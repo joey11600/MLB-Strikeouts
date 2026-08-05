@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-05 — Daily cap 6u → 10u; full pre-game restake to clean denoms
+
+- DAILY_MAX_UNITS raised 6.0 → 10.0 (operator direction): the 3.5u
+  ladder trio plus normal primaries regularly exceeded 6u.
+- All 2026-08-05 picks restaked to clean denominations BEFORE first
+  pitch (every game verified Pre-Game/Warmup at edit time; all changes
+  journaled to pick_changes.csv): Anderson OVER 2.5 → 2.00u, 4+ K
+  added at 1.00u @ +134 (latest captured board price), 5+ K → 0.50u;
+  Burke OVER 6.5 1.30u → 1.00u; Detmers already clean at 2.00u.
+  Day total 6.5u.
+
 ## 2026-08-05 — Clean stake denominations (operator rule)
 
 All published stakes quantize to {0.25, 0.5, 1, 1.5, 2} units

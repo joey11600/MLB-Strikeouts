@@ -262,8 +262,10 @@ We use `f*/4`, cap at MAX_STAKE_UNITS = 2.0 per bet, then quantize to
 clean denominations ({0.25, 0.5, 1, 1.5, 2}) — published stakes are
 always round numbers (operator rule).
 
-Portfolio daily cap: 6.0u total. Same-game pitchers get a 15%
-correlation haircut (same umpire, weather, game environment).
+Portfolio daily cap: 10.0u total (raised from 6.0 on 2026-08-05 —
+the 3.5u ladder trio plus normal primaries regularly exceeded 6u).
+Same-game pitchers get a 15% correlation haircut (same umpire,
+weather, game environment).
 Picks are allocated best-edge-first; a pick that doesn't fit steps
 DOWN to the largest denomination that fits or is dropped — no
 fractional partial fills.

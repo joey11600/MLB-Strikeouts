@@ -11,7 +11,9 @@ import math
 from tracker import MAX_STAKE_UNITS
 
 KELLY_FRACTION = 0.25
-DAILY_MAX_UNITS = 6.0
+# Raised 6.0 -> 10.0 by operator direction (2026-08-05): the 3.5u
+# ladder trio plus normal primaries regularly exceeded 6u.
+DAILY_MAX_UNITS = 10.0
 CORRELATION_HAIRCUT = 0.15
 
 # Published stakes use clean denominations (operator rule, 2026-08-05):
