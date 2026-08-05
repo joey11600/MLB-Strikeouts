@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-05 — Clean stake denominations (operator rule)
+
+All published stakes quantize to {0.25, 0.5, 1, 1.5, 2} units
+(`models/staking.py::quantize_stake`): >= 0.75 rounds to the nearest
+whole unit, smaller stakes to 0.5/0.25, below 0.125 is no bet. The
+daily 6u cap no longer produces fractional partial fills — a pick that
+doesn't fit steps DOWN to the largest denomination that fits or is
+dropped. Ladder rungs quantize downward within their halving caps, so
+a 2u primary yields exactly 2 / 1 / 0.5; LADDER_MAX_UNITS raised
+3.0 → 3.5 to fit the template. Applies from the next slate.
+
 ## 2026-08-05 — Descending ladder stakes (line-gap defense, operator rule)
 
 When the market's line sits far below the model's projection (Anderson:

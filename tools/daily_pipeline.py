@@ -43,7 +43,7 @@ from features.asof import (
 from models.edge import (
     compute_edge, pick_strength, american_to_decimal, no_vig_fair_prob,
 )
-from models.staking import kelly_stake, portfolio_daily_cap
+from models.staking import kelly_stake, portfolio_daily_cap, quantize_stake
 from models.ladder import evaluate_ladder, LADDER_MAX_UNITS
 from tracker import (
     FIELDS, PICKS_PATH, _write_rows, _pick_is_locked, _journal_change,
@@ -577,7 +577,7 @@ def run_daily(
     for play in primary_plays:
         decimal_odds = american_to_decimal(play["best_odds"])
         raw_units = kelly_stake(play["model_prob_best"], decimal_odds)
-        play["units_risked"] = min(raw_units, MAX_STAKE_UNITS)
+        play["units_risked"] = quantize_stake(min(raw_units, MAX_STAKE_UNITS))
         play["pick_type"] = "primary"
         all_plays.append(play)
 

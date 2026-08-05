@@ -14,6 +14,35 @@ KELLY_FRACTION = 0.25
 DAILY_MAX_UNITS = 6.0
 CORRELATION_HAIRCUT = 0.15
 
+# Published stakes use clean denominations (operator rule, 2026-08-05):
+# whole units when >= 0.75, else 0.5, else 0.25, else no bet. Ladder
+# rungs derive from the quantized primary, so a 2u primary yields the
+# 2 / 1 / 0.5 template.
+STAKE_DENOMS = [2.0, 1.5, 1.0, 0.5, 0.25]
+
+
+def quantize_stake(units: float) -> float:
+    """Round a stake to the nearest clean denomination.
+
+    >= 0.75 rounds to the nearest whole unit; 0.375-0.75 -> 0.5;
+    0.125-0.375 -> 0.25; below that -> 0 (no bet).
+    """
+    if units < 0.125:
+        return 0.0
+    if units < 0.375:
+        return 0.25
+    if units < 0.75:
+        return 0.5
+    return float(min(round(units), MAX_STAKE_UNITS))
+
+
+def quantize_stake_down(units: float) -> float:
+    """Largest clean denomination that fits within `units` (cap-safe)."""
+    for denom in STAKE_DENOMS:
+        if denom <= units + 1e-9:
+            return denom
+    return 0.0
+
 
 def kelly_stake(
     model_prob: float,
@@ -75,8 +104,13 @@ def portfolio_daily_cap(
             pick["capped_reason"] = "daily_cap"
             continue
 
-        final_units = min(raw_units, remaining)
-        final_units = round(final_units, 2)
+        # Clean denominations only — a partial fill steps DOWN to the
+        # largest denom that fits, never to an arbitrary fraction.
+        final_units = quantize_stake_down(min(raw_units, remaining))
+        if final_units <= 0:
+            pick["units_risked"] = 0.0
+            pick["capped_reason"] = "daily_cap"
+            continue
 
         pick["units_risked"] = final_units
         total_allocated += final_units

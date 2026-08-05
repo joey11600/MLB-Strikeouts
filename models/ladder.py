@@ -38,10 +38,11 @@ from models.edge import (
     blend_with_market,
     pick_strength,
 )
-from models.staking import kelly_stake, KELLY_FRACTION
+from models.staking import kelly_stake, quantize_stake_down, KELLY_FRACTION
 from tracker import MAX_STAKE_UNITS
 
-LADDER_MAX_UNITS = 3.0
+# 3.5 fits the clean-denomination template: 2u primary + 1u + 0.5u.
+LADDER_MAX_UNITS = 3.5
 
 # Operator ladder rules (confirmed 2026-08-05): fire only on a big
 # model-vs-line gap, take only the next rungs up, size small.
@@ -200,13 +201,13 @@ def evaluate_ladder(
 
         distance = max(1, rung["milestone"] - base)
         rung_stake_ceiling = primary_units * (LADDER_RUNG_STAKE_FRACTION ** distance)
-        capped = min(
+        capped = quantize_stake_down(min(
             rung["raw_units"], remaining, MAX_STAKE_UNITS, rung_stake_ceiling,
-        )
-        if capped < 0.1:
+        ))
+        if capped <= 0:
             rung["status"] = "passed_stake_too_small"
             continue
-        rung["units_risked"] = round(capped, 2)
+        rung["units_risked"] = capped
         rung["status"] = "bet"
         remaining -= capped
 
