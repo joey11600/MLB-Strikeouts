@@ -1,12 +1,21 @@
-"""Backtest harness — compound model vs naive baseline.
+"""Backtest harness — compound model vs naive baseline, honestly.
 
-Runs both models on the same game set and compares:
-- Brier score at each line
-- Calibration (mean predicted vs actual rate)
-- Sharpness (spread of predictions)
+Split design (within-2026 time split; multi-season cache not yet
+backfilled — see AUDIT):
+  TRAIN: games on or before TRAIN_CUTOFF, as-of features
+  TEST:  games after TRAIN_CUTOFF, as-of features
 
-Uses as-of feature computation via pitcher season K% computed
-from prior games only (same anti-leakage as the naive baseline).
+Anti-leakage guarantees:
+  1. Stage A/B are fit ONLY on train-window games; no test game's
+     outcome touches a coefficient.
+  2. Every feature (pitcher K%, BF mean/std, zone%, batter K%,
+     rookie counts) is computed strictly as-of via features.asof —
+     only games BEFORE the predicted game contribute.
+  3. The naive baseline gets the same as-of inputs, so the comparison
+     is apples-to-apples.
+
+Outputs data/backtest_predictions.csv (model + naive p_over per
+game/line) for calibration fitting and the dashboard Model view.
 """
 import sys
 from datetime import date
@@ -17,145 +26,83 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from data.backfill_statcast import load_cached
-from models.stage_a_bf import StageA
-from models.stage_b_rate import StageB
-from models.compound import compound_k_distribution, prob_k_geq
+from features.asof import asof_pitcher_game_table, asof_batter_game_table
+from models.stage_a_bf import StageA, prepare_training_data as prepare_stage_a
+from models.stage_b_rate import StageB, prepare_training_data as prepare_stage_b, ROOKIE_BF_THRESHOLD
+from models.compound import prob_k_geq
 from strikeout_predictor import StrikeoutPredictor
 
 LINES = [3.5, 4.5, 5.5, 6.5, 7.5, 8.5]
 
+TRAIN_START = date(2026, 6, 1)
+TRAIN_CUTOFF = date(2026, 7, 8)
+TEST_END = date(2026, 8, 3)
 
-def _build_test_set(start_date: date, end_date: date):
-    """Build game-level test set with pitcher stats AND per-game lineup K rates.
+PREDICTIONS_PATH = Path(__file__).parent / "data" / "backtest_predictions.csv"
+EVAL_STAGE_A_PATH = Path(__file__).parent / "models" / "stage_a_eval.pkl"
+EVAL_STAGE_B_PATH = Path(__file__).parent / "models" / "stage_b_eval.pkl"
 
-    Returns (game_df, lineup_dict) where lineup_dict maps
-    (game_pk, pitcher) -> list of 9 batter K% values.
+
+def _build_test_set(df: pd.DataFrame):
+    """Build the honest test set: post-cutoff starts with as-of features.
+
+    Returns (test_df, lineup_dict) where lineup_dict maps
+    (game_pk, pitcher) -> list of 9 as-of batter K% values.
     """
-    df = load_cached(start_date, end_date)
-    if df.empty:
-        return pd.DataFrame(), {}
+    pt = asof_pitcher_game_table(df)
+    bt = asof_batter_game_table(df)
 
-    if "game_date" in df.columns:
-        df["game_date"] = pd.to_datetime(df["game_date"])
+    cutoff_ts = pd.Timestamp(TRAIN_CUTOFF)
+    test = pt[
+        (pt["actual_bf"] >= 9)
+        & (pt["game_date"] > cutoff_ts)
+        & (pt["prior_games"] >= 3)
+        & (pt["prior_bf"] >= 50)
+        & pt["asof_k_pct"].notna()
+    ].copy()
+
+    test["zone_pct"] = test["asof_zone_pct"].fillna(0.45)
+
+    # As-of batter lookup: {(batter, game_pk): (shrunk_k_pct, prior_bf)}
+    batter_map = {
+        (row.batter, row.game_pk): (row.asof_k_pct_shrunk, row.prior_bf)
+        for row in bt.itertuples()
+    }
 
     completed = df[df["events"].notna()]
-
-    game_pitcher = completed.groupby(["game_pk", "pitcher"]).agg(
-        actual_bf=("events", "count"),
-    ).reset_index()
-    game_pitcher = game_pitcher[game_pitcher["actual_bf"] >= 9]
-
-    ks = completed[completed["events"].isin(["strikeout", "strikeout_double_play"])]
-    k_counts = ks.groupby(["game_pk", "pitcher"]).size().reset_index(name="actual_k")
-    game_pitcher = game_pitcher.merge(k_counts, on=["game_pk", "pitcher"], how="left")
-    game_pitcher["actual_k"] = game_pitcher["actual_k"].fillna(0).astype(int)
-
-    pitcher_stats = completed.groupby("pitcher").agg(
-        season_bf=("events", "count"),
-    ).reset_index()
-    pitcher_k_counts = ks.groupby("pitcher").size().reset_index(name="season_k")
-    pitcher_stats = pitcher_stats.merge(pitcher_k_counts, on="pitcher", how="left")
-    pitcher_stats["season_k"] = pitcher_stats["season_k"].fillna(0)
-    pitcher_stats["season_k_pct"] = pitcher_stats["season_k"] / pitcher_stats["season_bf"]
-    pitcher_stats = pitcher_stats[pitcher_stats["season_bf"] >= 50]
-
-    pitcher_bf_stats = game_pitcher.groupby("pitcher").agg(
-        bf_mean=("actual_bf", "mean"),
-        bf_std=("actual_bf", lambda x: x.std(ddof=1) if len(x) > 1 else 5.0),
-        n_starts=("game_pk", "count"),
-    ).reset_index()
-
-    game_pitcher = game_pitcher.merge(
-        pitcher_stats[["pitcher", "season_k_pct"]],
-        on="pitcher", how="inner"
-    )
-    game_pitcher = game_pitcher.merge(
-        pitcher_bf_stats[["pitcher", "bf_mean", "bf_std", "n_starts"]],
-        on="pitcher", how="inner"
-    )
-    game_pitcher = game_pitcher[game_pitcher["n_starts"] >= 3]
-
-    if "zone" in df.columns:
-        zone_valid = df[df["zone"].notna()]
-        pitcher_zone = zone_valid.groupby("pitcher").apply(
-            lambda g: g["zone"].isin(range(1, 10)).sum() / len(g)
-            if len(g) >= 50 else None,
-            include_groups=False,
-        ).reset_index(name="zone_pct")
-        game_pitcher = game_pitcher.merge(pitcher_zone, on="pitcher", how="left")
-        game_pitcher["zone_pct"] = game_pitcher["zone_pct"].fillna(0.45)
-    else:
-        game_pitcher["zone_pct"] = 0.45
-
-    from features.t2_candidates import TEAM_TIMEZONES
-    if "home_team" in df.columns and "game_date" in df.columns:
-        game_teams = df.groupby("game_pk").agg(
-            home_team=("home_team", "first"),
-            game_date=("game_date", "first"),
-        ).reset_index()
-        gp_with_teams = game_pitcher.merge(game_teams, on="game_pk", how="left")
-        gp_with_teams = gp_with_teams.sort_values(["pitcher", "game_date"])
-        gp_with_teams["curr_tz"] = gp_with_teams["home_team"].map(TEAM_TIMEZONES)
-        gp_with_teams["prev_tz"] = gp_with_teams.groupby("pitcher")["curr_tz"].shift(1)
-        gp_with_teams["eastward_tz"] = (gp_with_teams["curr_tz"] - gp_with_teams["prev_tz"]).clip(lower=0).fillna(0)
-        game_pitcher = game_pitcher.merge(
-            gp_with_teams[["game_pk", "pitcher", "eastward_tz"]].drop_duplicates(),
-            on=["game_pk", "pitcher"], how="left",
-        )
-        game_pitcher["eastward_tz"] = game_pitcher["eastward_tz"].fillna(0.0)
-    else:
-        game_pitcher["eastward_tz"] = 0.0
-
-    batter_stats = completed.groupby("batter").agg(
-        batter_bf=("events", "count"),
-    ).reset_index()
-    batter_k_counts = ks.groupby("batter").size().reset_index(name="batter_k")
-    batter_stats = batter_stats.merge(batter_k_counts, on="batter", how="left")
-    batter_stats["batter_k"] = batter_stats["batter_k"].fillna(0)
-    batter_stats["batter_k_pct"] = batter_stats["batter_k"] / batter_stats["batter_bf"]
-    batter_k_map = dict(zip(batter_stats["batter"], batter_stats["batter_k_pct"]))
+    starter_set = set(zip(test["game_pk"], test["pitcher"]))
 
     lineup_dict = {}
-    starter_set = set(zip(game_pitcher["game_pk"], game_pitcher["pitcher"]))
-
-    for (game_pk, pitcher_id), group in completed.groupby(["game_pk", "pitcher"]):
-        if (game_pk, pitcher_id) not in starter_set:
-            continue
-        sorted_abs = group.sort_values("at_bat_number")
-        seen = []
-        for _, row in sorted_abs.iterrows():
-            batter_id = row["batter"]
-            if batter_id not in seen:
-                seen.append(batter_id)
-            if len(seen) >= 9:
-                break
-
-        lineup_kpcts = [batter_k_map.get(b, 0.225) for b in seen[:9]]
-        while len(lineup_kpcts) < 9:
-            lineup_kpcts.append(0.225)
-        lineup_dict[(game_pk, pitcher_id)] = lineup_kpcts
-
-    rookie_threshold = 100
-    rookie_map = dict(zip(batter_stats["batter"], batter_stats["batter_bf"]))
     n_rookies_dict = {}
     for (game_pk, pitcher_id), group in completed.groupby(["game_pk", "pitcher"]):
         if (game_pk, pitcher_id) not in starter_set:
             continue
         sorted_abs = group.sort_values("at_bat_number")
-        seen_batters = []
-        for _, row in sorted_abs.iterrows():
-            if row["batter"] not in seen_batters:
-                seen_batters.append(row["batter"])
-            if len(seen_batters) >= 9:
+        seen = []
+        for batter_id in sorted_abs["batter"]:
+            if batter_id not in seen:
+                seen.append(batter_id)
+            if len(seen) >= 9:
                 break
-        count = sum(1 for b in seen_batters if rookie_map.get(b, 0) < rookie_threshold)
-        n_rookies_dict[(game_pk, pitcher_id)] = count
 
-    game_pitcher["n_rookies"] = game_pitcher.apply(
-        lambda r: n_rookies_dict.get((r["game_pk"], r["pitcher"]), 0), axis=1
-    ).astype(float)
+        kpcts = []
+        rookies = 0
+        for b in seen[:9]:
+            k_pct, prior_bf = batter_map.get((b, game_pk), (None, 0))
+            kpcts.append(k_pct if k_pct is not None and not np.isnan(k_pct) else 0.225)
+            if (prior_bf or 0) < ROOKIE_BF_THRESHOLD:
+                rookies += 1
+        while len(kpcts) < 9:
+            kpcts.append(0.225)
 
-    return game_pitcher, lineup_dict
+        lineup_dict[(game_pk, pitcher_id)] = kpcts
+        n_rookies_dict[(game_pk, pitcher_id)] = float(rookies)
+
+    test["n_rookies"] = test.apply(
+        lambda r: n_rookies_dict.get((r["game_pk"], r["pitcher"]), 0.0), axis=1
+    )
+
+    return test, lineup_dict
 
 
 def _naive_baseline_prediction(season_k_pct: float, bf_mean: float,
@@ -163,11 +110,12 @@ def _naive_baseline_prediction(season_k_pct: float, bf_mean: float,
     """Simple binomial baseline: Binom(round(bf_mean), season_k_pct)."""
     from scipy.stats import binom
 
+    bf_std = max(bf_std if bf_std and not np.isnan(bf_std) else 5.0, 0.1)
     bf_range = range(max(1, int(bf_mean - 2 * bf_std)),
                      int(bf_mean + 2 * bf_std) + 1)
     bf_probs = {}
     for bf in bf_range:
-        z = (bf - bf_mean) / max(bf_std, 0.1)
+        z = (bf - bf_mean) / bf_std
         bf_probs[bf] = np.exp(-0.5 * z ** 2)
     total = sum(bf_probs.values())
     bf_probs = {k: v / total for k, v in bf_probs.items()}
@@ -208,97 +156,107 @@ def _compound_model_prediction(predictor: StrikeoutPredictor,
     return result["per_line"]
 
 
+def fit_eval_models() -> tuple[StageA, StageB]:
+    """Fit Stage A/B on the train window only, save eval pickles."""
+    print(f"Fitting eval models on {TRAIN_START} .. {TRAIN_CUTOFF} (as-of features)...")
+
+    train_a = prepare_stage_a(TRAIN_START, TRAIN_CUTOFF)
+    print(f"  Stage A train rows: {len(train_a)}")
+    stage_a = StageA()
+    stage_a.fit(train_a)
+    stage_a.save(EVAL_STAGE_A_PATH)
+
+    train_b = prepare_stage_b(TRAIN_START, TRAIN_CUTOFF)
+    print(f"  Stage B train rows: {len(train_b)}")
+    stage_b = StageB()
+    stage_b.fit(train_b)
+    stage_b.save(EVAL_STAGE_B_PATH)
+
+    return stage_a, stage_b
+
+
 def run_backtest():
-    """Run both models on the test set and compare."""
-    print("Building test set...")
-    test_df, lineup_dict = _build_test_set(date(2026, 6, 1), date(2026, 8, 3))
-    print(f"  {len(test_df)} starter appearances")
+    """Fit on train window, predict the test window, compare, save."""
+    print(f"Honest backtest: train <= {TRAIN_CUTOFF}, test {TRAIN_CUTOFF} < d <= {TEST_END}")
+
+    stage_a, stage_b = fit_eval_models()
+
+    print("Building test set (as-of features)...")
+    df = load_cached(TRAIN_START, TEST_END)
+    test_df, lineup_dict = _build_test_set(df)
+    print(f"  {len(test_df)} starter appearances in test window")
     print(f"  {len(lineup_dict)} lineups extracted")
 
-    print("Loading compound model...")
     predictor = StrikeoutPredictor()
-    predictor.load_models()
+    predictor.stage_a = stage_a
+    predictor.stage_b = stage_b
 
     print("Running predictions...")
-    naive_results = []
-    model_results = []
+    rows = []
 
     for i, (_, row) in enumerate(test_df.iterrows()):
         if i % 200 == 0:
             print(f"  {i}/{len(test_df)}...", flush=True)
 
         naive_preds = _naive_baseline_prediction(
-            row["season_k_pct"], row["bf_mean"], row["bf_std"]
+            row["asof_k_pct"], row["asof_bf_mean"], row["asof_bf_std"]
         )
-        lineup_kpcts = lineup_dict.get(
-            (row["game_pk"], row["pitcher"]), None
-        )
+        lineup_kpcts = lineup_dict.get((row["game_pk"], row["pitcher"]), None)
         model_preds = _compound_model_prediction(
-            predictor, row["season_k_pct"], row["bf_mean"],
+            predictor, row["asof_k_pct_shrunk"], row["asof_bf_mean"],
             lineup_k_pcts=lineup_kpcts,
-            zone_pct=row.get("zone_pct"),
-            eastward_tz=row.get("eastward_tz", 0.0),
-            n_rookies=row.get("n_rookies", 0.0),
+            zone_pct=row["zone_pct"],
+            eastward_tz=row["eastward_tz"],
+            n_rookies=row["n_rookies"],
         )
 
         for line in LINES:
             actual_over = 1 if row["actual_k"] >= np.ceil(line) else 0
-
-            naive_results.append({
+            rows.append({
                 "game_pk": row["game_pk"],
                 "pitcher": row["pitcher"],
+                "game_date": row["game_date"].date(),
                 "line": line,
-                "p_over": naive_preds[line],
+                "model_p_over": model_preds[line],
+                "naive_p_over": naive_preds[line],
                 "actual_over": actual_over,
                 "actual_k": row["actual_k"],
+                "asof_k_pct": row["asof_k_pct"],
+                "asof_k_pct_shrunk": row["asof_k_pct_shrunk"],
+                "asof_bf_mean": row["asof_bf_mean"],
             })
 
-            model_results.append({
-                "game_pk": row["game_pk"],
-                "pitcher": row["pitcher"],
-                "line": line,
-                "p_over": model_preds[line],
-                "actual_over": actual_over,
-                "actual_k": row["actual_k"],
-            })
+    pred_df = pd.DataFrame(rows)
+    pred_df.to_csv(PREDICTIONS_PATH, index=False)
+    print(f"\nSaved {len(pred_df)} predictions to {PREDICTIONS_PATH}")
 
-    naive_df = pd.DataFrame(naive_results)
-    model_df = pd.DataFrame(model_results)
+    pred_df["model_brier"] = (pred_df["model_p_over"] - pred_df["actual_over"]) ** 2
+    pred_df["naive_brier"] = (pred_df["naive_p_over"] - pred_df["actual_over"]) ** 2
 
-    naive_df["brier"] = (naive_df["p_over"] - naive_df["actual_over"]) ** 2
-    model_df["brier"] = (model_df["p_over"] - model_df["actual_over"]) ** 2
-
-    print(f"\n{'=' * 70}")
-    print(f"BACKTEST RESULTS: Compound Model vs Naive Baseline")
-    print(f"{'=' * 70}")
+    print(f"\n{'=' * 76}")
+    print("HONEST BACKTEST: train <= "
+          f"{TRAIN_CUTOFF} -> test through {TEST_END}, all features as-of")
+    print(f"{'=' * 76}")
     print(f"{'':>6}  {'--- Naive ---':>26}  {'--- Model ---':>26}  {'Improvement':>12}")
     print(f"{'Line':>6}  {'Brier':>7} {'Pred':>7} {'Bias':>7}  "
           f"{'Brier':>7} {'Pred':>7} {'Bias':>7}  {'Brier':>7} {'%':>4}")
     print("-" * 76)
 
     for line in LINES:
-        n_df = naive_df[naive_df["line"] == line]
-        m_df = model_df[model_df["line"] == line]
-
-        n_brier = n_df["brier"].mean()
-        n_pred = n_df["p_over"].mean()
-        n_actual = n_df["actual_over"].mean()
-        n_bias = n_pred - n_actual
-
-        m_brier = m_df["brier"].mean()
-        m_pred = m_df["p_over"].mean()
-        m_actual = m_df["actual_over"].mean()
-        m_bias = m_pred - m_actual
-
+        sub = pred_df[pred_df["line"] == line]
+        n_brier = sub["naive_brier"].mean()
+        n_bias = sub["naive_p_over"].mean() - sub["actual_over"].mean()
+        m_brier = sub["model_brier"].mean()
+        m_bias = sub["model_p_over"].mean() - sub["actual_over"].mean()
         improvement = n_brier - m_brier
         pct = improvement / n_brier * 100 if n_brier > 0 else 0
 
-        print(f"{line:>6.1f}  {n_brier:>7.4f} {n_pred:>6.1%} {n_bias:>+6.1%}  "
-              f"{m_brier:>7.4f} {m_pred:>6.1%} {m_bias:>+6.1%}  "
+        print(f"{line:>6.1f}  {n_brier:>7.4f} {sub['naive_p_over'].mean():>6.1%} {n_bias:>+6.1%}  "
+              f"{m_brier:>7.4f} {sub['model_p_over'].mean():>6.1%} {m_bias:>+6.1%}  "
               f"{improvement:>+7.4f} {pct:>+3.0f}%")
 
-    overall_naive = naive_df["brier"].mean()
-    overall_model = model_df["brier"].mean()
+    overall_naive = pred_df["naive_brier"].mean()
+    overall_model = pred_df["model_brier"].mean()
     overall_imp = overall_naive - overall_model
     overall_pct = overall_imp / overall_naive * 100
 
@@ -311,10 +269,13 @@ def run_backtest():
 
     print(f"\nSharpness (std of predictions):")
     for line in LINES:
-        n_std = naive_df[naive_df["line"] == line]["p_over"].std()
-        m_std = model_df[model_df["line"] == line]["p_over"].std()
+        sub = pred_df[pred_df["line"] == line]
+        n_std = sub["naive_p_over"].std()
+        m_std = sub["model_p_over"].std()
         print(f"  {line}: naive={n_std:.4f}  model={m_std:.4f}  "
               f"{'sharper' if m_std > n_std else 'blunter'}")
+
+    return pred_df
 
 
 if __name__ == "__main__":

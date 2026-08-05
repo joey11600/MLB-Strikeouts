@@ -20,9 +20,12 @@ Staking rules:
 import numpy as np
 
 from models.edge import (
+    ALT_SIDE_MARGIN,
+    EDGE_MARGIN,
+    MIN_EDGE_PCT,
     american_to_decimal,
     american_to_implied,
-    compute_edge,
+    blend_with_market,
     pick_strength,
 )
 from models.staking import kelly_stake, KELLY_FRACTION
@@ -30,14 +33,31 @@ from tracker import MAX_STAKE_UNITS
 
 LADDER_MAX_UNITS = 3.0
 
+# One-sided markets carry the book's margin on the only quoted side, and
+# nothing to strip it against. Treat the two-sided-equivalent hold as
+# 2 * ALT_SIDE_MARGIN and demand the same discipline as the primary
+# market: hold + margin. This is intentionally STRICTER than the old
+# flat 3% bar, which let ladder picks through on a looser standard than
+# primaries while sharing the same edge column.
+LADDER_EDGE_THRESHOLD = max(2 * ALT_SIDE_MARGIN + EDGE_MARGIN, MIN_EDGE_PCT)
+
 
 def evaluate_ladder(
     k_dist: np.ndarray,
     alt_lines: list[dict],
     primary_line: float | None = None,
     primary_units: float = 0.0,
+    calibrate_fn=None,
 ) -> list[dict]:
     """Evaluate all available milestone lines for one pitcher.
+
+    Honesty rules (same discipline as the primary market):
+      1. Raw tail mass P(K >= m) is calibrated via calibrate_fn.
+      2. The one-sided implied probability is de-vigged with an assumed
+         side margin (fair = implied / (1 + ALT_SIDE_MARGIN)).
+      3. The calibrated model prob is blended with the fair prob
+         (market-anchored shrinkage) before edge is measured.
+      4. Threshold is LADDER_EDGE_THRESHOLD, not a loose flat 3%.
 
     Parameters
     ----------
@@ -52,11 +72,15 @@ def evaluate_ladder(
     primary_units : float
         Units already committed on the primary O/U line for this pitcher.
         Counts toward LADDER_MAX_UNITS.
+    calibrate_fn : callable or None
+        Maps raw tail probability -> calibrated probability
+        (StrikeoutPredictor.calibrate_prob). Identity if None.
 
     Returns
     -------
     list of dicts, each with:
-        milestone, odds, model_prob, implied_prob, edge, strength,
+        milestone, odds, raw_model_prob, model_prob (calibrated),
+        implied_prob, fair_prob, blended_prob, edge, strength,
         units_risked, decimal_odds
     Sorted best-edge-first, already capped at LADDER_MAX_UNITS.
     """
@@ -80,49 +104,61 @@ def evaluate_ladder(
             if milestone == math.ceil(primary_line):
                 continue
 
-        model_prob = float(np.sum(k_dist[milestone:]))
+        raw_model_prob = float(np.sum(k_dist[milestone:]))
+        model_prob = calibrate_fn(raw_model_prob) if calibrate_fn else raw_model_prob
         implied_prob = american_to_implied(odds_int)
+        fair_prob = implied_prob / (1.0 + ALT_SIDE_MARGIN)
         decimal_odds = american_to_decimal(odds_int)
 
-        edge = model_prob - implied_prob
+        blended_prob = blend_with_market(model_prob, fair_prob)
+        edge = blended_prob - fair_prob
+
+        raw_units = kelly_stake(blended_prob, decimal_odds, KELLY_FRACTION) if edge > 0 else 0.0
+        strength = pick_strength(edge, LADDER_EDGE_THRESHOLD)
+
+        # Every evaluated rung is kept — passed rungs carry a status so
+        # the slate sidecar can show the full board, not just the bets.
         if edge <= 0:
-            continue
-
-        raw_units = kelly_stake(model_prob, decimal_odds, KELLY_FRACTION)
-        if raw_units < 0.1:
-            continue
-
-        strength = pick_strength(edge, 0.03)
-        if strength == "NO_PLAY":
-            continue
+            status = "passed_no_edge"
+        elif raw_units < 0.1:
+            status = "passed_stake_too_small"
+        elif strength == "NO_PLAY":
+            status = "passed_below_threshold"
+        else:
+            status = "candidate"
 
         rungs.append({
             "milestone": milestone,
             "odds": odds_int,
-            "odds_str": odds_str,
+            "odds_str": f"{odds_int:+d}",
+            "raw_model_prob": raw_model_prob,
             "model_prob": model_prob,
             "implied_prob": implied_prob,
+            "fair_prob": fair_prob,
+            "blended_prob": blended_prob,
             "edge": edge,
             "strength": strength,
             "raw_units": raw_units,
-            "units_risked": raw_units,
+            "units_risked": 0.0,
             "decimal_odds": decimal_odds,
+            "status": status,
         })
 
     rungs.sort(key=lambda r: r["edge"], reverse=True)
 
     remaining = LADDER_MAX_UNITS - primary_units
     for rung in rungs:
+        if rung["status"] != "candidate":
+            continue
         if remaining <= 0:
-            rung["units_risked"] = 0.0
-            rung["capped"] = "pitcher_cap"
+            rung["status"] = "passed_pitcher_cap"
             continue
 
         capped = min(rung["raw_units"], remaining, MAX_STAKE_UNITS)
         rung["units_risked"] = round(capped, 2)
+        rung["status"] = "bet"
         remaining -= capped
 
-    rungs = [r for r in rungs if r["units_risked"] > 0]
     return rungs
 
 

@@ -19,7 +19,38 @@ The compound distribution is computed via a Poisson-binomial dynamic
 program — O(n²) where n ≤ 40, so microseconds.
 
 Final output: **P(K ≥ line)** for each line on the board, after
-isotonic calibration.
+isotonic calibration (fit on out-of-sample backtest predictions,
+`models/calibrator.pkl`, applied in `strikeout_predictor.predict` and
+via `calibrate_prob()` for milestone tails). Before 2026-08-05 the
+calibrator existed but was never fit or applied — see CHANGELOG
+Phase 7.
+
+### Betting probability (market-anchored)
+
+The probability used for edge and staking is NOT the raw model output:
+
+```
+p_bet = w * calibrated_model + (1 - w) * market_no_vig_fair
+w = MODEL_TRUST_WEIGHT = 0.5          (models/edge.py)
+edge = p_bet - fair  = w * (model - fair)
+```
+
+One-sided milestone markets are de-vigged with an assumed side margin
+(`ALT_SIDE_MARGIN` = 4%) and held to `LADDER_EDGE_THRESHOLD` = 10%.
+Raise w only after 100+ graded bets with positive average CLV.
+
+### As-of features and shrinkage
+
+Every rate feature in training and backtesting flows through
+`features/asof.py` — either per-game (`load_pitches_before_game`) or
+the vectorized tables (`asof_pitcher_game_table`,
+`asof_batter_game_table`: sort by date, cumsum-minus-current, so the
+predicted game can never contaminate its own features).
+
+K% rates are shrunk toward league average (empirical Bayes):
+pitcher 70 BF pseudo-count, batter 60 PA (`shrink_rate`). Without
+shrinkage the honest model has NO edge over naive — thin as-of
+samples are noise.
 
 ### Matchup formula
 
@@ -124,43 +155,47 @@ cleanup spot (slot 4) is highest at 23.6%.
 - **DraftKings**: odds via unofficial JSON API (`curl_cffi`).
 - **Chadwick Bureau**: player ID crosswalk.
 
-## Compound model v1 (Phase 2)
+## Compound model — honest evaluation (Phase 7 supersedes all earlier numbers)
 
-Two-stage model with Poisson-binomial combination. Evaluated on
-1,777 starts, June–Aug 2026.
+**The Phase 2/6 backtest numbers (0.1297 vs 0.1321 on 1,777 starts)
+were contaminated by leakage** — full-window feature aggregates AND
+train/test overlap — and are void. See CHANGELOG Phase 7.
 
-**Stage A** — Negative binomial regression on BF count.
-Features: pitcher prior BF mean, season K%. Correlation = 0.777.
+Honest protocol: Stage A/B fit only on games ≤ Jul 8; test Jul 9 –
+Aug 3 (618 starts); every feature strictly as-of; naive baseline gets
+the same as-of inputs.
 
-**Stage B** — Logistic regression on per-batter K outcome.
-8 features: logit(pitcher K%), logit(batter K%), TTO 2, TTO 3,
-zone_pct, eastward_tz, n_rookies.
-TTO coefficients: TTO 2 = −0.214, TTO 3 = −0.234.
-Zone_pct = +0.139, eastward_tz = −0.017, n_rookies = −0.012.
+**Stage A** — Negative binomial regression on BF count (as-of
+prior BF mean, shrunk season K%). Full-window refit: intercept
++2.223, prior_bf_mean +0.039, season_k_pct +0.064, alpha 0.0067.
 
-**Phase 6 gauntlet** — 16 T2 features tested (10 Statcast + 6 extended).
-3 promoted (a9_zone_pct, f1_eastward_tz, b14_n_rookies), 13 rejected.
-4 deferred (need external data). Noise floor calibrated at +0.167%
-(95th pctl from 20 random seeds). The add-one test on 800-game
-splits has limited power below ~0.3%. The aggregate backtest (+2%)
-is the definitive signal evidence. Full results in docs/GATES.md.
+**Stage B** — Logistic per-batter K. 8 features, full-window refit:
+logit(pitcher K%) +1.065, logit(batter K%) +1.059, TTO2 −0.239,
+TTO3 −0.226, zone_pct +0.257, eastward_tz −0.051, n_rookies +0.009.
+(n_rookies is noise on the honest harness — re-gauntlet pending,
+AUDIT A-005.)
 
 | Line | Naive Brier | Model Brier | Improvement |
 |---|---|---|---|
-| 3.5 | 0.1682 | 0.1663 | +1% |
-| 4.5 | 0.1808 | 0.1777 | +2% |
-| 5.5 | 0.1627 | 0.1589 | +2% |
-| 6.5 | 0.1310 | 0.1275 | +3% |
-| 7.5 | 0.0874 | 0.0865 | +1% |
-| 8.5 | 0.0622 | 0.0612 | +1% |
-| **All** | **0.1321** | **0.1297** | **+2%** |
+| 3.5 | 0.1938 | 0.1911 | +1% |
+| 4.5 | 0.2034 | 0.2016 | +1% |
+| 5.5 | 0.1883 | 0.1860 | +1% |
+| 6.5 | 0.1480 | 0.1438 | +3% |
+| 7.5 | 0.1001 | 0.0964 | +4% |
+| 8.5 | 0.0694 | 0.0696 | −0% |
+| **All** | **0.1505** | **0.1481** | **+2%** |
 
-Beats naive at every line. Sharper at 5/6 lines — the matchup +
-TTO structure produces more differentiated predictions.
+Raw model runs 2-4pp low on P(over); isotonic calibration corrects
+this (mid-lines within ±0.5pp cross-fit). Calibration leaves Brier
+~unchanged — its job is bias removal, which is what kills phantom
+edges.
 
-Remaining signal to capture: park/weather, umpire/catcher,
-workload features, calibration. Each should improve sharpness
-further without hurting calibration.
+Per-game predictions: `data/backtest_predictions.csv` (also feeds the
+dashboard Model view). Re-run: `python backtest.py` then
+`python tools/fit_calibrator.py`.
+
+Remaining signal to capture: park/weather, umpire/catcher, workload
+features, multi-season training data (A-004).
 
 ## Naive baseline (every model must beat this)
 

@@ -191,9 +191,19 @@ class StageB:
         self.feature_names = data["feature_names"]
 
 
+ROOKIE_BF_THRESHOLD = 100
+
+
 def prepare_training_data(start_date: date, end_date: date) -> pd.DataFrame:
-    """Build batter-level training DataFrame with features."""
+    """Build batter-level training DataFrame with strictly as-of features.
+
+    Every feature reflects only games BEFORE the row's game (via
+    features.asof tables), matching what the live pipeline feeds the
+    model. Starter games without enough pitcher history (< 50 prior BF)
+    are dropped; batters with no prior history fall back to league rate.
+    """
     from data.backfill_statcast import load_cached
+    from features.asof import asof_pitcher_game_table, asof_batter_game_table
 
     df = load_cached(start_date, end_date)
     if df.empty:
@@ -204,121 +214,73 @@ def prepare_training_data(start_date: date, end_date: date) -> pd.DataFrame:
 
     completed = df[df["events"].notna()].copy()
 
-    pitcher_stats = completed.groupby("pitcher").agg(
-        pitcher_total_bf=("events", "count"),
-    ).reset_index()
-    pitcher_ks = completed[completed["events"].isin(["strikeout", "strikeout_double_play"])]
-    pitcher_k_counts = pitcher_ks.groupby("pitcher").size().reset_index(name="pitcher_total_k")
-    pitcher_stats = pitcher_stats.merge(pitcher_k_counts, on="pitcher", how="left")
-    pitcher_stats["pitcher_total_k"] = pitcher_stats["pitcher_total_k"].fillna(0)
-    pitcher_stats["pitcher_k_pct"] = pitcher_stats["pitcher_total_k"] / pitcher_stats["pitcher_total_bf"]
-    pitcher_stats = pitcher_stats[pitcher_stats["pitcher_total_bf"] >= 50]
+    pt = asof_pitcher_game_table(df)
+    bt = asof_batter_game_table(df)
 
-    batter_stats = completed.groupby("batter").agg(
-        batter_total_bf=("events", "count"),
-    ).reset_index()
-    batter_ks = completed[completed["events"].isin(["strikeout", "strikeout_double_play"])]
-    batter_k_counts = batter_ks.groupby("batter").size().reset_index(name="batter_total_k")
-    batter_stats = batter_stats.merge(batter_k_counts, on="batter", how="left")
-    batter_stats["batter_total_k"] = batter_stats["batter_total_k"].fillna(0)
-    batter_stats["batter_k_pct"] = batter_stats["batter_total_k"] / batter_stats["batter_total_bf"]
-
-    game_pitcher_bf = completed.groupby(["game_pk", "pitcher"]).size().reset_index(name="game_bf")
-    starters = game_pitcher_bf[game_pitcher_bf["game_bf"] >= 9]
+    starters = pt[
+        (pt["actual_bf"] >= 9)
+        & (pt["prior_bf"] >= 50)
+        & pt["asof_k_pct"].notna()
+    ]
 
     starter_abs = completed.merge(
         starters[["game_pk", "pitcher"]],
         on=["game_pk", "pitcher"], how="inner"
     )
 
-    records = []
-    for (game_pk, pitcher_id), group in starter_abs.groupby(["game_pk", "pitcher"]):
-        sorted_abs = group.sort_values("at_bat_number")
-        for seq, (_, row) in enumerate(sorted_abs.iterrows(), 1):
-            if seq <= 9:
-                tto = 1
-            elif seq <= 18:
-                tto = 2
-            elif seq <= 27:
-                tto = 3
-            else:
-                tto = 4
-
-            records.append({
-                "game_pk": game_pk,
-                "pitcher": pitcher_id,
-                "batter": row["batter"],
-                "bf_seq": seq,
-                "tto": tto,
-                "is_k": 1 if row["events"] in ("strikeout", "strikeout_double_play") else 0,
-            })
-
-    batter_df = pd.DataFrame(records)
-
-    batter_df = batter_df.merge(
-        pitcher_stats[["pitcher", "pitcher_k_pct"]],
-        on="pitcher", how="inner"
+    starter_abs = starter_abs.sort_values(["game_pk", "pitcher", "at_bat_number"])
+    starter_abs["bf_seq"] = starter_abs.groupby(["game_pk", "pitcher"]).cumcount() + 1
+    starter_abs["tto"] = np.select(
+        [starter_abs["bf_seq"] <= 9, starter_abs["bf_seq"] <= 18, starter_abs["bf_seq"] <= 27],
+        [1, 2, 3], default=4,
     )
+    starter_abs["is_k"] = starter_abs["events"].isin(
+        ["strikeout", "strikeout_double_play"]
+    ).astype(int)
+
+    batter_df = starter_abs[[
+        "game_pk", "pitcher", "batter", "bf_seq", "tto", "is_k",
+    ]].copy()
+
     batter_df = batter_df.merge(
-        batter_stats[["batter", "batter_k_pct"]],
-        on="batter", how="left"
+        starters[["game_pk", "pitcher", "asof_k_pct_shrunk", "asof_zone_pct", "eastward_tz"]].rename(
+            columns={"asof_k_pct_shrunk": "pitcher_k_pct"}
+        ),
+        on=["game_pk", "pitcher"], how="inner",
+    )
+    batter_df["zone_pct"] = batter_df["asof_zone_pct"].fillna(LEAGUE_ZONE_PCT)
+    batter_df = batter_df.drop(columns=["asof_zone_pct"])
+
+    batter_df = batter_df.merge(
+        bt[["batter", "game_pk", "asof_k_pct_shrunk", "prior_bf"]].rename(
+            columns={"asof_k_pct_shrunk": "batter_k_pct", "prior_bf": "batter_prior_bf"}
+        ),
+        on=["batter", "game_pk"], how="left",
     )
     batter_df["batter_k_pct"] = batter_df["batter_k_pct"].fillna(LEAGUE_K_RATE)
+    batter_df["batter_prior_bf"] = batter_df["batter_prior_bf"].fillna(0)
 
-    if "zone" in df.columns:
-        zone_valid = df[df["zone"].notna()]
-        pitcher_zone = zone_valid.groupby("pitcher").apply(
-            lambda g: g["zone"].isin(range(1, 10)).sum() / len(g)
-            if len(g) >= 50 else None,
-            include_groups=False,
-        ).reset_index(name="zone_pct")
-        batter_df = batter_df.merge(pitcher_zone, on="pitcher", how="left")
-    else:
-        batter_df["zone_pct"] = LEAGUE_ZONE_PCT
-    batter_df["zone_pct"] = batter_df["zone_pct"].fillna(LEAGUE_ZONE_PCT)
-
-    from features.t2_candidates import TEAM_TIMEZONES
-    if "home_team" in df.columns and "game_date" in df.columns:
-        game_teams = df.groupby("game_pk").agg(
-            home_team=("home_team", "first"),
-            game_date=("game_date", "first"),
-        ).reset_index()
-        pitcher_games = starter_abs.groupby(["game_pk", "pitcher"]).first().reset_index()[["game_pk", "pitcher"]]
-        pitcher_games = pitcher_games.merge(game_teams, on="game_pk", how="left")
-        pitcher_games = pitcher_games.sort_values(["pitcher", "game_date"])
-        pitcher_games["curr_tz"] = pitcher_games["home_team"].map(TEAM_TIMEZONES)
-        pitcher_games["prev_tz"] = pitcher_games.groupby("pitcher")["curr_tz"].shift(1)
-        pitcher_games["eastward_tz"] = (pitcher_games["curr_tz"] - pitcher_games["prev_tz"]).clip(lower=0).fillna(0)
-        batter_df = batter_df.merge(
-            pitcher_games[["game_pk", "pitcher", "eastward_tz"]],
-            on=["game_pk", "pitcher"], how="left",
-        )
-    else:
-        batter_df["eastward_tz"] = 0.0
-    batter_df["eastward_tz"] = batter_df["eastward_tz"].fillna(0.0)
-
-    if "batter" in completed.columns:
-        game_lineups = starter_abs.groupby(["game_pk", "pitcher"]).apply(
-            lambda g: g.drop_duplicates("batter").head(9), include_groups=False
-        ).reset_index(level=[0, 1])[["game_pk", "pitcher", "batter"]]
-        rookie_threshold = 100
-        game_lineups = game_lineups.merge(
-            batter_stats[["batter", "batter_total_bf"]], on="batter", how="left"
-        )
-        game_lineups["is_rookie"] = (game_lineups["batter_total_bf"].fillna(0) < rookie_threshold).astype(int)
-        rookie_counts = game_lineups.groupby(["game_pk", "pitcher"])["is_rookie"].sum().reset_index(name="n_rookies")
-        batter_df = batter_df.merge(rookie_counts, on=["game_pk", "pitcher"], how="left")
-    else:
-        batter_df["n_rookies"] = 0.0
+    # n_rookies: as-of prior BF of the first 9 unique batters faced.
+    lineups = starter_abs.drop_duplicates(["game_pk", "pitcher", "batter"])
+    lineups = lineups.groupby(["game_pk", "pitcher"]).head(9)[["game_pk", "pitcher", "batter"]]
+    lineups = lineups.merge(
+        bt[["batter", "game_pk", "prior_bf"]],
+        on=["batter", "game_pk"], how="left",
+    )
+    lineups["is_rookie"] = (lineups["prior_bf"].fillna(0) < ROOKIE_BF_THRESHOLD).astype(int)
+    rookie_counts = lineups.groupby(["game_pk", "pitcher"])["is_rookie"].sum().reset_index(name="n_rookies")
+    batter_df = batter_df.merge(rookie_counts, on=["game_pk", "pitcher"], how="left")
     batter_df["n_rookies"] = batter_df["n_rookies"].fillna(0.0)
 
     return batter_df
 
 
-def fit_and_evaluate():
-    """Fit Stage B and evaluate."""
-    print("Preparing Stage B training data...")
-    train_df = prepare_training_data(date(2026, 6, 1), date(2026, 8, 3))
+def fit_and_evaluate(start_date: date = date(2026, 6, 1),
+                     end_date: date = date(2026, 8, 4),
+                     save_path: Path | None = None):
+    """Fit Stage B on as-of training data and evaluate."""
+    print("Preparing Stage B training data (as-of features)...")
+    train_df = prepare_training_data(start_date, end_date)
     print(f"  {len(train_df)} batter-level rows")
     print(f"  Overall K rate: {train_df['is_k'].mean():.3f}")
 
@@ -336,8 +298,8 @@ def fit_and_evaluate():
             p = model.predict_single(pk, bk, 1)
             print(f"    P_K%={pk:.0%} vs B_K%={bk:.0%}: p(K) = {p:.3f}")
 
-    model.save()
-    print(f"\n  Model saved to {MODEL_PATH}")
+    model.save(save_path)
+    print(f"\n  Model saved to {save_path or MODEL_PATH}")
 
     return model
 

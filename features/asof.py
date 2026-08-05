@@ -260,6 +260,180 @@ def batter_k_rate_by_hand(pitches: pd.DataFrame, batter_id: int) -> dict:
     return result
 
 
+# Empirical-Bayes shrinkage pseudo-counts: the sample size at which a
+# K% observation is weighted 50/50 against league average (stabilization
+# points from published reliability research: ~70 BF pitchers, ~60 PA batters).
+PITCHER_K_PSEUDO_BF = 70
+BATTER_K_PSEUDO_BF = 60
+LEAGUE_K_RATE = 0.225
+
+
+def shrink_rate(successes: float, trials: float,
+                pseudo_count: float, league_rate: float = LEAGUE_K_RATE) -> float:
+    """Shrink an observed rate toward league average by sample size.
+
+    shrunk = (successes + pseudo * league) / (trials + pseudo)
+
+    With 0 trials this returns exactly the league rate; as trials grow
+    the observed rate dominates. This is the required transform for
+    as-of rates early in a season, where raw values are mostly noise.
+    """
+    trials = trials or 0
+    successes = successes or 0
+    return (successes + pseudo_count * league_rate) / (trials + pseudo_count)
+
+
+def _add_prior_stats(per_game: pd.DataFrame, entity_col: str,
+                     k_pseudo_count: float | None = None) -> pd.DataFrame:
+    """Add strictly-prior cumulative stats to a per-entity per-game table.
+
+    per_game must have columns [entity_col, game_pk, game_date, bf, k].
+    Rows are sorted by (entity, game_date, game_pk); each row's prior_*
+    columns are computed from rows strictly before it via
+    cumsum-minus-current, so the current game never leaks into its own
+    features. Doubleheader ordering falls back to game_pk within a date.
+
+    Adds: prior_games, prior_bf, prior_k, asof_k_pct,
+          asof_k_pct_shrunk (if k_pseudo_count given),
+          asof_bf_mean, asof_bf_std (expanding, ddof=1).
+    """
+    g = per_game.sort_values([entity_col, "game_date", "game_pk"]).copy()
+    grp = g.groupby(entity_col, sort=False)
+
+    g["prior_games"] = grp.cumcount()
+    g["prior_bf"] = grp["bf"].cumsum() - g["bf"]
+    g["prior_k"] = grp["k"].cumsum() - g["k"]
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        g["asof_k_pct"] = np.where(
+            g["prior_bf"] > 0, g["prior_k"] / g["prior_bf"], np.nan
+        )
+
+    if k_pseudo_count is not None:
+        g["asof_k_pct_shrunk"] = (
+            (g["prior_k"] + k_pseudo_count * LEAGUE_K_RATE)
+            / (g["prior_bf"] + k_pseudo_count)
+        )
+
+    # Expanding mean/std of per-game BF over prior games only:
+    # prior_sum = cumsum - current, prior_sumsq = cumsum(x^2) - current^2,
+    # var = (sumsq - sum^2/n) / (n-1).
+    bf = g["bf"].astype(float)
+    bf_sq = bf ** 2
+    prior_sum = grp["bf"].cumsum().astype(float) - bf
+    prior_sumsq = bf_sq.groupby(g[entity_col], sort=False).cumsum() - bf_sq
+    n = g["prior_games"].astype(float)
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        g["asof_bf_mean"] = np.where(n > 0, prior_sum / n, np.nan)
+        var = np.where(
+            n > 1,
+            (prior_sumsq - prior_sum ** 2 / np.where(n > 0, n, 1)) / np.where(n > 1, n - 1, 1),
+            np.nan,
+        )
+    g["asof_bf_std"] = np.sqrt(np.clip(var, 0, None))
+
+    return g
+
+
+def asof_pitcher_game_table(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per (pitcher, game): labels + strictly-prior features.
+
+    This is the vectorized bulk counterpart to load_pitches_before_game
+    for backtests and training-set assembly. Every asof_* column reflects
+    only games before that row's game.
+
+    Columns: pitcher, game_pk, game_date, home_team,
+             actual_bf, actual_k (labels),
+             prior_games, prior_bf, prior_k, asof_k_pct,
+             asof_bf_mean, asof_bf_std, asof_zone_pct, eastward_tz.
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"])
+
+    completed = df[df["events"].notna()]
+    is_k = completed["events"].isin(["strikeout", "strikeout_double_play"])
+
+    pg = completed.assign(is_k=is_k.astype(int)).groupby(
+        ["pitcher", "game_pk"]
+    ).agg(
+        bf=("events", "count"),
+        k=("is_k", "sum"),
+        game_date=("game_date", "first"),
+    ).reset_index()
+
+    # Zone counts use every pitch, not just PA-ending ones.
+    if "zone" in df.columns:
+        zdf = df[df["zone"].notna()]
+        zg = zdf.assign(in_zone=zdf["zone"].isin(range(1, 10)).astype(int)).groupby(
+            ["pitcher", "game_pk"]
+        ).agg(
+            zone_valid=("in_zone", "count"),
+            zone_in=("in_zone", "sum"),
+        ).reset_index()
+        pg = pg.merge(zg, on=["pitcher", "game_pk"], how="left")
+        pg[["zone_valid", "zone_in"]] = pg[["zone_valid", "zone_in"]].fillna(0)
+    else:
+        pg["zone_valid"] = 0
+        pg["zone_in"] = 0
+
+    if "home_team" in df.columns:
+        teams = df.groupby("game_pk").agg(home_team=("home_team", "first")).reset_index()
+        pg = pg.merge(teams, on="game_pk", how="left")
+    else:
+        pg["home_team"] = None
+
+    pg = _add_prior_stats(pg, "pitcher", k_pseudo_count=PITCHER_K_PSEUDO_BF)
+
+    grp = pg.groupby("pitcher", sort=False)
+    prior_zone_valid = grp["zone_valid"].cumsum() - pg["zone_valid"]
+    prior_zone_in = grp["zone_in"].cumsum() - pg["zone_in"]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        pg["asof_zone_pct"] = np.where(
+            prior_zone_valid >= 50, prior_zone_in / prior_zone_valid, np.nan
+        )
+
+    from features.t2_candidates import TEAM_TIMEZONES
+    pg["curr_tz"] = pg["home_team"].map(TEAM_TIMEZONES)
+    pg["prev_tz"] = grp["curr_tz"].shift(1)
+    pg["eastward_tz"] = (pg["curr_tz"] - pg["prev_tz"]).clip(lower=0).fillna(0.0)
+
+    pg = pg.rename(columns={"bf": "actual_bf", "k": "actual_k"})
+    return pg.drop(columns=["zone_valid", "zone_in", "curr_tz", "prev_tz"])
+
+
+def asof_batter_game_table(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per (batter, game): strictly-prior batter K stats.
+
+    Columns: batter, game_pk, game_date, bf, k,
+             prior_games, prior_bf, prior_k, asof_k_pct,
+             asof_bf_mean, asof_bf_std.
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"])
+
+    completed = df[df["events"].notna()]
+    is_k = completed["events"].isin(["strikeout", "strikeout_double_play"])
+
+    bg = completed.assign(is_k=is_k.astype(int)).groupby(
+        ["batter", "game_pk"]
+    ).agg(
+        bf=("events", "count"),
+        k=("is_k", "sum"),
+        game_date=("game_date", "first"),
+    ).reset_index()
+
+    return _add_prior_stats(bg, "batter", k_pseudo_count=BATTER_K_PSEUDO_BF)
+
+
 def as_of_features(game_pk: int, game_date: date, pitcher_id: int) -> dict:
     """Return all as-of pitcher features for a game.
 

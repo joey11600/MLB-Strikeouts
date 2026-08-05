@@ -36,6 +36,7 @@ def _negbin_log_pmf(k, mu, alpha):
     """
     r = 1.0 / alpha
     p = r / (r + mu)
+    p = np.clip(p, 1e-10, 1 - 1e-10)
     return (gammaln(k + r) - gammaln(k + 1) - gammaln(r)
             + r * np.log(p) + k * np.log(1 - p))
 
@@ -98,12 +99,17 @@ class StageA:
         n_features = X.shape[1]
         beta_init = np.zeros(n_features)
         beta_init[0] = np.log(y.mean())
-        log_alpha_init = np.log(0.1)
+        log_alpha_init = np.log(0.05)
         params_init = np.append(beta_init, log_alpha_init)
+
+        # log_alpha bounded so the dispersion can't collapse to 0 (Poisson
+        # degenerate) or explode; betas unbounded.
+        bounds = [(None, None)] * n_features + [(-5.0, 1.0)]
 
         result = minimize(
             self._neg_log_lik, params_init, args=(X, y),
             method="L-BFGS-B",
+            bounds=bounds,
             options={"maxiter": 1000, "ftol": 1e-10},
         )
 
@@ -168,61 +174,47 @@ class StageA:
 
 
 def prepare_training_data(start_date: date, end_date: date) -> pd.DataFrame:
-    """Build the game-level DataFrame with Stage A features."""
+    """Build the game-level DataFrame with strictly as-of Stage A features.
+
+    Every feature row uses only games BEFORE that row's game (via
+    features.asof.asof_pitcher_game_table), matching what the live
+    pipeline feeds the model at predict time. Rows without enough
+    prior history (< 3 prior starts or < 50 prior BF) are dropped.
+    """
     from data.backfill_statcast import load_cached
+    from features.asof import asof_pitcher_game_table
 
     df = load_cached(start_date, end_date)
     if df.empty:
         return pd.DataFrame()
 
-    if "game_date" in df.columns:
-        df["game_date"] = pd.to_datetime(df["game_date"])
+    pt = asof_pitcher_game_table(df)
+    starters = pt[pt["actual_bf"] >= 9].copy()
 
-    completed = df[df["events"].notna()]
-
-    game_pitcher = completed.groupby(["game_pk", "pitcher"]).agg(
-        actual_bf=("events", "count"),
-    ).reset_index()
-    game_pitcher = game_pitcher[game_pitcher["actual_bf"] >= 9]
-
-    ks = completed[completed["events"].isin(["strikeout", "strikeout_double_play"])]
-    k_counts = ks.groupby(["game_pk", "pitcher"]).size().reset_index(name="actual_k")
-    game_pitcher = game_pitcher.merge(k_counts, on=["game_pk", "pitcher"], how="left")
-    game_pitcher["actual_k"] = game_pitcher["actual_k"].fillna(0).astype(int)
-
-    pitcher_season = completed.groupby("pitcher").agg(
-        season_bf=("events", "count"),
-    ).reset_index()
-    pitcher_season_k = ks.groupby("pitcher").size().reset_index(name="season_k")
-    pitcher_season = pitcher_season.merge(pitcher_season_k, on="pitcher", how="left")
-    pitcher_season["season_k"] = pitcher_season["season_k"].fillna(0)
-    pitcher_season["season_k_pct"] = pitcher_season["season_k"] / pitcher_season["season_bf"]
-
-    game_pitcher = game_pitcher.merge(pitcher_season[["pitcher", "season_k_pct"]],
-                                       on="pitcher", how="left")
-
-    pitcher_bf_stats = game_pitcher.groupby("pitcher").agg(
-        prior_bf_mean=("actual_bf", "mean"),
-        n_starts=("game_pk", "count"),
-    ).reset_index()
-    game_pitcher = game_pitcher.merge(pitcher_bf_stats[["pitcher", "prior_bf_mean"]],
-                                       on="pitcher", how="left")
-
-    game_pitcher = game_pitcher[
-        game_pitcher["pitcher"].isin(pitcher_bf_stats[pitcher_bf_stats["n_starts"] >= 3]["pitcher"])
+    starters = starters[
+        (starters["prior_games"] >= 3)
+        & (starters["prior_bf"] >= 50)
+        & starters["asof_k_pct"].notna()
     ]
 
-    game_pitcher["il_return"] = False
-    game_pitcher["has_pitch_limit"] = False
-    game_pitcher["bp_heavy"] = False
+    starters = starters.rename(columns={
+        "asof_bf_mean": "prior_bf_mean",
+        "asof_k_pct_shrunk": "season_k_pct",
+    })
 
-    return game_pitcher
+    starters["il_return"] = False
+    starters["has_pitch_limit"] = False
+    starters["bp_heavy"] = False
+
+    return starters.reset_index(drop=True)
 
 
-def fit_and_evaluate():
-    """Fit Stage A on June-July 2026 data and evaluate."""
-    print("Preparing Stage A training data...")
-    train_df = prepare_training_data(date(2026, 6, 1), date(2026, 8, 3))
+def fit_and_evaluate(start_date: date = date(2026, 6, 1),
+                     end_date: date = date(2026, 8, 4),
+                     save_path: Path | None = None):
+    """Fit Stage A on as-of training data and evaluate."""
+    print("Preparing Stage A training data (as-of features)...")
+    train_df = prepare_training_data(start_date, end_date)
     print(f"  {len(train_df)} training rows")
 
     model = StageA()
@@ -256,8 +248,8 @@ def fit_and_evaluate():
     print(f"    Mean actual = {train_df['actual_bf'].mean():.1f}")
     print(f"    Mean predicted = {train_df['pred_bf'].mean():.1f}")
 
-    model.save()
-    print(f"\n  Model saved to {MODEL_PATH}")
+    model.save(save_path)
+    print(f"\n  Model saved to {save_path or MODEL_PATH}")
 
     return model
 

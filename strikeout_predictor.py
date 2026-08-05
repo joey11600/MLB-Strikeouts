@@ -33,9 +33,23 @@ class StrikeoutPredictor:
         self.calibrator = IsotonicCalibrator()
 
     def load_models(self):
-        """Load fitted models from disk."""
+        """Load fitted models (and the calibrator, if fitted) from disk."""
         self.stage_a.load()
         self.stage_b.load()
+
+        from models.calibration import CALIBRATOR_PATH
+        if CALIBRATOR_PATH.exists():
+            self.calibrator.load()
+
+    def calibrate_prob(self, raw_prob: float) -> float:
+        """Map a raw tail probability P(K >= x) to a calibrated one.
+
+        Identity until a calibrator has been fit — the ladder/milestone
+        path must call this too, not just per_line.
+        """
+        if self.calibrator.is_fitted:
+            return self.calibrator.predict(raw_prob)
+        return raw_prob
 
     def predict(
         self,
@@ -91,9 +105,12 @@ class StrikeoutPredictor:
         expected_k = float(np.sum(np.arange(len(k_dist)) * k_dist))
         expected_bf = float(np.sum(np.arange(len(bf_dist)) * bf_dist))
 
+        per_line_raw = {}
         per_line = {}
         for line in lines:
-            per_line[line] = prob_k_geq(k_dist, line)
+            raw = prob_k_geq(k_dist, line)
+            per_line_raw[line] = raw
+            per_line[line] = self.calibrate_prob(raw)
 
         return {
             "bf_dist": bf_dist,
@@ -101,6 +118,7 @@ class StrikeoutPredictor:
             "expected_k": expected_k,
             "expected_bf": expected_bf,
             "per_line": per_line,
+            "per_line_raw": per_line_raw,
             "pitcher_k_pct": pitcher_k,
             "per_batter_probs": per_batter_probs,
         }

@@ -18,8 +18,11 @@ Orchestrates:
   9. Write qualifying picks to tracker CSV
 """
 import csv
+import json
 import math
+import os
 import sys
+import tempfile
 import unicodedata
 from datetime import date, datetime
 from pathlib import Path
@@ -33,6 +36,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from data.game_context import fetch_schedule, build_game_context
 from scrape_dk_odds import fetch_dk_strikeout_props, fetch_dk_strikeout_alts
 from strikeout_predictor import StrikeoutPredictor
+from features.asof import (
+    shrink_rate, PITCHER_K_PSEUDO_BF, BATTER_K_PSEUDO_BF,
+)
 from models.edge import (
     compute_edge, pick_strength, american_to_decimal, no_vig_fair_prob,
 )
@@ -44,7 +50,9 @@ ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
 
 LEAGUE_K_RATE = 0.225
-SHRINKAGE_BF = 70
+SHRINKAGE_BF = PITCHER_K_PSEUDO_BF
+
+SLATES_DIR = Path(__file__).parent.parent / "data" / "slates"
 
 
 def _normalize_name(name: str) -> str:
@@ -189,7 +197,13 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
 def _compute_batter_k_rates(
     statcast_df: pd.DataFrame, lineup: list[dict]
 ) -> list[float]:
-    """Compute K% for each batter in the lineup from Statcast data."""
+    """Compute shrunk K% for each batter in the lineup from Statcast data.
+
+    Uses the same empirical-Bayes shrinkage as training
+    (features.asof.BATTER_K_PSEUDO_BF) so live inputs match the
+    distribution the model was fit on. A batter with no history gets
+    exactly the league rate.
+    """
     completed = statcast_df[statcast_df["events"].notna()]
     k_rates = []
 
@@ -200,17 +214,93 @@ def _compute_batter_k_rates(
             continue
 
         b = completed[completed["batter"] == batter_id]
-        if b.empty or len(b) < 30:
-            k_rates.append(LEAGUE_K_RATE)
-            continue
-
-        ks = b["events"].isin(["strikeout", "strikeout_double_play"]).sum()
-        k_rates.append(float(ks / len(b)))
+        ks = b["events"].isin(["strikeout", "strikeout_double_play"]).sum() if not b.empty else 0
+        k_rates.append(shrink_rate(float(ks), float(len(b)), BATTER_K_PSEUDO_BF))
 
     while len(k_rates) < 9:
         k_rates.append(LEAGUE_K_RATE)
 
     return k_rates
+
+
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    """Atomic JSON write: tempfile + fsync + os.replace (repo rule)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=1)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+
+def _write_slate_sidecar(game_date: str, predictions: list) -> None:
+    """Persist the full evaluated slate to data/slates/YYYY-MM-DD.json.
+
+    Every analyzed pitcher — full P(K=k) distribution, expected K/BF,
+    and EVERY evaluated ladder rung (bet or passed with reason) — so the
+    dashboard can show the whole board, not just the surviving picks.
+    """
+    pitchers = []
+    for pred in predictions:
+        k_dist = pred.get("k_dist")
+        rungs = []
+        for r in pred.get("ladder_eval") or []:
+            rungs.append({
+                "milestone": r["milestone"],
+                "odds": r["odds_str"],
+                "raw_model_prob": round(float(r["raw_model_prob"]), 4),
+                "model_prob": round(float(r["model_prob"]), 4),
+                "fair_prob": round(float(r["fair_prob"]), 4),
+                "blended_prob": round(float(r["blended_prob"]), 4),
+                "edge": round(float(r["edge"]), 4),
+                "strength": r["strength"],
+                "units_risked": float(r["units_risked"]),
+                "status": r["status"],
+            })
+
+        pitchers.append({
+            "pitcher_id": pred.get("pitcher_id"),
+            "pitcher_name": pred.get("pitcher_name"),
+            "pitcher_team": pred.get("pitcher_team"),
+            "opponent_team": pred.get("opponent_team"),
+            "is_home": bool(pred.get("is_home")),
+            "venue": pred.get("venue"),
+            "game_pk": pred.get("game_pk"),
+            "line": pred.get("line"),
+            "over_odds": str(pred.get("over_odds", "")),
+            "under_odds": str(pred.get("under_odds", "")),
+            "lineup_source": pred.get("lineup_source"),
+            "expected_k": round(float(pred.get("expected_k", 0)), 2),
+            "expected_bf": round(float(pred.get("expected_bf", 0)), 2),
+            "p_over_raw": round(float(pred.get("model_prob_over_raw", 0)), 4),
+            "p_over_calibrated": round(float(pred.get("model_prob_over", 0)), 4),
+            "blended_prob_over": round(float(pred.get("blended_prob_over", 0)), 4),
+            "fair_over": round(float(pred.get("fair_over", 0)), 4),
+            "hold_pct": round(float(pred.get("hold_pct", 0)), 4),
+            "best_side": pred.get("best_side"),
+            "edge_best": round(float(pred.get("best_edge", 0)), 4),
+            "threshold": round(float(pred.get("threshold", 0)), 4),
+            "strength": pred.get("strength"),
+            "primary_units_risked": float(pred.get("primary_units_final", 0.0)),
+            "k_dist": [round(float(x), 6) for x in (k_dist if k_dist is not None else [])],
+            "ladder": rungs,
+        })
+
+    payload = {
+        "date": game_date,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "reconstructed": False,
+        "pitchers": pitchers,
+    }
+    out_path = SLATES_DIR / f"{game_date}.json"
+    _write_json_atomic(out_path, payload)
+    print(f"  Slate sidecar written: {out_path} ({len(pitchers)} pitchers)")
 
 
 def _load_existing_picks(iso_date: str) -> dict:
@@ -385,6 +475,7 @@ def run_daily(
             **entry,
             "model_prob_over": model_prob_over,
             "model_prob_under": 1.0 - model_prob_over,
+            "model_prob_over_raw": result["per_line_raw"][dk_line],
             "expected_k": result["expected_k"],
             "expected_bf": result["expected_bf"],
             "pitcher_k_pct": stats["season_k_pct"],
@@ -446,11 +537,15 @@ def run_daily(
                 k_dist, pitcher_alts,
                 primary_line=dk_line,
                 primary_units=primary_units,
+                calibrate_fn=predictor.calibrate_prob,
             )
+            pred["ladder_eval"] = rungs
 
-            if rungs:
-                print(f"    {pitcher_name}: {len(rungs)} ladder rungs")
-                for rung in rungs:
+            bet_rungs = [r for r in rungs if r["status"] == "bet"]
+            if bet_rungs:
+                print(f"    {pitcher_name}: {len(bet_rungs)} ladder rungs "
+                      f"({len(rungs)} evaluated)")
+                for rung in bet_rungs:
                     print(
                         f"      {rung['milestone']}+ K  "
                         f"@ {rung['odds']:>+4}  "
@@ -469,7 +564,8 @@ def run_daily(
                         "best_odds": rung["odds"],
                         "model_prob_over": rung["model_prob"],
                         "model_prob_under": 1.0 - rung["model_prob"],
-                        "over_odds": str(rung["odds"]),
+                        "fair_prob": rung["fair_prob"],
+                        "over_odds": rung["odds_str"],
                         "under_odds": "",
                         "strength": rung["strength"],
                         "units_risked": rung["units_risked"],
@@ -490,6 +586,27 @@ def run_daily(
     # Apply portfolio daily cap across ALL plays (primary + ladder)
     all_plays = portfolio_daily_cap(all_plays)
     all_plays = [p for p in all_plays if p["units_risked"] > 0]
+
+    # Reconcile final stakes back into the full-board evaluation so the
+    # slate sidecar records what was actually bet after every cap.
+    final_primary = {}
+    final_ladder = {}
+    for p in all_plays:
+        pid = p.get("pitcher_id")
+        if p.get("pick_type") == "primary":
+            final_primary[pid] = p.get("units_risked", 0.0)
+        elif p.get("pick_type") == "ladder":
+            final_ladder[(pid, p.get("milestone"))] = p.get("units_risked", 0.0)
+
+    for pred in predictions:
+        pid = pred.get("pitcher_id")
+        pred["primary_units_final"] = final_primary.get(pid, 0.0)
+        for rung in pred.get("ladder_eval") or []:
+            if rung["status"] == "bet":
+                final = final_ladder.get((pid, rung["milestone"]), 0.0)
+                rung["units_risked"] = final
+                if final <= 0:
+                    rung["status"] = "passed_daily_cap"
 
     print(f"\n  ALL PICKS (primary + ladder):")
     total_units = 0
@@ -519,6 +636,7 @@ def run_daily(
         return all_plays
 
     print(f"\n[8/8] Writing picks to {PICKS_PATH}...")
+    _write_slate_sidecar(game_date, predictions)
     existing_picks = _load_existing_picks(game_date)
 
     all_rows = []
@@ -546,7 +664,8 @@ def run_daily(
                 continue
 
         if play.get("pick_type") == "ladder":
-            nv_fair = f"{play['model_prob_over']:.4f}"
+            # True de-vigged fair prob — NOT the model prob (old bug).
+            nv_fair = f"{play.get('fair_prob', 0.0):.4f}"
             over_odds_str = str(play.get("over_odds", ""))
             under_odds_str = ""
             pick_label = f"OVER {line_val} ({play['strength']})"

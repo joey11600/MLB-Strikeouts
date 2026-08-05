@@ -9,7 +9,12 @@ does adding a feature improve the Brier score and calibration curve?
 Point-estimate RMSE improvements mean nothing when 72% of the variance
 is irreducible.
 """
+import pickle
+from pathlib import Path
+
 import numpy as np
+
+CALIBRATOR_PATH = Path(__file__).parent / "calibrator.pkl"
 
 
 def pav_isotonic(values: list[float], weights: list[float], increasing: bool = True) -> list[float]:
@@ -110,3 +115,22 @@ class IsotonicCalibrator:
             return raw_prob
 
         return float(np.interp(raw_prob, self._x_knots, self._y_knots))
+
+    @property
+    def is_fitted(self) -> bool:
+        return self._x_knots is not None
+
+    def save(self, path: Path | None = None):
+        path = path or CALIBRATOR_PATH
+        with open(path, "wb") as f:
+            pickle.dump({
+                "x_knots": self._x_knots,
+                "y_knots": self._y_knots,
+            }, f)
+
+    def load(self, path: Path | None = None):
+        path = path or CALIBRATOR_PATH
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        self._x_knots = data["x_knots"]
+        self._y_knots = data["y_knots"]

@@ -13,6 +13,25 @@ import math
 EDGE_MARGIN = 0.02
 MIN_EDGE_PCT = 0.03
 
+# Market-anchored shrinkage: the betting probability is a blend of the
+# calibrated model and the market's no-vig fair probability. The model
+# earned +2% Brier over naive on the honest backtest — real but modest —
+# so it gets half-trust until a track record (100+ graded bets with
+# positive CLV) justifies raising this. w=1.0 reproduces the old
+# model-only behavior that claimed absurd 22pp edges on day one.
+MODEL_TRUST_WEIGHT = 0.5
+
+# One-sided markets (ladder/milestone alt lines) can't be de-vigged from
+# two sides. Assume the book's margin on a single quoted side; alt boards
+# are juiced harder than mainlines.
+ALT_SIDE_MARGIN = 0.04
+
+
+def blend_with_market(model_prob: float, fair_prob: float,
+                      weight: float = MODEL_TRUST_WEIGHT) -> float:
+    """Shrink the model probability toward the market's fair probability."""
+    return weight * model_prob + (1.0 - weight) * fair_prob
+
 
 def american_to_implied(odds: int | str) -> float:
     """Convert American odds to implied probability.
@@ -73,28 +92,35 @@ def compute_edge(
     over_odds: int | str,
     under_odds: int | str,
 ) -> dict:
-    """Compute model edge for both sides of a strikeout prop.
+    """Compute market-anchored edge for both sides of a strikeout prop.
+
+    model_prob_over should be the CALIBRATED model probability. It is
+    blended with the no-vig fair probability (MODEL_TRUST_WEIGHT) before
+    the edge is measured, so edge = w * (model - fair).
 
     Returns dict with: fair_over, fair_under, hold_pct,
-    edge_over, edge_under, best_side, best_edge, best_odds,
-    model_prob_best, clears_threshold.
+    blended_prob_over, raw_model_prob_over, edge_over, edge_under,
+    best_side, best_edge, best_odds, model_prob_best (blended, for
+    staking), threshold, clears_threshold.
     """
     nv = no_vig_fair_prob(over_odds, under_odds)
-    model_prob_under = 1.0 - model_prob_over
 
-    edge_over = model_prob_over - nv["fair_over"]
-    edge_under = model_prob_under - nv["fair_under"]
+    blended_over = blend_with_market(model_prob_over, nv["fair_over"])
+    blended_under = 1.0 - blended_over
+
+    edge_over = blended_over - nv["fair_over"]
+    edge_under = blended_under - nv["fair_under"]
 
     if edge_over >= edge_under:
         best_side = "OVER"
         best_edge = edge_over
         best_odds = int(over_odds)
-        model_prob_best = model_prob_over
+        model_prob_best = blended_over
     else:
         best_side = "UNDER"
         best_edge = edge_under
         best_odds = int(under_odds)
-        model_prob_best = model_prob_under
+        model_prob_best = blended_under
 
     threshold = max(nv["hold_pct"] + EDGE_MARGIN, MIN_EDGE_PCT)
     clears = best_edge >= threshold
@@ -103,6 +129,8 @@ def compute_edge(
         "fair_over": nv["fair_over"],
         "fair_under": nv["fair_under"],
         "hold_pct": nv["hold_pct"],
+        "blended_prob_over": blended_over,
+        "raw_model_prob_over": model_prob_over,
         "edge_over": edge_over,
         "edge_under": edge_under,
         "best_side": best_side,

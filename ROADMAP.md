@@ -9,7 +9,9 @@
 - [x] Surface licensing decision
 
 ## Phase 1 — Data layer and the honest baseline ✅
-- [x] Backfill Statcast 2024–2026
+- [ ] Backfill Statcast 2024–2026 — **CORRECTED 2026-08-05: only
+  2026-06..08 exists on disk (AUDIT A-004). Multi-season backfill
+  still required for cross-season splits.**
 - [x] Build features/asof.py (the as-of-date utility)
 - [x] Build game-context store (probables, lineups, venue, umpire, weather)
 - [x] Build ID crosswalk from Chadwick
@@ -80,3 +82,40 @@
   Promoted features are above floor but marginal. Backtest (+2%)
   is the real validation.
 - [ ] Shadow promoted features for 2 weeks
+- [ ] Re-gauntlet T2 promotions on the honest as-of harness (A-005)
+
+## Phase 7 — Model truth audit ✅ (2026-08-05)
+- [x] Vectorized as-of feature tables (`features/asof.py`) — leakage
+  structurally impossible in training/backtest feature computation
+- [x] Empirical-Bayes K% shrinkage (70 BF pitcher / 60 PA batter),
+  consistent across training, backtest, and live pipeline
+- [x] Honest backtest: train ≤ Jul 8 → test Jul 9–Aug 3, all as-of.
+  TRUE numbers: model 0.1481 vs naive 0.1505 (+2%), 618 test starts.
+  Predictions saved to `data/backtest_predictions.csv`
+- [x] Isotonic calibration fit (cross-fit check), persisted, wired
+  into live path — corrects 2-4pp systematic low bias
+- [x] Market-anchored shrinkage: MODEL_TRUST_WEIGHT=0.5 blend with
+  no-vig fair; edges compress to honest single digits
+- [x] Ladder honesty: ALT_SIDE_MARGIN de-vig, 10% threshold, true
+  fair prob in ledger, signed odds
+- [x] Slate sidecars (`data/slates/*.json`): full board persisted —
+  every pitcher, distribution, ladder rung with status. 8/4
+  reconstructed from odds snapshots
+- [x] CLV capture: `run.py close` snapshots; grader writes closing
+  odds + clv_pct per pick
+- [ ] Multi-season Statcast backfill (2024, 2025, Apr–May 2026), then
+  cross-season three-way splits (A-004)
+- [ ] Raise MODEL_TRUST_WEIGHT only after 100+ graded bets with
+  positive average CLV (A-006)
+
+## Phase 8 — Dashboard rebuild (Next.js + 21st.dev)
+- [ ] Next.js App Router app in `dashboard/`, static export, Dark
+  Terminal tokens, Tailwind + shadcn (21st.dev components)
+- [ ] Data layer v2: per-date slates, availableDates, performance
+  aggregates, model analytics
+- [ ] Slate view: date stepper, filters, expandable pick cards with
+  full ladder + K-distribution histogram
+- [ ] Performance view: P&L chart with scrubbing, window tabs,
+  splits, ledger
+- [ ] Model view: calibration curve, Brier-by-line, gauntlet results
+- [ ] Deploy to existing Vercel project

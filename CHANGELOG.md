@@ -1,5 +1,87 @@
 # Changelog
 
+## 2026-08-05 — Phase 7: Model truth audit — leakage fix, calibration, market shrinkage
+
+A full pipeline audit after the first live slate (1W-3L, -4.34u) found
+three structural defects. All fixed in this release. **Every previously
+published backtest number is superseded by the honest numbers below.**
+
+### Defects found
+
+1. **Isotonic calibration was dead code.** `IsotonicCalibrator` was
+   constructed but never fit, persisted, loaded, or applied — in the
+   live path or the backtest. Live picks shipped raw model
+   probabilities, which is why all 4 first-slate picks claimed
+   implausible 22-25pp edges vs DraftKings.
+2. **Backtest leakage.** `backtest.py` computed season K%, BF stats,
+   zone%, batter K%, and rookie counts over the FULL test window —
+   every prediction saw its own game and future games. Stage A/B were
+   also trained on the same window the backtest scored. The published
+   "+2% vs naive" was contaminated. With leakage removed and nothing
+   else changed, the model showed NO edge over naive (0.1509 vs 0.1505).
+3. **Ladder edges overstated.** One-sided milestone edges were computed
+   against raw vig-inclusive implied probability (no de-vig) with a
+   flat 3% threshold — a materially looser bar than the primary
+   market's hold+2%, sharing the same edge column. Ladder rows also
+   wrote the MODEL prob into `no_vig_fair_prob`.
+
+### Fixes shipped
+
+- **Vectorized as-of features** (`features/asof.py`):
+  `asof_pitcher_game_table` / `asof_batter_game_table` — per-entity
+  per-game cumulative stats via sort + cumsum-minus-current; the
+  current game can never leak into its own features. Stage A/B
+  training preps and the backtest all rebuilt on these.
+- **Empirical-Bayes shrinkage** (`features/asof.py::shrink_rate`):
+  pitcher K% (70 BF pseudo-count) and batter K% (60 PA) shrunk toward
+  league average. This restored the honest edge: thin as-of samples
+  are mostly noise without it. Live pipeline batter rates now use the
+  same shrinkage as training (was raw with a 30-BF cutoff).
+- **Honest backtest** (`backtest.py`): within-2026 time split — train
+  ≤ Jul 8, test Jul 9–Aug 3, all features as-of. Result:
+  **model Brier 0.1481 vs naive 0.1505 (+2%)**, positive at 5 of 6
+  lines. Saves per-game predictions to `data/backtest_predictions.csv`.
+- **Isotonic calibration wired live**
+  (`tools/fit_calibrator.py`, `models/calibration.py` save/load,
+  `strikeout_predictor.py`): fit on out-of-sample predictions with a
+  cross-fit honesty check; corrects the model's systematic 2-4pp low
+  bias (mid-lines now within ±0.5pp). Applied to per_line and exposed
+  as `calibrate_prob()` for milestone tails.
+- **Market-anchored shrinkage** (`models/edge.py::MODEL_TRUST_WEIGHT`
+  = 0.5): betting probability = 50/50 blend of calibrated model and
+  no-vig market fair. Edge = w·(model − fair). First-slate-style picks
+  compress from ~22pp claimed edges to ~9-11pp, demoting STRONG → LEAN
+  with smaller Kelly stakes. Revisit weight after 100 graded bets.
+- **Ladder honesty** (`models/ladder.py`): assumed one-side margin
+  de-vig (`ALT_SIDE_MARGIN` = 4%), blended edge, threshold raised to
+  `LADDER_EDGE_THRESHOLD` = 10% (2×margin + 2pp). Re-priced 8/4: the
+  losing Ginn 6+ rung correctly fails the new bar. True fair prob now
+  written to `no_vig_fair_prob`; ladder odds stored with explicit sign.
+- **Slate sidecars** (`data/slates/YYYY-MM-DD.json`): pipeline now
+  persists every evaluated pitcher — full P(K=k) distribution,
+  expected K/BF, and EVERY ladder rung with bet/passed status
+  (previously 212 of 213 evaluated rungs were destroyed).
+  `tools/reconstruct_slate.py` rebuilt 2026-08-04 from archived odds
+  snapshots (26 pitchers, flagged `reconstructed: true`).
+- **CLV capture** (`tools/closing_odds.py`, `run.py close`):
+  timestamped closing-odds snapshots; grader fills
+  `closing_over_odds` / `closing_under_odds` / `clv_pct` (fair prob at
+  close minus at open, pick side) as it grades. Three new ledger
+  columns appended to tracker FIELDS.
+- Production Stage A/B refit on as-of features, full window:
+  Stage A season_k_pct coefficient now sensible (+0.064, was −0.11
+  degenerate under leaky fit); Stage B pitcher/batter logits ≈ +1.06
+  each. Optimizer stabilized (bounded dispersion, clipped log PMF).
+
+### Honest-model caveats (recorded, not hidden)
+
+- With honest features, `n_rookies` (+0.009) and `eastward_tz` (−0.05)
+  are marginal; the T2 promotions should be re-gauntleted against the
+  honest harness (A-005).
+- Statcast cache holds ONLY 2026-06-01..08-04. The documented
+  2024-2025 backfill does not exist on disk (A-004); the three-way
+  cross-season split is impossible until it runs.
+
 ## 2026-08-04 — Phase 6: T2 feature gauntlet and 3 promotions
 
 - Built T2 feature extraction module (`features/t2_candidates.py`):

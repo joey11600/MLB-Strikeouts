@@ -17,6 +17,7 @@ be overwritten by subsequent pipeline runs.
 """
 import csv
 import sys
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -24,12 +25,105 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.game_context import fetch_boxscore, fetch_schedule
+from models.edge import no_vig_fair_prob, american_to_implied, ALT_SIDE_MARGIN
 from tracker import (
     FIELDS, PICKS_PATH, _write_rows, _calc_pnl, grade_pick,
 )
 
 ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
+
+ODDS_DIR = Path(__file__).parent.parent / "data" / "odds"
+
+
+def _norm_name(name: str) -> str:
+    n = unicodedata.normalize("NFD", name)
+    n = "".join(c for c in n if unicodedata.category(c) != "Mn")
+    return " ".join(n.strip().lower().split())
+
+
+def _load_closing_snapshots(pick_date: str) -> tuple[list[dict], list[dict]]:
+    """Load closing-odds snapshots for a date (primary, alts)."""
+    primary, alts = [], []
+    p_path = ODDS_DIR / f"closing_{pick_date}.csv"
+    a_path = ODDS_DIR / f"closing_alts_{pick_date}.csv"
+    if p_path.exists():
+        with open(p_path, encoding="utf-8") as f:
+            primary = list(csv.DictReader(f))
+    if a_path.exists():
+        with open(a_path, encoding="utf-8") as f:
+            alts = list(csv.DictReader(f))
+    return primary, alts
+
+
+def _last_snapshot(rows: list[dict]) -> dict | None:
+    """Last capture at or before the game's start; else the latest one."""
+    if not rows:
+        return None
+    pregame = [
+        r for r in rows
+        if r.get("start_time_utc") and r.get("captured_at")
+        and r["captured_at"] <= r["start_time_utc"]
+    ]
+    pool = pregame or rows
+    return max(pool, key=lambda r: r.get("captured_at") or "")
+
+
+def _fill_closing_and_clv(row: dict, closing_primary: list[dict],
+                          closing_alts: list[dict]) -> None:
+    """Write closing odds + CLV into a pick row, if a snapshot matches.
+
+    CLV = fair probability of the pick side at CLOSE minus at OPEN.
+    Positive means the market moved toward our side after we bet.
+    """
+    name = _norm_name(row.get("pitcher_name", ""))
+    line = str(row.get("line", ""))
+    side = (row.get("pick_side") or "").strip().upper()
+    is_ladder = line.endswith("+")
+
+    try:
+        if is_ladder:
+            milestone = line.rstrip("+")
+            matches = [
+                r for r in closing_alts
+                if _norm_name(r.get("pitcher_name", "")) == name
+                and str(r.get("milestone", "")) == milestone
+            ]
+            snap = _last_snapshot(matches)
+            if snap is None:
+                return
+            close_odds = str(snap.get("odds", ""))
+            open_odds = row.get("opened_over_odds", "")
+            if not close_odds or not open_odds:
+                return
+            fair_close = american_to_implied(close_odds) / (1.0 + ALT_SIDE_MARGIN)
+            fair_open = american_to_implied(open_odds) / (1.0 + ALT_SIDE_MARGIN)
+            row["closing_over_odds"] = f"{int(close_odds):+d}"
+            row["closing_under_odds"] = ""
+            row["clv_pct"] = f"{fair_close - fair_open:.4f}"
+        else:
+            matches = [
+                r for r in closing_primary
+                if _norm_name(r.get("pitcher_name", "")) == name
+                and str(r.get("line", "")) == line
+            ]
+            snap = _last_snapshot(matches)
+            if snap is None:
+                return
+            c_over = snap.get("over_odds", "")
+            c_under = snap.get("under_odds", "")
+            o_over = row.get("opened_over_odds", "")
+            o_under = row.get("opened_under_odds", "")
+            if not (c_over and c_under and o_over and o_under):
+                return
+            nv_close = no_vig_fair_prob(c_over, c_under)
+            nv_open = no_vig_fair_prob(o_over, o_under)
+            key = "fair_over" if side == "OVER" else "fair_under"
+            row["closing_over_odds"] = c_over
+            row["closing_under_odds"] = c_under
+            row["clv_pct"] = f"{nv_close[key] - nv_open[key]:.4f}"
+    except (ValueError, TypeError):
+        return
 
 
 def _fetch_actual_strikeouts(game_pk: int, pitcher_id: int) -> int | None:
@@ -127,6 +221,7 @@ def run_grader(
     modified = False
 
     boxscore_cache = {}
+    closing_cache = {}
 
     for i, row in enumerate(all_rows):
         existing_grade = (row.get("graded_result") or "").strip().upper()
@@ -181,14 +276,24 @@ def run_grader(
 
         row["graded_result"] = result
         row["actual_strikeouts"] = str(actual_k) if actual_k is not None else ""
-        row["profit_loss_units"] = f"{_calc_pnl({**row, 'graded_result': result}):.2f}"
+        row["profit_loss_units"] = str(round(_calc_pnl({**row, 'graded_result': result}), 4))
         row["updated_at"] = datetime.now(UTC).isoformat()
+
+        # CLV: fill closing odds from pre-game snapshots, if captured.
+        if pick_date not in closing_cache:
+            closing_cache[pick_date] = _load_closing_snapshots(pick_date)
+        _fill_closing_and_clv(row, *closing_cache[pick_date])
+
         modified = True
         graded_count += 1
 
         pnl = float(row["profit_loss_units"])
         pnl_str = f"+{pnl:.2f}" if pnl > 0 else f"{pnl:.2f}"
-        print(f"  {result:>4}: {pitcher_name:<22} {line:<6} actual={actual_k}  P&L={pnl_str}u")
+        clv_str = ""
+        if row.get("clv_pct"):
+            clv_val = float(row["clv_pct"])
+            clv_str = f"  CLV={clv_val:+.1%}"
+        print(f"  {result:>4}: {pitcher_name:<22} {line:<6} actual={actual_k}  P&L={pnl_str}u{clv_str}")
 
     if modified:
         _write_rows(PICKS_PATH, all_rows)

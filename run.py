@@ -78,6 +78,14 @@ def cmd_backfill():
     print("Backfill complete.")
 
 
+def cmd_close():
+    """Capture a closing-odds snapshot (run shortly before first pitch)."""
+    from tools.closing_odds import capture_closing
+
+    print(f"\n--- CLOSING ODDS SNAPSHOT ---\n")
+    capture_closing()
+
+
 def cmd_full_cycle(dry_run: bool = False, no_ladder: bool = False):
     """Full daily cycle: grade yesterday, show status, predict today."""
     print("=" * 60)
@@ -132,10 +140,11 @@ Commands:
   grade      Grade yesterday's picks (or specify a date)
   status     Show current record and P&L
   backfill   Refresh Statcast cache for the last week
+  close      Capture closing-odds snapshot (run before first pitch)
         """,
     )
     parser.add_argument("command", nargs="?", default=None,
-                        choices=["predict", "grade", "status", "backfill"])
+                        choices=["predict", "grade", "status", "backfill", "close"])
     parser.add_argument("date", nargs="?", default=None,
                         help="Date for grade command (YYYY-MM-DD)")
     parser.add_argument("--dry-run", action="store_true",
@@ -157,6 +166,8 @@ Commands:
             cmd_status()
         elif args.command == "backfill":
             cmd_backfill()
+        elif args.command == "close":
+            cmd_close()
     except Exception as exc:
         if args.debug:
             traceback.print_exc()
