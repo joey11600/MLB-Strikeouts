@@ -313,10 +313,17 @@ Graded picks are locked and cannot be overwritten.
 
 ### Production operator workflow
 
+Automated (Windows Task Scheduler, `tools/scheduled_run.py`, ET):
+10:30 AM morning picks + deploy · 12:15/3:00/6:15 PM closing
+snapshots · 3:00 AM grade + CLV + deploy. Logs in
+`logs/auto_YYYY-MM-DD.log`. Runs only while logged in — keep the PC
+on. Manual commands still work any time:
+
 ```
 python run.py              # full daily cycle
 python run.py predict      # today's picks only
 python run.py grade        # grade yesterday's picks
+python run.py close        # closing-odds snapshot (CLV)
 python run.py status       # show record and P&L
 python run.py backfill     # refresh Statcast cache
 ```

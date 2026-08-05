@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-08-05 — Phase 11: Daily automation (Windows Task Scheduler)
+
+Five user-level scheduled tasks now run the daily rhythm unattended
+(`tools/scheduled_run.py`, machine is Eastern time):
+
+- **10:30 AM — Morning Picks**: grade yesterday, predict today, write
+  slate sidecar, regenerate dashboard data, auto-commit ledger, push,
+  deploy dashboard.
+- **12:15 / 3:00 / 6:15 PM — Closing snapshots**: append-only
+  closing-odds captures; the grader uses the last capture before each
+  game's own start time, so day games and night games each get an
+  honest close.
+- **3:00 AM — Night Grading**: grade the finished slate (fills CLV),
+  regenerate + commit + push + deploy.
+
+Every step logs to `logs/auto_YYYY-MM-DD.log` (gitignored); a failed
+step is logged and the remaining steps still run. Tasks are
+StartWhenAvailable + WakeToRun, but run only while the operator is
+logged in (no stored credentials, by design) — keep the PC on.
+Auto-commits are message-prefixed `chore(auto):`.
+
 ## 2026-08-05 — Phase 10: Feature re-gauntlet — all three T2 promotions demoted
 
 Closed AUDIT A-005. The Phase 6 gauntlet promoted a9_zone_pct,

@@ -12,6 +12,7 @@ node_modules/
 .vercel/
 dashboard/out/
 dashboard/next-env.d.ts
+logs/
 *.tmp
 data/statcast_cache/
 data/backfill/

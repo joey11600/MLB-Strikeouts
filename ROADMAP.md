@@ -44,7 +44,8 @@
 - [x] Auto-grading pipeline: boxscore K fetch, WIN/LOSS/PUSH/VOID
 - [x] Production run script (`run.py`): single entry point for operator
 - [x] Atomic ledger with void/push/scratch grading
-- [ ] Daily cron / scheduled task
+- [x] Daily cron / scheduled task — 5 Windows scheduled tasks
+  (morning picks, 3 closing snapshots, night grading), Phase 11
 - [ ] Supabase mirror
 - [ ] Telegram alerts
 - [ ] Loss-cluster pipeline
