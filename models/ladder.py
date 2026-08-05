@@ -10,9 +10,13 @@ betting system (operator rule, 2026-08-05):
   2. NEXT RUNGS ONLY — at most the next LADDER_RUNG_COUNT lines above
      the primary (line 6.5 -> alt 7.5 and alt 8.5, i.e. milestones
      8+ and 9+). Nothing below the line, nothing further out.
-  3. SMALL — each rung's stake caps at LADDER_RUNG_STAKE_FRACTION of
-     the primary stake, on top of quarter-Kelly, MAX_STAKE_UNITS, and
-     the LADDER_MAX_UNITS per-pitcher cap.
+  3. DESCENDING STAKES — the primary at the market line carries the
+     most money (it is the most leash-proof bet); each rung up caps at
+     LADDER_RUNG_STAKE_FRACTION of the rung below it:
+     rung cap = primary_units * FRACTION^(distance from the line).
+     Line 2.5 with 1.70u primary -> 4+ K <= 0.85u, 5+ K <= 0.43u.
+     Allocation is nearest-rung-first, on top of quarter-Kelly,
+     MAX_STAKE_UNITS, and the LADDER_MAX_UNITS per-pitcher cap.
   4. Every rung still must clear LADDER_EDGE_THRESHOLD (money rule).
 
 Every posted rung is still EVALUATED and returned with a status so the
@@ -180,10 +184,13 @@ def evaluate_ladder(
             "status": status,
         })
 
-    rungs.sort(key=lambda r: r["edge"], reverse=True)
+    # Nearest-rung-first allocation with stakes that DESCEND by distance
+    # from the line: the market line holds the most money (most robust
+    # to a short outing), each step up gets at most half the step below.
+    rungs.sort(key=lambda r: r["milestone"])
 
+    base = math.ceil(primary_line) if primary_line is not None else 0
     remaining = LADDER_MAX_UNITS - primary_units
-    rung_stake_ceiling = LADDER_RUNG_STAKE_FRACTION * primary_units
     for rung in rungs:
         if rung["status"] != "candidate":
             continue
@@ -191,6 +198,8 @@ def evaluate_ladder(
             rung["status"] = "passed_pitcher_cap"
             continue
 
+        distance = max(1, rung["milestone"] - base)
+        rung_stake_ceiling = primary_units * (LADDER_RUNG_STAKE_FRACTION ** distance)
         capped = min(
             rung["raw_units"], remaining, MAX_STAKE_UNITS, rung_stake_ceiling,
         )

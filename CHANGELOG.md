@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-05 — Descending ladder stakes (line-gap defense, operator rule)
+
+When the market's line sits far below the model's projection (Anderson:
+line 2.5, projection 5.4), the line placement itself is leash
+information — the book expects a short outing. The operator's answer:
+keep the most money on the leash-proof market line and taper up.
+Ladder allocation is now nearest-rung-first with stakes that halve per
+step: rung cap = primary × 0.5^distance (1.70u primary → 4+ K ≤
+0.85u, 5+ K ≤ 0.43u, ~2.97u total under the 3u cap). Replaces
+best-edge-first allocation. Gap gate, next-2-rungs, and the 10% edge
+bar are unchanged. Applies from the next slate; tonight's placed bets
+stand as written.
+
 ## 2026-08-05 — Ladder table readability round 2 (operator feedback)
 
 - Rungs display in strict line order; bet rungs are highlighted in

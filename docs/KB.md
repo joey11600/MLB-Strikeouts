@@ -274,9 +274,15 @@ parallel betting system:
    projection of 8.0+.
 2. **Next rungs only** — at most `LADDER_RUNG_COUNT` (2) lines above
    the primary: line 6.5 → alt 7.5 and 8.5 (milestones 8+ and 9+).
-3. **Small** — each rung ≤ `LADDER_RUNG_STAKE_FRACTION` (50%) of the
-   primary stake, on top of quarter-Kelly, the 2u per-bet cap, and
-   the 3u per-pitcher cap.
+3. **Descending stakes** — the primary at the market line carries the
+   most money (most robust to a short outing); each rung up caps at
+   half the rung below: `primary × 0.5^distance`. Line 2.5 with a
+   1.70u primary → 4+ K ≤ 0.85u, 5+ K ≤ 0.43u. Nearest-rung-first
+   allocation, on top of quarter-Kelly, the 2u per-bet cap, and the
+   3u per-pitcher cap. This is also the line-gap defense: when DK's
+   line sits far below the projection, the line placement itself is
+   leash information — most money stays on the leash-proof low line,
+   with tapering plus-money exposure to the full-start upside.
 4. Every rung still clears `LADDER_EDGE_THRESHOLD` (10%).
 
 Every posted rung is evaluated and stored with a pass/bet status so
