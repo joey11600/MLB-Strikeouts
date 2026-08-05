@@ -81,7 +81,7 @@
      "edge": -0.0354,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -93,7 +93,7 @@
      "edge": -0.0575,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -105,7 +105,7 @@
      "edge": -0.0706,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -129,7 +129,7 @@
      "edge": -0.0723,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -141,7 +141,7 @@
      "edge": -0.0301,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -153,7 +153,7 @@
      "edge": -0.0182,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T18:10:00.0000000Z"
@@ -236,7 +236,7 @@
      "edge": 0.0358,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -248,7 +248,7 @@
      "edge": 0.03,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -260,7 +260,7 @@
      "edge": 0.0632,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -284,7 +284,7 @@
      "edge": 0.0677,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -296,7 +296,7 @@
      "edge": 0.0517,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -308,7 +308,7 @@
      "edge": 0.0266,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T18:10:00.0000000Z"
@@ -391,7 +391,7 @@
      "edge": -0.0172,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -403,7 +403,7 @@
      "edge": -0.0241,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -427,7 +427,7 @@
      "edge": -0.0356,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -439,7 +439,7 @@
      "edge": -0.033,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -451,7 +451,7 @@
      "edge": 0.0012,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -463,7 +463,7 @@
      "edge": -0.006,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T18:20:00.0000000Z"
@@ -546,7 +546,7 @@
      "edge": -0.0064,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -558,7 +558,7 @@
      "edge": -0.0119,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -582,7 +582,7 @@
      "edge": -0.0302,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -594,7 +594,7 @@
      "edge": -0.0205,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -606,7 +606,7 @@
      "edge": -0.0126,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T18:20:00.0000000Z"
@@ -689,7 +689,7 @@
      "edge": 0.0181,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -701,7 +701,7 @@
      "edge": -0.0058,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -713,7 +713,7 @@
      "edge": 0.0011,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -737,7 +737,7 @@
      "edge": -0.0061,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -749,7 +749,7 @@
      "edge": -0.0086,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -761,7 +761,7 @@
      "edge": -0.0055,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T18:35:00.0000000Z"
@@ -844,7 +844,7 @@
      "edge": -0.0286,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -856,7 +856,7 @@
      "edge": -0.0451,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -880,7 +880,7 @@
      "edge": -0.032,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -892,7 +892,7 @@
      "edge": -0.0226,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -904,7 +904,7 @@
      "edge": -0.0157,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T19:10:00.0000000Z"
@@ -987,7 +987,7 @@
      "edge": 0.0377,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 2,
@@ -999,7 +999,7 @@
      "edge": 0.0456,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -1023,7 +1023,7 @@
      "edge": 0.052,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -1035,7 +1035,7 @@
      "edge": 0.0484,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -1047,7 +1047,7 @@
      "edge": 0.0243,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T19:10:00.0000000Z"
@@ -1130,7 +1130,7 @@
      "edge": -0.0606,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -1142,7 +1142,7 @@
      "edge": -0.0842,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -1154,7 +1154,7 @@
      "edge": -0.1072,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -1166,7 +1166,7 @@
      "edge": -0.1245,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -1190,7 +1190,7 @@
      "edge": -0.0861,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 10,
@@ -1202,7 +1202,7 @@
      "edge": -0.0586,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 11,
@@ -1214,7 +1214,7 @@
      "edge": -0.0372,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 12,
@@ -1226,7 +1226,7 @@
      "edge": -0.0192,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T22:35:00.0000000Z"
@@ -1309,7 +1309,7 @@
      "edge": -0.0123,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -1321,7 +1321,7 @@
      "edge": -0.0348,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -1333,7 +1333,7 @@
      "edge": -0.0434,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -1357,7 +1357,7 @@
      "edge": -0.0421,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -1369,7 +1369,7 @@
      "edge": -0.0366,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -1381,7 +1381,7 @@
      "edge": -0.0021,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 10,
@@ -1393,7 +1393,7 @@
      "edge": -0.0073,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T22:35:00.0000000Z"
@@ -1476,7 +1476,7 @@
      "edge": 0.028,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -1488,7 +1488,7 @@
      "edge": 0.0175,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -1500,7 +1500,7 @@
      "edge": 0.0349,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -1524,7 +1524,7 @@
      "edge": 0.0241,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -1536,7 +1536,7 @@
      "edge": 0.0066,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -1548,7 +1548,7 @@
      "edge": 0.0257,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T22:40:00.0000000Z"
@@ -1631,7 +1631,7 @@
      "edge": 0.0298,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -1643,7 +1643,7 @@
      "edge": 0.0248,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -1655,7 +1655,7 @@
      "edge": 0.0363,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -1679,7 +1679,7 @@
      "edge": 0.0566,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -1691,7 +1691,7 @@
      "edge": 0.0392,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -1703,7 +1703,7 @@
      "edge": 0.0164,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T22:40:00.0000000Z"
@@ -1786,7 +1786,7 @@
      "edge": -0.0308,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -1798,7 +1798,7 @@
      "edge": -0.0438,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -1822,7 +1822,7 @@
      "edge": -0.0425,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -1834,7 +1834,7 @@
      "edge": -0.0339,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -1846,7 +1846,7 @@
      "edge": -0.0207,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -1858,7 +1858,7 @@
      "edge": -0.0142,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T22:40:00.0000000Z"
@@ -1941,7 +1941,7 @@
      "edge": 0.0097,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -1953,7 +1953,7 @@
      "edge": 0.0049,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -1965,7 +1965,7 @@
      "edge": 0.0074,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -1989,7 +1989,7 @@
      "edge": -0.0033,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -2001,7 +2001,7 @@
      "edge": -0.0102,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -2013,7 +2013,7 @@
      "edge": 0.0082,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T22:40:00.0000000Z"
@@ -2096,7 +2096,7 @@
      "edge": 0.03,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -2108,7 +2108,7 @@
      "edge": 0.0194,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -2120,7 +2120,7 @@
      "edge": 0.0342,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -2144,7 +2144,7 @@
      "edge": 0.0187,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -2156,7 +2156,7 @@
      "edge": 0.0033,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -2168,7 +2168,7 @@
      "edge": 0.0106,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T22:40:00.0000000Z"
@@ -2251,7 +2251,7 @@
      "edge": 0.0102,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -2263,7 +2263,7 @@
      "edge": -0.0202,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -2275,7 +2275,7 @@
      "edge": -0.0221,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -2299,7 +2299,7 @@
      "edge": -0.0278,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -2311,7 +2311,7 @@
      "edge": -0.0255,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -2323,7 +2323,7 @@
      "edge": -0.0142,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:05:00.0000000Z"
@@ -2406,7 +2406,7 @@
      "edge": 0.0128,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -2418,7 +2418,7 @@
      "edge": -0.0156,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -2430,7 +2430,7 @@
      "edge": -0.0226,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -2454,7 +2454,7 @@
      "edge": -0.0241,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -2466,7 +2466,7 @@
      "edge": -0.0194,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -2478,7 +2478,7 @@
      "edge": -0.0106,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:05:00.0000000Z"
@@ -2561,7 +2561,7 @@
      "edge": 0.0347,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -2573,7 +2573,7 @@
      "edge": 0.052,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -2585,7 +2585,7 @@
      "edge": 0.0539,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -2597,7 +2597,7 @@
      "edge": 0.0796,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -2621,7 +2621,7 @@
      "edge": 0.0745,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -2633,7 +2633,7 @@
      "edge": 0.069,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 10,
@@ -2645,7 +2645,7 @@
      "edge": 0.0608,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 11,
@@ -2657,7 +2657,7 @@
      "edge": 0.0281,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:10:00.0000000Z"
@@ -2740,7 +2740,7 @@
      "edge": 0.0201,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -2752,7 +2752,7 @@
      "edge": 0.0115,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -2764,7 +2764,7 @@
      "edge": 0.0204,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -2788,7 +2788,7 @@
      "edge": 0.052,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -2800,7 +2800,7 @@
      "edge": 0.0368,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -2812,7 +2812,7 @@
      "edge": 0.0152,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:10:00.0000000Z"
@@ -2895,7 +2895,7 @@
      "edge": 0.0154,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -2907,7 +2907,7 @@
      "edge": 0.0015,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -2919,7 +2919,7 @@
      "edge": 0.0127,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -2943,7 +2943,7 @@
      "edge": 0.0419,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -2955,7 +2955,7 @@
      "edge": 0.0274,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -2967,7 +2967,7 @@
      "edge": 0.0091,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 10,
@@ -2979,7 +2979,7 @@
      "edge": 0.0045,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:15:00.0000000Z"
@@ -3062,7 +3062,7 @@
      "edge": -0.013,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -3074,7 +3074,7 @@
      "edge": -0.0279,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -3098,7 +3098,7 @@
      "edge": -0.0044,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -3110,7 +3110,7 @@
      "edge": -0.0024,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -3122,7 +3122,7 @@
      "edge": -0.0002,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -3134,7 +3134,7 @@
      "edge": -0.0049,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:15:00.0000000Z"
@@ -3217,7 +3217,7 @@
      "edge": 0.0126,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -3229,7 +3229,7 @@
      "edge": -0.0019,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -3241,7 +3241,7 @@
      "edge": 0.0159,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -3265,7 +3265,7 @@
      "edge": -0.0072,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -3277,7 +3277,7 @@
      "edge": 0.002,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 10,
@@ -3289,7 +3289,7 @@
      "edge": -0.0099,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 11,
@@ -3301,7 +3301,7 @@
      "edge": 0.0115,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 12,
@@ -3313,7 +3313,7 @@
      "edge": 0.0032,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:40:00.0000000Z"
@@ -3396,7 +3396,7 @@
      "edge": -0.027,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -3408,7 +3408,7 @@
      "edge": -0.0362,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -3420,7 +3420,7 @@
      "edge": -0.0297,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -3444,7 +3444,7 @@
      "edge": -0.0119,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -3456,7 +3456,7 @@
      "edge": -0.0137,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 10,
@@ -3468,7 +3468,7 @@
      "edge": -0.0066,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:40:00.0000000Z"
@@ -3551,7 +3551,7 @@
      "edge": 0.0161,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -3563,7 +3563,7 @@
      "edge": 0.0084,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -3587,7 +3587,7 @@
      "edge": 0.0239,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -3599,7 +3599,7 @@
      "edge": 0.0241,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -3611,7 +3611,7 @@
      "edge": 0.0051,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -3623,7 +3623,7 @@
      "edge": 0.0221,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:40:00.0000000Z"
@@ -3706,7 +3706,7 @@
      "edge": -0.0011,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -3718,7 +3718,7 @@
      "edge": -0.0049,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -3742,7 +3742,7 @@
      "edge": 0.021,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -3754,7 +3754,7 @@
      "edge": 0.0201,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -3766,7 +3766,7 @@
      "edge": 0.0057,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -3778,7 +3778,7 @@
      "edge": -0.0029,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-05T23:40:00.0000000Z"
@@ -3861,7 +3861,7 @@
      "edge": -0.0213,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -3873,7 +3873,7 @@
      "edge": -0.0169,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -3885,7 +3885,7 @@
      "edge": -0.0374,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -3909,7 +3909,7 @@
      "edge": -0.0264,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 9,
@@ -3921,7 +3921,7 @@
      "edge": -0.0252,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 10,
@@ -3933,7 +3933,7 @@
      "edge": -0.0076,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 11,
@@ -3945,7 +3945,7 @@
      "edge": -0.0022,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-06T01:40:00.0000000Z"
@@ -4028,7 +4028,7 @@
      "edge": 0.0393,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_not_next_rung"
     },
     {
      "milestone": 2,
@@ -4040,7 +4040,7 @@
      "edge": 0.1135,
      "strength": "LEAN",
      "units_risked": 0.0,
-     "status": "passed_pitcher_cap"
+     "status": "passed_not_next_rung"
     },
     {
      "milestone": 3,
@@ -4064,7 +4064,7 @@
      "edge": 0.2087,
      "strength": "STRONG",
      "units_risked": 0.0,
-     "status": "passed_pitcher_cap"
+     "status": "not_bet_rule_change"
     },
     {
      "milestone": 5,
@@ -4088,7 +4088,7 @@
      "edge": 0.2069,
      "strength": "STRONG",
      "units_risked": 0.0,
-     "status": "passed_pitcher_cap"
+     "status": "passed_not_next_rung"
     },
     {
      "milestone": 7,
@@ -4100,7 +4100,7 @@
      "edge": 0.1686,
      "strength": "STRONG",
      "units_risked": 0.0,
-     "status": "passed_pitcher_cap"
+     "status": "passed_not_next_rung"
     }
    ],
    "start_time_utc": "2026-08-06T01:40:00.0000000Z"
@@ -4183,7 +4183,7 @@
      "edge": 0.0353,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -4195,7 +4195,7 @@
      "edge": 0.0324,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -4207,7 +4207,7 @@
      "edge": 0.0532,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 5,
@@ -4231,7 +4231,7 @@
      "edge": 0.0552,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -4243,7 +4243,7 @@
      "edge": 0.0515,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 8,
@@ -4255,7 +4255,7 @@
      "edge": 0.0268,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-06T01:40:00.0000000Z"
@@ -4338,7 +4338,7 @@
      "edge": 0.0149,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 3,
@@ -4350,7 +4350,7 @@
      "edge": 0.0274,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_below_threshold"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 4,
@@ -4374,7 +4374,7 @@
      "edge": 0.0049,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_stake_too_small"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 6,
@@ -4386,7 +4386,7 @@
      "edge": -0.0006,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     },
     {
      "milestone": 7,
@@ -4398,7 +4398,7 @@
      "edge": -0.0045,
      "strength": "NO_PLAY",
      "units_risked": 0.0,
-     "status": "passed_no_edge"
+     "status": "passed_gap_gate"
     }
    ],
    "start_time_utc": "2026-08-06T01:40:00.0000000Z"

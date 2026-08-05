@@ -18,6 +18,7 @@ const STATUS_LABEL: Record<string, string> = {
   passed_daily_cap: "PASS · daily cap",
   passed_gap_gate: "PASS · gap gate (needs E[K] ≥ line +1.5)",
   passed_not_next_rung: "PASS · beyond next 2 rungs",
+  not_bet_rule_change: "current rules would bet — placed before rule change",
 };
 
 function ResultBadge({ result, pnl, actualK }: {
