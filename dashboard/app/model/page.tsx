@@ -258,13 +258,13 @@ export default function ModelPage() {
               label="Honest split"
               value="as-of"
               tone="accent"
-              sub={`train ≤ ${bt.train_cutoff}`}
+              sub={`train ${bt.train_desc}`}
             />
           </div>
 
           <p className="rounded-card border border-line bg-surface px-4 py-3 text-xs leading-relaxed text-ink-secondary">
             Every number on this page is <span className="font-semibold text-ink">out-of-sample</span>:
-            the model was fit only on games before {bt.train_cutoff}, then scored on{" "}
+            the model was fit only on {bt.train_desc}, then scored on{" "}
             {bt.test_window} with features computed strictly as-of (no game ever
             sees its own data). The earlier leaky backtest numbers were retired —
             see CHANGELOG Phase 7.

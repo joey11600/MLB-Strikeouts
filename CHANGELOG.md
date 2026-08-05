@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-08-05 — Phase 9: Multi-season backfill + cross-season validation + production refit
+
+Closed AUDIT A-004: backfilled Statcast 2024 (724,076 pitches), 2025
+(725,775), and the missing Apr–May 2026 (cache now 1.95M pitches,
+2024-03-28 .. 2026-08-04). This unlocked the repo's sanctioned
+three-way validation, rebuilt in `backtest.py` as a split-driven
+harness (seasons loaded separately so as-of priors RESET at season
+boundaries, matching live serving).
+
+**Cross-season results (all features as-of, models fit on train
+seasons only):**
+
+| Split | Test starts | Naive Brier | Model Brier | Improvement |
+|---|---|---|---|---|
+| train 2024 → test 2025 | 4,807 | 0.1539 | 0.1480 | +3.8% |
+| train 2025 → test 2024 | 4,713 | 0.1572 | 0.1496 | +4.8% |
+| train 2024+2025 → test 2026 | 3,133 | 0.1540 | 0.1491 | +3.2% |
+
+Positive in BOTH temporal directions and on the decision split —
+12,653 out-of-sample starts, positive at every line in every split.
+The promotion gate passed, so:
+
+- Production Stage A/B refit on 2024+2025+2026 via
+  `tools/retrain_production.py` (12,653 starts / 267,257 PA).
+  Stage A `season_k_pct` resolves to +0.317 — the "strikeout pitchers
+  earn longer leashes" effect the two-month sample couldn't identify.
+  Stage B: pitcher +0.938, batter +1.066, TTO2 −0.141, TTO3 −0.210,
+  zone +0.287; eastward_tz (−0.016) and n_rookies (−0.006) are
+  near-zero — re-gauntlet pending (A-005).
+- Calibrator refit on the 18,798 decision-split OOS predictions
+  (cross-fit check): mid-line bias −2pp → within ±1pp.
+- `data/backtest_meta.json` now records the split; the dashboard
+  Model view reads it instead of hardcoded labels.
+- Placed picks are untouched (ledger locks); the new model prices
+  slates from 2026-08-06 onward.
+
 ## 2026-08-05 — Phase 8: Dashboard rebuild (Next.js + 21st.dev)
 
 Replaced the single-file static dashboard with a Next.js App Router app

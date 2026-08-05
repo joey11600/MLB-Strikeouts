@@ -164,7 +164,7 @@ export interface DashboardData {
   };
   model: {
     backtest: {
-      train_cutoff: string;
+      train_desc: string;
       test_window: string;
       n_predictions: number;
       n_starts: number;

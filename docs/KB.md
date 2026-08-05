@@ -155,47 +155,48 @@ cleanup spot (slot 4) is highest at 23.6%.
 - **DraftKings**: odds via unofficial JSON API (`curl_cffi`).
 - **Chadwick Bureau**: player ID crosswalk.
 
-## Compound model — honest evaluation (Phase 7 supersedes all earlier numbers)
+## Compound model — honest evaluation (Phase 9 cross-season; supersedes all earlier numbers)
 
 **The Phase 2/6 backtest numbers (0.1297 vs 0.1321 on 1,777 starts)
-were contaminated by leakage** — full-window feature aggregates AND
-train/test overlap — and are void. See CHANGELOG Phase 7.
+were contaminated by leakage** and are void (CHANGELOG Phase 7). The
+Phase 7 within-2026 split (+2% on 618 starts) is superseded by the
+full cross-season validation below (Phase 9).
 
-Honest protocol: Stage A/B fit only on games ≤ Jul 8; test Jul 9 –
-Aug 3 (618 starts); every feature strictly as-of; naive baseline gets
-the same as-of inputs.
+Honest protocol: models fit ONLY on train seasons; every feature
+strictly as-of; seasons loaded separately so priors reset at season
+boundaries (matching live serving); naive baseline gets the same
+as-of inputs.
 
-**Stage A** — Negative binomial regression on BF count (as-of
-prior BF mean, shrunk season K%). Full-window refit: intercept
-+2.223, prior_bf_mean +0.039, season_k_pct +0.064, alpha 0.0067.
+| Split | Test starts | Naive Brier | Model Brier | Improvement |
+|---|---|---|---|---|
+| train 2024 → test 2025 | 4,807 | 0.1539 | 0.1480 | +3.8% |
+| train 2025 → test 2024 | 4,713 | 0.1572 | 0.1496 | +4.8% |
+| train 2024+2025 → test 2026 | 3,133 | 0.1540 | 0.1491 | +3.2% |
 
-**Stage B** — Logistic per-batter K. 8 features, full-window refit:
-logit(pitcher K%) +1.065, logit(batter K%) +1.059, TTO2 −0.239,
-TTO3 −0.226, zone_pct +0.257, eastward_tz −0.051, n_rookies +0.009.
-(n_rookies is noise on the honest harness — re-gauntlet pending,
-AUDIT A-005.)
+Positive in both temporal directions and on the decision split,
+positive at every line in every split — 12,653 out-of-sample starts.
 
-| Line | Naive Brier | Model Brier | Improvement |
-|---|---|---|---|
-| 3.5 | 0.1938 | 0.1911 | +1% |
-| 4.5 | 0.2034 | 0.2016 | +1% |
-| 5.5 | 0.1883 | 0.1860 | +1% |
-| 6.5 | 0.1480 | 0.1438 | +3% |
-| 7.5 | 0.1001 | 0.0964 | +4% |
-| 8.5 | 0.0694 | 0.0696 | −0% |
-| **All** | **0.1505** | **0.1481** | **+2%** |
+**Production models** (refit 2024+2025+2026, 267,257 PA,
+`tools/retrain_production.py`):
 
-Raw model runs 2-4pp low on P(over); isotonic calibration corrects
-this (mid-lines within ±0.5pp cross-fit). Calibration leaves Brier
-~unchanged — its job is bias removal, which is what kills phantom
-edges.
+- **Stage A** — negative binomial BF: intercept +2.216,
+  prior_bf_mean +0.037, season_k_pct +0.317, alpha 0.0067.
+- **Stage B** — logistic per-batter K: logit(pitcher K%) +0.938,
+  logit(batter K%) +1.066, TTO2 −0.141, TTO3 −0.210, zone_pct +0.287,
+  eastward_tz −0.016, n_rookies −0.006. (The last two are near-zero —
+  re-gauntlet pending, AUDIT A-005.)
 
-Per-game predictions: `data/backtest_predictions.csv` (also feeds the
-dashboard Model view). Re-run: `python backtest.py` then
-`python tools/fit_calibrator.py`.
+Isotonic calibration refit on the 18,798 decision-split OOS
+predictions: mid-line bias −2pp → within ±1pp. Calibration's job is
+bias removal (kills phantom edges), not Brier.
+
+Per-game predictions: `data/backtest_predictions.csv`; split metadata:
+`data/backtest_meta.json` (feeds the dashboard Model view). Re-run:
+`python backtest.py`, then `python tools/fit_calibrator.py`, then
+`python tools/retrain_production.py`.
 
 Remaining signal to capture: park/weather, umpire/catcher, workload
-features, multi-season training data (A-004).
+features, lineup-lock timing.
 
 ## Naive baseline (every model must beat this)
 

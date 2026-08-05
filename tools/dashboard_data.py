@@ -412,9 +412,18 @@ def _build_model_analytics() -> dict:
                 "n": len(chunk),
             })
 
+        meta_path = ROOT / "data" / "backtest_meta.json"
+        train_desc = "games before 2026-07-08"
+        test_window = "2026-07-09 to 2026-08-03"
+        if meta_path.exists():
+            with open(meta_path, encoding="utf-8") as f:
+                meta = json.load(f)
+            train_desc = meta.get("train_desc", train_desc)
+            test_window = meta.get("test_window", test_window)
+
         out["backtest"] = {
-            "train_cutoff": "2026-07-08",
-            "test_window": "2026-07-09 to 2026-08-03",
+            "train_desc": train_desc,
+            "test_window": test_window,
             "n_predictions": len(preds),
             "n_starts": len({(p["game_pk"], p["pitcher"]) for p in preds}),
             "naive_brier": round(overall_n, 4),

@@ -103,8 +103,10 @@
   reconstructed from odds snapshots
 - [x] CLV capture: `run.py close` snapshots; grader writes closing
   odds + clv_pct per pick
-- [ ] Multi-season Statcast backfill (2024, 2025, Apr–May 2026), then
-  cross-season three-way splits (A-004)
+- [x] Multi-season Statcast backfill (2024, 2025, Apr–May 2026) —
+  1.95M pitches cached (Phase 9)
+- [x] Cross-season three-way splits: +3.8% / +4.8% / +3.2% vs naive,
+  12,653 OOS starts; production refit on all three seasons (Phase 9)
 - [ ] Raise MODEL_TRUST_WEIGHT only after 100+ graded bets with
   positive average CLV (A-006)
 
