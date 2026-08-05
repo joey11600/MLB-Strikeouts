@@ -35,7 +35,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from data.backfill_statcast import load_cached
-from features.asof import asof_pitcher_game_table, asof_batter_game_table
+from features.asof import (
+    asof_pitcher_game_table, asof_batter_game_table,
+    bullpen_fatigue_table, IL_GAP_DAYS,
+)
 from models.stage_a_bf import StageA, prepare_training_data as prepare_stage_a
 from models.stage_b_rate import (
     StageB, prepare_training_data as prepare_stage_b, ROOKIE_BF_THRESHOLD,
@@ -85,6 +88,10 @@ def _build_test_set(test_year: int):
     ].copy()
 
     test["zone_pct"] = test["asof_zone_pct"].fillna(0.45)
+    test["il_return"] = test["days_since_prior"] > IL_GAP_DAYS
+    bp = bullpen_fatigue_table(df)
+    test = test.merge(bp, on=["game_pk", "pitcher"], how="left")
+    test["bp_heavy"] = test["bp_heavy"].fillna(False).astype(bool)
 
     batter_map = {
         (row.batter, row.game_pk): (row.asof_k_pct_shrunk, row.prior_bf)
@@ -160,7 +167,9 @@ def _compound_model_prediction(predictor: StrikeoutPredictor,
                                 lineup_k_pcts: list[float] | None = None,
                                 zone_pct: float | None = None,
                                 eastward_tz: float = 0.0,
-                                n_rookies: float = 0.0) -> dict:
+                                n_rookies: float = 0.0,
+                                il_return: bool = False,
+                                bp_heavy: bool = False) -> dict:
     """Two-stage compound model prediction (raw, uncalibrated)."""
     features = {
         "a3_season_k_pct_shrunk": season_k_pct,
@@ -169,9 +178,9 @@ def _compound_model_prediction(predictor: StrikeoutPredictor,
         "a9_zone_pct": zone_pct,
         "f1_eastward_tz": eastward_tz,
         "b14_n_rookies": n_rookies,
-        "c10_il_return": False,
+        "c10_il_return": bool(il_return),
         "c11_pitch_limit": None,
-        "c12_bp_heavy": False,
+        "c12_bp_heavy": bool(bp_heavy),
     }
 
     result = predictor.predict(features, lineup_k_pcts=lineup_k_pcts, lines=LINES)
@@ -236,6 +245,8 @@ def run_split(split_name: str) -> dict:
             zone_pct=row["zone_pct"],
             eastward_tz=row["eastward_tz"],
             n_rookies=row["n_rookies"],
+            il_return=row["il_return"],
+            bp_heavy=row["bp_heavy"],
         )
 
         for line in LINES:

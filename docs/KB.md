@@ -179,8 +179,12 @@ positive at every line in every split — 12,653 out-of-sample starts.
 **Production models** (refit 2024+2025+2026, 267,257 PA,
 `tools/retrain_production.py`):
 
-- **Stage A** — negative binomial BF: intercept +2.216,
-  prior_bf_mean +0.037, season_k_pct +0.317, alpha 0.0067.
+- **Stage A** — negative binomial BF with leash inputs (Phase 12):
+  prior_bf_mean +0.036, season_k_pct ~+0.25, il_return −0.122
+  (25+ day layoff → shorter leash), bp_heavy +0.028 (taxed pen →
+  starter stretched), alpha 0.0067. Announced pitch limits apply as a
+  direct live cap (E[BF] ≤ limit/4), untrained historically.
+  Operator enters limits in `data/manual_pitch_limits.csv`.
 - **Stage B** — logistic per-batter K, CORE ONLY
   (`PRODUCTION_EXTRA_FEATURES = []`): intercept +1.343,
   logit(pitcher K%) +0.935, logit(batter K%) +1.065, TTO2 −0.142,
@@ -334,10 +338,11 @@ Graded picks are locked and cannot be overwritten.
 ### Production operator workflow
 
 Automated (Windows Task Scheduler, `tools/scheduled_run.py`, ET):
-10:30 AM morning picks + deploy · 12:15/3:00/6:15 PM closing
-snapshots · 3:00 AM grade + CLV + deploy. Logs in
-`logs/auto_YYYY-MM-DD.log`. Runs only while logged in — keep the PC
-on. Manual commands still work any time:
+10:30 AM morning picks + deploy · 4:45 PM lineup-lock re-run
+(re-predict with confirmed lineups; placed bets stay frozen, changes
+journaled) · 12:15/3:00/6:15 PM closing snapshots · 3:00 AM grade +
+CLV + deploy. Logs in `logs/auto_YYYY-MM-DD.log`. Runs only while
+logged in — keep the PC on. Manual commands still work any time:
 
 ```
 python run.py              # full daily cycle

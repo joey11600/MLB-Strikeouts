@@ -402,8 +402,96 @@ def asof_pitcher_game_table(df: pd.DataFrame) -> pd.DataFrame:
     pg["prev_tz"] = grp["curr_tz"].shift(1)
     pg["eastward_tz"] = (pg["curr_tz"] - pg["prev_tz"]).clip(lower=0).fillna(0.0)
 
+    # Days since the pitcher's previous appearance (NaN on his first
+    # game of the loaded window). Long gaps flag IL returns / call-ups.
+    pg["days_since_prior"] = (
+        pg["game_date"] - grp["game_date"].shift(1)
+    ).dt.days.astype(float)
+
     pg = pg.rename(columns={"bf": "actual_bf", "k": "actual_k"})
     return pg.drop(columns=["zone_valid", "zone_in", "curr_tz", "prev_tz"])
+
+
+# Leash-input thresholds (Stage A). IL_GAP_DAYS: a start after this many
+# days without an appearance flags an IL return / call-up (normal rest
+# is 4-6 days; skipped-turn ~10-12; 25+ is a real absence).
+# BP_HEAVY_PITCHES: relief pitches a team threw the PREVIOUS day at or
+# above this marks a taxed bullpen (an average pen throws ~50-60).
+IL_GAP_DAYS = 25
+BP_HEAVY_PITCHES = 90
+
+
+def team_relief_pitches_by_date(df: pd.DataFrame) -> dict:
+    """Relief pitches thrown per (team_abbr, normalized date).
+
+    Pitching team per pitch row comes from inning_topbot (Top = home
+    team pitching). Relief pitches = pitches by anyone other than that
+    team's starter (its first pitcher) in that game.
+    """
+    if df.empty or "inning_topbot" not in df.columns:
+        return {}
+
+    d = df.copy()
+    if "game_date" in d.columns:
+        d["game_date"] = pd.to_datetime(d["game_date"])
+    d["pitching_team"] = np.where(
+        d["inning_topbot"] == "Top", d["home_team"], d["away_team"]
+    )
+
+    d_sorted = d.sort_values("at_bat_number")
+    starter_map = d_sorted.groupby(
+        ["game_pk", "pitching_team"]
+    )["pitcher"].first().to_dict()
+
+    d["is_relief"] = [
+        p != starter_map.get((g, t))
+        for g, t, p in zip(d["game_pk"], d["pitching_team"], d["pitcher"])
+    ]
+
+    counts = (
+        d[d["is_relief"]]
+        .groupby(["pitching_team", d["game_date"].dt.normalize()])
+        .size()
+    )
+    return {(team, dt): int(n) for (team, dt), n in counts.items()}
+
+
+def bullpen_fatigue_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Per (game_pk, pitcher): was the STARTER's team's bullpen heavily
+    used the previous day? Strictly prior-day data — as-of safe.
+
+    Returns columns: game_pk, pitcher, bp_heavy (bool).
+    """
+    if df.empty or "inning_topbot" not in df.columns:
+        return pd.DataFrame(columns=["game_pk", "pitcher", "bp_heavy"])
+
+    d = df.copy()
+    if "game_date" in d.columns:
+        d["game_date"] = pd.to_datetime(d["game_date"])
+    d["pitching_team"] = np.where(
+        d["inning_topbot"] == "Top", d["home_team"], d["away_team"]
+    )
+    d_sorted = d.sort_values("at_bat_number")
+    starter_map = d_sorted.groupby(
+        ["game_pk", "pitching_team"]
+    )["pitcher"].first().to_dict()
+
+    relief = team_relief_pitches_by_date(df)
+    heavy = {key for key, n in relief.items() if n >= BP_HEAVY_PITCHES}
+
+    game_date_map = d.groupby("game_pk")["game_date"].first().dt.normalize().to_dict()
+    out = []
+    for (game_pk, team), pitcher in starter_map.items():
+        gd = game_date_map.get(game_pk)
+        if gd is None:
+            continue
+        prev = gd - pd.Timedelta(days=1)
+        out.append({
+            "game_pk": game_pk,
+            "pitcher": pitcher,
+            "bp_heavy": (team, prev) in heavy,
+        })
+    return pd.DataFrame(out)
 
 
 def asof_batter_game_table(df: pd.DataFrame) -> pd.DataFrame:

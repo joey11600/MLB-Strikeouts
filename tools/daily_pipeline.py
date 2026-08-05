@@ -38,13 +38,17 @@ from scrape_dk_odds import fetch_dk_strikeout_props, fetch_dk_strikeout_alts
 from strikeout_predictor import StrikeoutPredictor
 from features.asof import (
     shrink_rate, PITCHER_K_PSEUDO_BF, BATTER_K_PSEUDO_BF,
+    IL_GAP_DAYS, BP_HEAVY_PITCHES, team_relief_pitches_by_date,
 )
 from models.edge import (
     compute_edge, pick_strength, american_to_decimal, no_vig_fair_prob,
 )
 from models.staking import kelly_stake, portfolio_daily_cap
 from models.ladder import evaluate_ladder, LADDER_MAX_UNITS
-from tracker import FIELDS, PICKS_PATH, _write_rows, _pick_is_locked, MAX_STAKE_UNITS
+from tracker import (
+    FIELDS, PICKS_PATH, _write_rows, _pick_is_locked, _journal_change,
+    MAX_STAKE_UNITS,
+)
 
 ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
@@ -135,7 +139,8 @@ def _group_alt_lines_by_pitcher(alt_lines: list[dict]) -> dict:
 
 
 def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
-                           home_team: str | None = None) -> dict:
+                           home_team: str | None = None,
+                           target_date: date | None = None) -> dict:
     """Compute season K% and BF stats for a pitcher from Statcast data."""
     completed = statcast_df[statcast_df["events"].notna()]
     p = completed[completed["pitcher"] == pitcher_id]
@@ -169,6 +174,7 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
 
     from features.t2_candidates import TEAM_TIMEZONES
     eastward_tz = 0.0
+    days_since_last = None
     if home_team and "home_team" in statcast_df.columns and "game_date" in statcast_df.columns:
         pitcher_all = statcast_df[statcast_df["pitcher"] == pitcher_id]
         if not pitcher_all.empty:
@@ -182,6 +188,11 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
                 curr_tz = TEAM_TIMEZONES.get(home_team)
                 if prev_tz is not None and curr_tz is not None:
                     eastward_tz = max(0, curr_tz - prev_tz)
+                if target_date is not None:
+                    last_date = pd.to_datetime(
+                        last_games.iloc[-1]["game_date"]
+                    ).date()
+                    days_since_last = (target_date - last_date).days
 
     return {
         "season_k_pct": float(shrunk_k_pct),
@@ -191,6 +202,7 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
         "n_starts": int(len(starter_games)),
         "zone_pct": zone_pct,
         "eastward_tz": float(eastward_tz),
+        "days_since_last": days_since_last,
     }
 
 
@@ -304,6 +316,29 @@ def _write_slate_sidecar(game_date: str, predictions: list) -> None:
     print(f"  Slate sidecar written: {out_path} ({len(pitchers)} pitchers)")
 
 
+def _load_pitch_limits(iso_date: str) -> dict:
+    """Operator-entered pitch limits for a date: {pitcher_id_str: limit}.
+
+    Source: data/manual_pitch_limits.csv (date, game_pk, pitcher_name,
+    pitcher_id, pitch_limit, source, notes).
+    """
+    path = Path(__file__).parent.parent / "data" / "manual_pitch_limits.csv"
+    limits = {}
+    if not path.exists():
+        return limits
+    with open(path, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if row.get("date") != iso_date:
+                continue
+            try:
+                limits[str(row.get("pitcher_id", "")).strip()] = int(
+                    float(row["pitch_limit"])
+                )
+            except (ValueError, TypeError, KeyError):
+                continue
+    return limits
+
+
 def _load_existing_picks(iso_date: str) -> dict:
     """Load existing picks for a date, keyed by (game_pk, pitcher_id, line)."""
     if not PICKS_PATH.exists():
@@ -411,6 +446,21 @@ def run_daily(
         print("  Falling back to league-average features.")
         statcast_df = pd.DataFrame()
 
+    # Leash-input context: operator pitch limits for today, and each
+    # team's relief usage yesterday (both feed Stage A's leash).
+    pitch_limits = _load_pitch_limits(game_date)
+    if pitch_limits:
+        print(f"  {len(pitch_limits)} manual pitch limit(s) for {game_date}")
+
+    relief_yesterday = {}
+    if not statcast_df.empty:
+        yesterday = pd.Timestamp(d) - pd.Timedelta(days=1)
+        relief_yesterday = {
+            team: n
+            for (team, dt), n in team_relief_pitches_by_date(statcast_df).items()
+            if dt == yesterday
+        }
+
     # 5. Load model and run predictions
     print("\n[5/8] Running predictions...")
     predictor = StrikeoutPredictor()
@@ -426,7 +476,9 @@ def run_daily(
 
         home_team = entry.get("pitcher_team") if entry.get("is_home") else entry.get("opponent_team")
         if not statcast_df.empty and pitcher_id:
-            stats = _compute_pitcher_stats(statcast_df, pitcher_id, home_team=home_team)
+            stats = _compute_pitcher_stats(
+                statcast_df, pitcher_id, home_team=home_team, target_date=d,
+            )
         else:
             stats = {"season_k_pct": LEAGUE_K_RATE, "bf_mean": 21.1, "total_bf": 0}
 
@@ -453,13 +505,30 @@ def run_daily(
                 if batter_bf < 100:
                     n_rookies += 1
 
+        # Leash inputs (Phase 12): long-layoff flag from the cache,
+        # operator-entered pitch limits, and prior-day bullpen usage.
+        il_return = (
+            stats.get("days_since_last") is not None
+            and stats["days_since_last"] > IL_GAP_DAYS
+        )
+        pitch_limit = pitch_limits.get(str(pitcher_id))
+        team_abbr = entry.get("pitcher_team", "")
+        bp_heavy = relief_yesterday.get(team_abbr, 0) >= BP_HEAVY_PITCHES
+        if il_return or pitch_limit or bp_heavy:
+            flags = [f for f, on in [
+                (f"IL return ({stats.get('days_since_last')}d layoff)", il_return),
+                (f"pitch limit {pitch_limit}", pitch_limit),
+                (f"bullpen heavy ({relief_yesterday.get(team_abbr, 0)} relief pitches yday)", bp_heavy),
+            ] if on]
+            print(f"    {pitcher_name}: leash flags — {', '.join(flags)}")
+
         features = {
             "a3_season_k_pct_shrunk": stats["season_k_pct"],
             "a3_season_k_pct_raw": stats.get("season_k_pct_raw", stats["season_k_pct"]),
             "c1_bf_mean": stats["bf_mean"],
-            "c10_il_return": False,
-            "c11_pitch_limit": None,
-            "c12_bp_heavy": False,
+            "c10_il_return": bool(il_return),
+            "c11_pitch_limit": pitch_limit,
+            "c12_bp_heavy": bool(bp_heavy),
             "a9_zone_pct": stats.get("zone_pct"),
             "f1_eastward_tz": stats.get("eastward_tz", 0.0),
             "b14_n_rookies": n_rookies,
@@ -714,6 +783,29 @@ def run_daily(
         }
 
         if key in existing_picks:
+            existing = existing_picks[key]
+            if (existing.get("bet_placed") or "").upper() == "Y":
+                # Money rule: once bet_placed=Y the captured odds are
+                # LOCKED — a re-run (e.g. the lineup-lock pass) may only
+                # refresh the model's view. Side, stake, odds, and
+                # created_at stay frozen; a side/strength flip is
+                # journaled, never applied to the placed bet.
+                if pick_row["pick_label"] != existing.get("pick_label", ""):
+                    _journal_change(
+                        game_date,
+                        play.get("game_pk", ""),
+                        play.get("pitcher_name", ""),
+                        existing.get("pick_label", ""),
+                        pick_row["pick_label"],
+                    )
+                    print(f"    JOURNAL: {play['pitcher_name']} "
+                          f"{existing.get('pick_label', '')} -> {pick_row['pick_label']} "
+                          f"(placed bet unchanged)")
+                merged = dict(existing)
+                for f in ("model_prob_over", "model_prob_under",
+                          "lineup_source", "updated_at"):
+                    merged[f] = pick_row[f]
+                pick_row = merged
             for i, row in enumerate(all_rows):
                 rk = (
                     row.get("game_pk", ""),

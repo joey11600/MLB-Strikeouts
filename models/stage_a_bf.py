@@ -182,7 +182,9 @@ def prepare_training_data(start_date: date, end_date: date) -> pd.DataFrame:
     prior history (< 3 prior starts or < 50 prior BF) are dropped.
     """
     from data.backfill_statcast import load_cached
-    from features.asof import asof_pitcher_game_table
+    from features.asof import (
+        asof_pitcher_game_table, bullpen_fatigue_table, IL_GAP_DAYS,
+    )
 
     df = load_cached(start_date, end_date)
     if df.empty:
@@ -202,9 +204,17 @@ def prepare_training_data(start_date: date, end_date: date) -> pd.DataFrame:
         "asof_k_pct_shrunk": "season_k_pct",
     })
 
-    starters["il_return"] = False
+    # Leash inputs (Phase 12). il_return: long layoff before this start.
+    # bp_heavy: the team's bullpen was taxed the previous day. Announced
+    # pitch limits are unknowable historically, so has_pitch_limit stays
+    # untrained — the live path applies limits as a direct BF cap.
+    starters["il_return"] = starters["days_since_prior"] > IL_GAP_DAYS
+
+    bp = bullpen_fatigue_table(df)
+    starters = starters.merge(bp, on=["game_pk", "pitcher"], how="left")
+    starters["bp_heavy"] = starters["bp_heavy"].fillna(False).astype(bool)
+
     starters["has_pitch_limit"] = False
-    starters["bp_heavy"] = False
 
     return starters.reset_index(drop=True)
 

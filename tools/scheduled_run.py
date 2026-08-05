@@ -5,6 +5,10 @@ Windows Task Scheduler calls this with one argument:
     python tools/scheduled_run.py morning   # 10:30 AM ET
         grade yesterday -> predict today -> dashboard data ->
         commit ledger -> push -> deploy dashboard
+    python tools/scheduled_run.py lineups   # 4:45 PM ET
+        lineup-lock re-run: re-predict with confirmed lineups.
+        Placed bets keep their locked odds/side/stake (changes are
+        journaled); new edges that emerged become new picks.
     python tools/scheduled_run.py close     # 12:15 / 3:00 / 6:15 PM ET
         closing-odds snapshot (append-only; grader uses the last
         capture before each game's own start time)
@@ -99,6 +103,13 @@ def task_morning():
     _deploy_dashboard()
 
 
+def task_lineups():
+    _run("lineup-lock-predict", [PYTHON, "run.py", "predict"], 1800)
+    _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 600)
+    _commit_and_push("lineup-lock re-run")
+    _deploy_dashboard()
+
+
 def task_close():
     _run("closing-odds", [PYTHON, "run.py", "close"], 300)
 
@@ -111,13 +122,18 @@ def task_night():
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in ("morning", "close", "night"):
-        print("usage: python tools/scheduled_run.py {morning|close|night}")
+    if len(sys.argv) != 2 or sys.argv[1] not in ("morning", "lineups", "close", "night"):
+        print("usage: python tools/scheduled_run.py {morning|lineups|close|night}")
         sys.exit(2)
 
     task = sys.argv[1]
     _log(f"===== scheduled task '{task}' begin =====")
-    {"morning": task_morning, "close": task_close, "night": task_night}[task]()
+    {
+        "morning": task_morning,
+        "lineups": task_lineups,
+        "close": task_close,
+        "night": task_night,
+    }[task]()
     _log(f"===== scheduled task '{task}' end =====")
 
 

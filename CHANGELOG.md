@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-08-05 — Phase 12: Leash inputs + lineup-lock re-run
+
+The two changes most likely to add real edge (operator-directed):
+
+### Stage A leash inputs (were stubbed to "no" since Phase 2)
+
+- **il_return** — start after a 25+ day absence (`IL_GAP_DAYS`),
+  computed as-of from `days_since_prior` in the pitcher table. Trained
+  coefficient **−0.122**: a returning pitcher faces ~2-3 fewer batters.
+- **bp_heavy** — the team's bullpen threw ≥ 90 relief pitches the
+  previous day (`BP_HEAVY_PITCHES`; pitching team via inning_topbot,
+  relief = non-starter pitches; `features/asof.py::
+  team_relief_pitches_by_date` / `bullpen_fatigue_table`). Trained
+  coefficient **+0.028**: a taxed pen stretches the starter (matches
+  the raw data: 22.9 vs 21.2 mean BF).
+- **pitch_limit** — operator entries in `data/manual_pitch_limits.csv`
+  now load live per date/pitcher and cap Stage A's expected BF at
+  limit/4. Untrained historically (announced limits unknowable) —
+  the live cap does the work.
+- Cross-season validation IMPROVED with the new inputs:
+  24→25 +4.0% (was +3.8%), 25→24 +4.9% (was +4.8%), 24+25→26 +3.2%
+  (unchanged). Production Stage A/B refit; calibrator refit.
+- The pipeline logs leash flags per pitcher when any input fires.
+
+### Lineup-lock re-run (4:45 PM ET scheduled task)
+
+Morning picks price mostly with league-average lineups (lineups not
+posted at 10:30 AM). A new `lineups` task re-predicts when lineups are
+confirmed — tonight's dry run showed Detmers' E[K] move 5.4 → 7.1 on
+lineup information alone. To make same-day re-runs safe, the pick
+writer now enforces the money rule mechanically: existing
+bet_placed=Y rows keep their odds, side, stake, label, and created_at
+frozen; only model probs, lineup_source, and updated_at refresh; a
+side/strength flip is journaled to data/pick_changes.csv (never
+applied to the placed bet). New edges that emerge with lineups become
+NEW picks under the normal caps.
+
 ## 2026-08-05 — Ladder discipline: gap gate, next-2 rungs, half-stakes
 
 Operator rules, confirmed via questions before implementation
