@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-05 — Phase 10: Feature re-gauntlet — all three T2 promotions demoted
+
+Closed AUDIT A-005. The Phase 6 gauntlet promoted a9_zone_pct,
+f1_eastward_tz, and b14_n_rookies using leaky full-window aggregates
+and ~800-game splits. Re-tested on the Phase 9 cross-season harness
+(`tools/regauntlet.py`): five Stage B variants (full / core-only /
+drop-one-each) scored on the IDENTICAL 12,653 out-of-sample starts,
+feature value measured as paired per-start Brier deltas with
+t-statistics — no arbitrary noise floor.
+
+**Verdict: DEMOTE all three.** No feature cleared drop-delta t ≥ 2 in
+both temporal directions (all |t| ≤ 1.7); the core model matched the
+full model within ±0.00006 Brier on every split and was marginally
+BETTER on the 2026 decision split (0.14906 vs 0.14909). The old
+promotions were noise laundered by the leaky harness — consistent with
+its own negative-control finding that random features passed at that
+sample size.
+
+- `models/stage_b_rate.py`: StageB now supports feature subsets
+  (extra_features, persisted in the pickle);
+  `PRODUCTION_EXTRA_FEATURES = []` is the single source of truth.
+- Production Stage B refit core-only (intercept +1.343,
+  logit_pitcher_k +0.935, logit_batter_k +1.065, TTO2 −0.142,
+  TTO3 −0.211). The model's edge is entirely: pitcher K%, batter K%s,
+  TTO decay, and the Stage A leash — everything else must re-earn its
+  slot through the cross-season bar.
+- Decision-split predictions + calibrator regenerated against the
+  core model; dashboard Model view shows the re-tested verdicts
+  (marked ↻), superseding the leaky-harness rows.
+- Feature extractors remain in `features/t2_candidates.py` and the
+  pipeline still records zone/travel/rookie values in slate sidecars
+  (they're informational); the model simply doesn't use them.
+
 ## 2026-08-05 — Phase 9: Multi-season backfill + cross-season validation + production refit
 
 Closed AUDIT A-004: backfilled Statcast 2024 (724,076 pitches), 2025

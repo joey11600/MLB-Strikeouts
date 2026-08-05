@@ -37,7 +37,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from data.backfill_statcast import load_cached
 from features.asof import asof_pitcher_game_table, asof_batter_game_table
 from models.stage_a_bf import StageA, prepare_training_data as prepare_stage_a
-from models.stage_b_rate import StageB, prepare_training_data as prepare_stage_b, ROOKIE_BF_THRESHOLD
+from models.stage_b_rate import (
+    StageB, prepare_training_data as prepare_stage_b, ROOKIE_BF_THRESHOLD,
+    PRODUCTION_EXTRA_FEATURES,
+)
 from models.compound import prob_k_geq
 from strikeout_predictor import StrikeoutPredictor
 
@@ -189,8 +192,9 @@ def fit_eval_models(train_years: list[int]) -> tuple[StageA, StageB]:
 
     frames_b = [prepare_stage_b(*SEASONS[y]) for y in train_years]
     train_b = pd.concat(frames_b, ignore_index=True)
-    print(f"  Stage B train rows: {len(train_b)}")
-    stage_b = StageB()
+    print(f"  Stage B train rows: {len(train_b)} "
+          f"(extras: {PRODUCTION_EXTRA_FEATURES or 'core only'})")
+    stage_b = StageB(extra_features=PRODUCTION_EXTRA_FEATURES)
     stage_b.fit(train_b)
     stage_b.save(EVAL_STAGE_B_PATH)
 

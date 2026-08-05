@@ -38,39 +38,66 @@ def _sigmoid(x):
     return 1.0 / (1.0 + np.exp(-np.clip(x, -20, 20)))
 
 
-class StageB:
-    """Logistic regression for per-batter K probability."""
+# Optional Stage B features, in canonical design-matrix order. The core
+# design (intercept, pitcher/batter logits, TTO dummies) is fixed.
+EXTRA_FEATURES = ["zone_pct", "eastward_tz", "n_rookies"]
 
-    def __init__(self):
+# What production actually uses. The cross-season re-gauntlet
+# (tools/regauntlet.py, 12,653 OOS starts) demoted all three extras:
+# no feature cleared drop-delta t>=2 in both temporal directions, and
+# the core model matched the full model to within 0.00006 Brier on
+# every split. Promotion back requires passing that same bar.
+PRODUCTION_EXTRA_FEATURES: list[str] = []
+
+
+class StageB:
+    """Logistic regression for per-batter K probability.
+
+    extra_features selects which optional features (from EXTRA_FEATURES)
+    enter the design matrix — the re-gauntlet fits variants with subsets
+    to measure each feature's marginal out-of-sample value.
+    """
+
+    def __init__(self, extra_features: list[str] | None = None):
         self.coefficients = None
         self.feature_names = None
+        if extra_features is None:
+            extra_features = list(EXTRA_FEATURES)
+        unknown = set(extra_features) - set(EXTRA_FEATURES)
+        if unknown:
+            raise ValueError(f"Unknown Stage B extra features: {unknown}")
+        # canonical order regardless of caller order
+        self.extra_features = [f for f in EXTRA_FEATURES if f in extra_features]
+
+    def _extra_column(self, df: pd.DataFrame, name: str) -> np.ndarray:
+        if name == "zone_pct":
+            return df["zone_pct"].values if "zone_pct" in df.columns else np.full(len(df), LEAGUE_ZONE_PCT)
+        if name == "eastward_tz":
+            return df["eastward_tz"].values if "eastward_tz" in df.columns else np.zeros(len(df))
+        if name == "n_rookies":
+            return df["n_rookies"].values if "n_rookies" in df.columns else np.zeros(len(df))
+        raise ValueError(name)
 
     def _build_X(self, df: pd.DataFrame) -> np.ndarray:
         """Build design matrix from batter-level DataFrame."""
         tto_2 = (df["tto"] == 2).astype(float).values
         tto_3 = (df["tto"] >= 3).astype(float).values
-        pitcher_k = df["pitcher_k_pct"].values
-        batter_k = df["batter_k_pct"].values
-        zone_pct = df["zone_pct"].values if "zone_pct" in df.columns else np.full(len(df), LEAGUE_ZONE_PCT)
-        eastward_tz = df["eastward_tz"].values if "eastward_tz" in df.columns else np.zeros(len(df))
-        n_rookies = df["n_rookies"].values if "n_rookies" in df.columns else np.zeros(len(df))
 
-        X = np.column_stack([
+        cols = [
             np.ones(len(df)),
-            _logit(pitcher_k),
-            _logit(batter_k),
+            _logit(df["pitcher_k_pct"].values),
+            _logit(df["batter_k_pct"].values),
             tto_2,
             tto_3,
-            zone_pct,
-            eastward_tz,
-            n_rookies,
-        ])
-
-        self.feature_names = [
-            "intercept", "logit_pitcher_k", "logit_batter_k",
-            "tto_2", "tto_3", "zone_pct", "eastward_tz", "n_rookies",
         ]
-        return X
+        names = ["intercept", "logit_pitcher_k", "logit_batter_k", "tto_2", "tto_3"]
+
+        for name in self.extra_features:
+            cols.append(self._extra_column(df, name))
+            names.append(name)
+
+        self.feature_names = names
+        return np.column_stack(cols)
 
     def _neg_log_lik(self, beta, X, y):
         """Negative log-likelihood for logistic regression."""
@@ -119,21 +146,22 @@ class StageB:
                         tto: int, zone_pct: float | None = None,
                         eastward_tz: float = 0.0,
                         n_rookies: float = 0.0) -> float:
-        """Predict K probability for one batter."""
-        tto_2 = float(tto == 2)
-        tto_3 = float(tto >= 3)
-        zp = zone_pct if zone_pct is not None else LEAGUE_ZONE_PCT
+        """Predict K probability for one batter.
 
-        x = np.array([
-            1.0,
-            _logit(pitcher_k_pct),
-            _logit(batter_k_pct),
-            tto_2,
-            tto_3,
-            zp,
-            eastward_tz,
-            n_rookies,
-        ])
+        Callers always pass the full feature set; only the features this
+        model instance was fit with enter the design vector.
+        """
+        extra_values = {
+            "zone_pct": zone_pct if zone_pct is not None else LEAGUE_ZONE_PCT,
+            "eastward_tz": eastward_tz,
+            "n_rookies": n_rookies,
+        }
+
+        x = np.array(
+            [1.0, _logit(pitcher_k_pct), _logit(batter_k_pct),
+             float(tto == 2), float(tto >= 3)]
+            + [extra_values[name] for name in self.extra_features]
+        )
 
         if self.coefficients is not None:
             return float(_sigmoid(x @ self.coefficients))
@@ -181,6 +209,7 @@ class StageB:
             pickle.dump({
                 "coefficients": self.coefficients,
                 "feature_names": self.feature_names,
+                "extra_features": self.extra_features,
             }, f)
 
     def load(self, path: Path | None = None):
@@ -189,6 +218,8 @@ class StageB:
             data = pickle.load(f)
         self.coefficients = data["coefficients"]
         self.feature_names = data["feature_names"]
+        # Legacy pickles predate feature subsets and carry the full trio.
+        self.extra_features = data.get("extra_features", list(EXTRA_FEATURES))
 
 
 ROOKIE_BF_THRESHOLD = 100

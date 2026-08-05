@@ -181,10 +181,14 @@ positive at every line in every split — 12,653 out-of-sample starts.
 
 - **Stage A** — negative binomial BF: intercept +2.216,
   prior_bf_mean +0.037, season_k_pct +0.317, alpha 0.0067.
-- **Stage B** — logistic per-batter K: logit(pitcher K%) +0.938,
-  logit(batter K%) +1.066, TTO2 −0.141, TTO3 −0.210, zone_pct +0.287,
-  eastward_tz −0.016, n_rookies −0.006. (The last two are near-zero —
-  re-gauntlet pending, AUDIT A-005.)
+- **Stage B** — logistic per-batter K, CORE ONLY
+  (`PRODUCTION_EXTRA_FEATURES = []`): intercept +1.343,
+  logit(pitcher K%) +0.935, logit(batter K%) +1.065, TTO2 −0.142,
+  TTO3 −0.211. The Phase 6 T2 promotions (zone_pct, eastward_tz,
+  n_rookies) were ALL demoted by the cross-season re-gauntlet
+  (`tools/regauntlet.py`, paired drop-one deltas over 12,653 OOS
+  starts, none reached t≥2 both directions — AUDIT R-005). New
+  features must pass that same bar to enter.
 
 Isotonic calibration refit on the 18,798 decision-split OOS
 predictions: mid-line bias −2pp → within ±1pp. Calibration's job is

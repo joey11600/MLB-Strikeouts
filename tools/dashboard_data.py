@@ -449,14 +449,65 @@ def _build_model_analytics() -> dict:
                 for s in splits.values()
                 if isinstance(s, dict) and s.get("improvement_pct") is not None
             ]
+            # gauntlet_results.json predates the Phase 6 noise-floor
+            # re-evaluation (its stored verdicts for a10_fps_pct and
+            # f7_month_factor say PROMOTED; the published decision in
+            # CHANGELOG/GATES.md rejected them). Display the published
+            # promotion set only.
+            published_promotions = {"a9_zone_pct", "f1_eastward_tz", "b14_n_rookies"}
             features.append({
                 "feature": name,
                 "gates": gates,
-                "promoted": res.get("verdict") == "PROMOTED",
+                "promoted": res.get("verdict") == "PROMOTED" and name in published_promotions,
                 "failed_at": res.get("failed_at"),
                 "min_improvement_pct": round(min(imps), 3) if imps else None,
             })
         features.sort(key=lambda x: (not x["promoted"], -(x["min_improvement_pct"] or -99)))
+
+        # Cross-season re-gauntlet (Phase 9 harness) supersedes the old
+        # leaky-harness rows for the features it re-tested.
+        regauntlet_path = ROOT / "data" / "regauntlet_results.json"
+        if regauntlet_path.exists():
+            with open(regauntlet_path, encoding="utf-8") as f:
+                rg = json.load(f)
+            name_map = {
+                "zone_pct": "a9_zone_pct",
+                "eastward_tz": "f1_eastward_tz",
+                "n_rookies": "b14_n_rookies",
+            }
+            splits = {s["split"]: s for s in rg.get("splits", [])}
+            cross = [s for k, s in splits.items() if k in ("24to25", "25to24")]
+            decision = splits.get("2425to26")
+            retested = []
+            for feat, verdict in rg.get("verdicts", {}).items():
+                deltas_pct = []
+                for s in cross:
+                    fr = s["features"].get(feat)
+                    full_b = s["variant_brier"].get("full")
+                    if fr and full_b:
+                        deltas_pct.append(fr["mean_delta"] / full_b * 100)
+                d_ok = None
+                if decision and decision["features"].get(feat):
+                    d_ok = decision["features"][feat]["helps"]
+                retested.append({
+                    "feature": name_map.get(feat, feat) + " ↻",
+                    "gates": {
+                        "gate1": True,
+                        "gate2": all(
+                            s["features"][feat]["helps"] and s["features"][feat]["significant"]
+                            for s in cross if s["features"].get(feat)
+                        ),
+                        "gate3": None,
+                        "gate4": None,
+                        "gate5": d_ok,
+                    },
+                    "promoted": verdict == "KEEP",
+                    "failed_at": None,
+                    "min_improvement_pct": round(min(deltas_pct), 3) if deltas_pct else None,
+                })
+            superseded = set(name_map.values())
+            features = retested + [f for f in features if f["feature"] not in superseded]
+
         out["gauntlet"] = {
             "features": features,
             "noise_floor_pct": 0.167,

@@ -27,14 +27,6 @@ Tracks open items, resolved items, and known risks.
   embedded JSON or use the venue-specific endpoint.
 
 
-### A-005: T2 promotions need re-gauntleting on the honest harness
-- **Filed:** 2026-08-05
-- **Status:** Open
-- **Description:** a9_zone_pct, f1_eastward_tz, b14_n_rookies were
-  promoted by a gauntlet whose feature aggregates predate the as-of
-  rewrite. Refit on honest features, n_rookies collapsed to +0.009
-  (sign flip) and eastward_tz moved to -0.05. Re-run the gauntlet
-  against the as-of pipeline; demote features that fail.
 
 ### A-006: MODEL_TRUST_WEIGHT held at 0.5 pending live CLV evidence
 - **Filed:** 2026-08-05 (amended same day)
@@ -47,6 +39,15 @@ Tracks open items, resolved items, and known risks.
   100+ graded live bets with positive average CLV.
 
 ## Resolved
+
+### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)
+- **Filed/Resolved:** 2026-08-05
+- **Description:** a9_zone_pct, f1_eastward_tz, b14_n_rookies re-tested
+  on the cross-season harness via paired drop-one deltas over 12,653
+  OOS starts (`tools/regauntlet.py`). None cleared t ≥ 2 in both
+  temporal directions; core model matches full within ±0.00006 Brier.
+  Production Stage B is core-only (PRODUCTION_EXTRA_FEATURES = []).
+  Future promotions must pass this same cross-season bar.
 
 ### R-004: Statcast cache missing 2024, 2025, and Apr-May 2026 (was A-004)
 - **Filed/Resolved:** 2026-08-05

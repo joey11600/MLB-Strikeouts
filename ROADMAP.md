@@ -81,8 +81,10 @@
   the floor (0.23% min), exposing low power at 800-game splits.
   Promoted features are above floor but marginal. Backtest (+2%)
   is the real validation.
-- [ ] Shadow promoted features for 2 weeks
-- [ ] Re-gauntlet T2 promotions on the honest as-of harness (A-005)
+- [x] Re-gauntlet T2 promotions on the honest cross-season harness
+  (A-005): **all three DEMOTED** — none cleared paired drop-delta
+  t≥2 in both directions over 12,653 OOS starts. Production Stage B
+  is core-only. (Shadow period moot — features removed.)
 
 ## Phase 7 — Model truth audit ✅ (2026-08-05)
 - [x] Vectorized as-of feature tables (`features/asof.py`) — leakage

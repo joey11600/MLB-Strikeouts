@@ -18,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backtest import SEASONS
 from models.stage_a_bf import StageA, prepare_training_data as prepare_stage_a
-from models.stage_b_rate import StageB, prepare_training_data as prepare_stage_b
+from models.stage_b_rate import (
+    StageB, prepare_training_data as prepare_stage_b, PRODUCTION_EXTRA_FEATURES,
+)
 
 
 def main():
@@ -44,7 +46,8 @@ def main():
         frames_b.append(f)
     train_b = pd.concat(frames_b, ignore_index=True)
     print(f"  Stage B total: {len(train_b)} rows")
-    stage_b = StageB()
+    print(f"  Stage B extra features: {PRODUCTION_EXTRA_FEATURES or '(core only)'}")
+    stage_b = StageB(extra_features=PRODUCTION_EXTRA_FEATURES)
     stage_b.fit(train_b)
     stage_b.save()
 
