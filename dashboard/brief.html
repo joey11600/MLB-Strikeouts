@@ -221,6 +221,50 @@
     margin-left: auto;
   }
 
+  .brief-ladder-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .brief-ladder-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 10px;
+    margin-bottom: 6px;
+  }
+
+  .brief-ladder-header-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .brief-ladder-rung {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 4px 10px 4px 18px;
+    font-size: 0.85em;
+    opacity: 0.85;
+  }
+
+  .brief-ladder-rung .brief-side {
+    font-size: 20px;
+  }
+
+  .brief-ladder-rung .brief-odds {
+    font-size: 15px;
+  }
+
+  .brief-ladder-rung .brief-units {
+    font-size: 15px;
+  }
+
   .empty-state {
     text-align: center;
     padding: 48px 20px;
@@ -278,15 +322,19 @@
       return;
     }
 
-    var sorted = data.today.picks.slice().sort(function(a, b) {
-      if (a.pitcher_name < b.pitcher_name) return -1;
-      if (a.pitcher_name > b.pitcher_name) return 1;
-      return a.is_ladder ? 1 : -1;
-    });
+    var groups = [];
+    var map = {};
+    for (var i = 0; i < data.today.picks.length; i++) {
+      var pk = data.today.picks[i];
+      var key = pk.pitcher_name + '|' + pk.date + '|' + pk.pitcher_team;
+      if (!map[key]) { map[key] = { primary: null, ladders: [] }; groups.push(map[key]); }
+      if (pk.is_ladder) { map[key].ladders.push(pk); } else { map[key].primary = pk; }
+    }
 
     var html = '';
-    for (var i = 0; i < sorted.length; i++) {
-      var p = sorted[i];
+    for (var g = 0; g < groups.length; g++) {
+      var p = groups[g].primary || groups[g].ladders.shift();
+      if (!p) continue;
       var sideClass = 'side-' + p.pick_side;
       var valClass = p.pick_side === 'OVER' ? 'val-over' : 'val-under';
       var odds = p.pick_side === 'OVER' ? p.market_over_odds : p.market_under_odds;
@@ -295,9 +343,7 @@
 
       html += '<div class="brief-card ' + sideClass + '">' +
         '<div class="brief-top">' +
-          '<span class="brief-pitcher">' + p.pitcher_name +
-            (p.is_ladder ? '<span class="brief-ladder-tag">LADDER</span>' : '') +
-          '</span>' +
+          '<span class="brief-pitcher">' + p.pitcher_name + '</span>' +
           '<span class="brief-strength strength-' + p.pick_strength + '">' + p.pick_strength + '</span>' +
         '</div>' +
         '<div class="brief-matchup">' + matchup + '</div>' +
@@ -305,8 +351,25 @@
           '<span class="brief-side ' + valClass + '">' + p.pick_side + ' ' + p.line + '</span>' +
           '<span class="brief-odds">' + oddsStr(odds) + '</span>' +
           '<span class="brief-units">' + p.units_risked.toFixed(1) + 'u</span>' +
-        '</div>' +
-      '</div>';
+        '</div>';
+
+      if (groups[g].ladders.length > 0) {
+        html += '<div class="brief-ladder-section">' +
+          '<div class="brief-ladder-header"><span class="brief-ladder-header-label">Ladder</span></div>';
+        for (var j = 0; j < groups[g].ladders.length; j++) {
+          var lp = groups[g].ladders[j];
+          var lValClass = lp.pick_side === 'OVER' ? 'val-over' : 'val-under';
+          var lOdds = lp.market_over_odds || '';
+          html += '<div class="brief-ladder-rung">' +
+            '<span class="brief-side ' + lValClass + '">' + lp.pick_side + ' ' + lp.line + '</span>' +
+            '<span class="brief-odds">' + oddsStr(lOdds) + '</span>' +
+            '<span class="brief-units">' + lp.units_risked.toFixed(1) + 'u</span>' +
+          '</div>';
+        }
+        html += '</div>';
+      }
+
+      html += '</div>';
     }
 
     el.innerHTML = html;

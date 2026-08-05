@@ -579,7 +579,7 @@ def run_daily(
             "no_vig_fair_prob": nv_fair,
             "edge_pct": f"{play['best_edge']:.4f}",
             "units_risked": f"{play['units_risked']:.2f}",
-            "bet_placed": "N",
+            "bet_placed": "Y",
             "graded_result": "",
             "actual_strikeouts": "",
             "profit_loss_units": "",

@@ -1,140 +1,51 @@
 {
-  "generated_at": "2026-08-04T20:50:10.691522+00:00",
+  "generated_at": "2026-08-05T04:19:13.009768+00:00",
   "basis": "flat_100u",
   "record": {
-    "wins": 0,
-    "losses": 0,
+    "wins": 1,
+    "losses": 3,
     "voids": 0,
     "pushes": 0,
     "postponed": 0,
-    "pending": 4,
-    "total_graded": 0,
-    "hit_rate": 0.0
+    "pending": 0,
+    "total_graded": 4,
+    "hit_rate": 0.25
   },
   "pnl": {
     "total": {
-      "value": 0.0,
+      "value": -4.34,
       "basis": "flat_100u"
     },
     "total_risked": {
-      "value": 0.0,
+      "value": 6.0,
       "basis": "flat_100u"
     },
-    "roi": 0.0
+    "roi": -0.723
   },
-  "cumulative_series": [],
-  "today": {
-    "date": "2026-08-04",
-    "picks": [
-      {
-        "date": "2026-08-04",
-        "pitcher_name": "Logan Henderson",
-        "pitcher_team": "MIL",
-        "opponent_team": "PIT",
-        "is_home": true,
-        "venue": "American Family Field",
-        "line": "6.5",
-        "pick_side": "UNDER",
-        "pick_strength": "STRONG",
-        "pick_label": "UNDER 6.5 (STRONG)",
-        "model_prob_over": 0.2614,
-        "edge_pct": 0.2282,
-        "market_over_odds": "-108",
-        "market_under_odds": "-118",
-        "units_risked": 2.0,
-        "bet_placed": false,
-        "graded_result": null,
-        "actual_strikeouts": null,
-        "profit_loss_units": {
-          "value": 0.0,
-          "basis": "flat_100u"
-        },
-        "is_ladder": false,
-        "lineup_source": "projected"
+  "cumulative_series": [
+    {
+      "date": "2026-08-04",
+      "daily_pnl": {
+        "value": -4.34,
+        "basis": "flat_100u"
       },
-      {
-        "date": "2026-08-04",
-        "pitcher_name": "Hunter Dobbins",
-        "pitcher_team": "STL",
-        "opponent_team": "NYY",
-        "is_home": false,
-        "venue": "Yankee Stadium",
-        "line": "4.5",
-        "pick_side": "OVER",
-        "pick_strength": "STRONG",
-        "pick_label": "OVER 4.5 (STRONG)",
-        "model_prob_over": 0.6321,
-        "edge_pct": 0.2199,
-        "market_over_odds": "+129",
-        "market_under_odds": "-165",
-        "units_risked": 2.0,
-        "bet_placed": false,
-        "graded_result": null,
-        "actual_strikeouts": null,
-        "profit_loss_units": {
-          "value": 0.0,
-          "basis": "flat_100u"
-        },
-        "is_ladder": false,
-        "lineup_source": "confirmed"
+      "cumulative_pnl": {
+        "value": -4.34,
+        "basis": "flat_100u"
       },
-      {
-        "date": "2026-08-04",
-        "pitcher_name": "J.T. Ginn",
-        "pitcher_team": "ATH",
-        "opponent_team": "CIN",
-        "is_home": false,
-        "venue": "Great American Ball Park",
-        "line": "4.5",
-        "pick_side": "OVER",
-        "pick_strength": "STRONG",
-        "pick_label": "OVER 4.5 (STRONG)",
-        "model_prob_over": 0.7842,
-        "edge_pct": 0.2168,
-        "market_over_odds": "-151",
-        "market_under_odds": "+118",
-        "units_risked": 1.0,
-        "bet_placed": false,
-        "graded_result": null,
-        "actual_strikeouts": null,
-        "profit_loss_units": {
-          "value": 0.0,
-          "basis": "flat_100u"
-        },
-        "is_ladder": false,
-        "lineup_source": "confirmed"
-      },
-      {
-        "date": "2026-08-04",
-        "pitcher_name": "J.T. Ginn",
-        "pitcher_team": "ATH",
-        "opponent_team": "CIN",
-        "is_home": false,
-        "venue": "Great American Ball Park",
-        "line": "6+",
-        "pick_side": "OVER",
-        "pick_strength": "STRONG",
-        "pick_label": "OVER 6+ (STRONG)",
-        "model_prob_over": 0.6371,
-        "edge_pct": 0.2187,
-        "market_over_odds": "139",
-        "market_under_odds": "",
-        "units_risked": 1.0,
-        "bet_placed": false,
-        "graded_result": null,
-        "actual_strikeouts": null,
-        "profit_loss_units": {
-          "value": 0.0,
-          "basis": "flat_100u"
-        },
-        "is_ladder": true,
-        "lineup_source": "confirmed"
+      "record": {
+        "w": 1,
+        "l": 3
       }
-    ],
-    "pick_count": 4,
-    "primary_count": 3,
-    "ladder_count": 1,
-    "total_units": 6.0
+    }
+  ],
+  "today": {
+    "date": "2026-08-05",
+    "picks": [],
+    "pick_count": 0,
+    "primary_count": 0,
+    "ladder_count": 0,
+    "total_units": 0
   },
   "all_picks": [
     {
@@ -153,11 +64,11 @@
       "market_over_odds": "-108",
       "market_under_odds": "-118",
       "units_risked": 2.0,
-      "bet_placed": false,
-      "graded_result": null,
-      "actual_strikeouts": null,
+      "bet_placed": true,
+      "graded_result": "LOSS",
+      "actual_strikeouts": 8,
       "profit_loss_units": {
-        "value": 0.0,
+        "value": -2.0,
         "basis": "flat_100u"
       },
       "is_ladder": false,
@@ -179,11 +90,11 @@
       "market_over_odds": "+129",
       "market_under_odds": "-165",
       "units_risked": 2.0,
-      "bet_placed": false,
-      "graded_result": null,
-      "actual_strikeouts": null,
+      "bet_placed": true,
+      "graded_result": "LOSS",
+      "actual_strikeouts": 4,
       "profit_loss_units": {
-        "value": 0.0,
+        "value": -2.0,
         "basis": "flat_100u"
       },
       "is_ladder": false,
@@ -205,11 +116,11 @@
       "market_over_odds": "-151",
       "market_under_odds": "+118",
       "units_risked": 1.0,
-      "bet_placed": false,
-      "graded_result": null,
-      "actual_strikeouts": null,
+      "bet_placed": true,
+      "graded_result": "WIN",
+      "actual_strikeouts": 5,
       "profit_loss_units": {
-        "value": 0.0,
+        "value": 0.6622516556291391,
         "basis": "flat_100u"
       },
       "is_ladder": false,
@@ -231,11 +142,11 @@
       "market_over_odds": "139",
       "market_under_odds": "",
       "units_risked": 1.0,
-      "bet_placed": false,
-      "graded_result": null,
-      "actual_strikeouts": null,
+      "bet_placed": true,
+      "graded_result": "LOSS",
+      "actual_strikeouts": 5,
       "profit_loss_units": {
-        "value": 0.0,
+        "value": -1.0,
         "basis": "flat_100u"
       },
       "is_ladder": true,

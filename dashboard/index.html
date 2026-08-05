@@ -72,9 +72,9 @@
   }
 
   .container {
-    max-width: 520px;
+    max-width: 960px;
     margin: 0 auto;
-    padding: 0 16px;
+    padding: 0 24px;
     position: relative;
     z-index: 1;
   }
@@ -219,8 +219,8 @@
 
   /* ===== PICK CARDS ===== */
   .picks-grid {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     gap: 10px;
     margin-bottom: 28px;
   }
@@ -277,6 +277,103 @@
     border-radius: 100px;
     padding: 2px 8px;
     z-index: 2;
+  }
+
+  /* ===== LADDER DROPDOWN ===== */
+  .ladder-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    margin-left: 10px;
+    padding: 6px 10px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(245,158,11,0.15);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .ladder-toggle:hover {
+    border-color: rgba(245,158,11,0.3);
+    background: rgba(245,158,11,0.15);
+  }
+
+  .ladder-toggle-icon {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    transition: transform 0.25s ease;
+    display: inline-block;
+  }
+
+  .ladder-toggle.open .ladder-toggle-icon {
+    transform: rotate(90deg);
+  }
+
+  .ladder-toggle-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .ladder-toggle-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  .ladder-rungs {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .ladder-rungs.open {
+    max-height: 600px;
+  }
+
+  .ladder-rung {
+    margin: 8px 10px 0;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr 0.8fr 1fr;
+    gap: 6px;
+    align-items: center;
+    animation: fadeUp 0.3s ease-out both;
+  }
+
+  .ladder-rung:last-child {
+    margin-bottom: 4px;
+  }
+
+  .ladder-rung .pick-datum-value {
+    font-size: 13px;
+  }
+
+  .ladder-rung .pick-datum-label {
+    font-size: 8px;
+  }
+
+  .ladder-rung-result {
+    grid-column: 1 / -1;
+    margin-top: 2px;
+  }
+
+  .ladder-rung-result .pick-result {
+    margin-left: 0;
+    font-size: 10px;
+    padding: 2px 8px;
   }
 
   .pick-top {
@@ -637,9 +734,11 @@
   .pick-card:nth-child(6) { animation-delay: 0.45s; }
 
   /* ===== RESPONSIVE ===== */
-  @media (max-width: 400px) {
+  @media (max-width: 500px) {
+    .container { padding: 0 12px; }
     .hero-stats { grid-template-columns: repeat(2, 1fr); }
     .hero-stat-value { font-size: 18px; }
+    .picks-grid { grid-template-columns: 1fr; }
     .pick-data-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .pick-pitcher { font-size: 15px; }
   }
@@ -799,6 +898,94 @@
     '</div>';
   }
 
+  function groupByPitcher(picks) {
+    var groups = [];
+    var map = {};
+    for (var i = 0; i < picks.length; i++) {
+      var p = picks[i];
+      var key = p.pitcher_name + '|' + p.date + '|' + p.pitcher_team;
+      if (!map[key]) {
+        map[key] = { primary: null, ladders: [] };
+        groups.push(map[key]);
+      }
+      if (p.is_ladder) {
+        map[key].ladders.push(p);
+      } else {
+        map[key].primary = p;
+      }
+    }
+    return groups;
+  }
+
+  function renderLadderRung(pick) {
+    var valClass = pick.pick_side === 'OVER' ? 'val-over' : 'val-under';
+    var odds = pick.market_over_odds || '';
+
+    var resultHtml = '';
+    if (pick.graded_result) {
+      var resultClass = 'result-' + pick.graded_result;
+      var rText = pick.graded_result;
+      if (pick.actual_strikeouts !== null && pick.actual_strikeouts !== undefined) {
+        rText += ' · ' + pick.actual_strikeouts + 'K';
+      }
+      if ((pick.graded_result === 'WIN' || pick.graded_result === 'LOSS') && pick.profit_loss_units) {
+        rText += ' · ' + pnlStr(pick.profit_loss_units.value);
+      }
+      resultHtml = '<div class="ladder-rung-result"><span class="pick-result ' + resultClass + '">' + rText + '</span></div>';
+    } else {
+      resultHtml = '<div class="ladder-rung-result"><span class="pick-result result-PENDING">PENDING</span></div>';
+    }
+
+    return '<div class="ladder-rung">' +
+      '<div class="pick-datum">' +
+        '<div class="pick-datum-value ' + valClass + '">' + pick.pick_side + ' ' + pick.line + '</div>' +
+        '<div class="pick-datum-label">Line</div>' +
+      '</div>' +
+      '<div class="pick-datum">' +
+        '<div class="pick-datum-value">' + oddsStr(odds) + '</div>' +
+        '<div class="pick-datum-label">Odds</div>' +
+      '</div>' +
+      '<div class="pick-datum">' +
+        '<div class="pick-datum-value">' + pick.units_risked.toFixed(1) + 'u</div>' +
+        '<div class="pick-datum-label">Stake</div>' +
+      '</div>' +
+      '<div class="pick-datum">' +
+        '<div class="pick-datum-value">' + pctStr(pick.edge_pct) + '</div>' +
+        '<div class="pick-datum-label">Edge</div>' +
+      '</div>' +
+      resultHtml +
+    '</div>';
+  }
+
+  function renderPickCardWithLadder(group, i) {
+    var primary = group.primary;
+    var ladders = group.ladders;
+    if (!primary && ladders.length > 0) {
+      primary = ladders.shift();
+    }
+    if (!primary) return '';
+
+    var card = renderPickCard(primary, i);
+
+    if (ladders.length > 0) {
+      var ladderHtml = '<div class="ladder-toggle" onclick="this.classList.toggle(\'open\');this.nextElementSibling.classList.toggle(\'open\')">' +
+        '<span class="ladder-toggle-icon">&#9654;</span>' +
+        '<span class="ladder-toggle-label">Ladder</span>' +
+        '<span class="ladder-toggle-count">' + ladders.length + ' rung' + (ladders.length !== 1 ? 's' : '') + '</span>' +
+      '</div>' +
+      '<div class="ladder-rungs">';
+
+      for (var j = 0; j < ladders.length; j++) {
+        ladderHtml += renderLadderRung(ladders[j]);
+      }
+      ladderHtml += '</div>';
+
+      card = card.replace(/<\/div>$/, ladderHtml + '</div>');
+    }
+
+    return card;
+  }
+
   function renderToday(today) {
     var el = document.getElementById('today-section');
     if (!today.picks || today.picks.length === 0) {
@@ -818,11 +1005,7 @@
       countLabel = today.primary_count + ' primary + ' + today.ladder_count + ' ladder';
     }
 
-    var sorted = today.picks.slice().sort(function(a, b) {
-      if (a.pitcher_name < b.pitcher_name) return -1;
-      if (a.pitcher_name > b.pitcher_name) return 1;
-      return a.is_ladder ? 1 : -1;
-    });
+    var groups = groupByPitcher(today.picks);
 
     var html =
       '<div class="section-header">' +
@@ -831,8 +1014,8 @@
       '</div>' +
       '<div class="picks-grid">';
 
-    for (var i = 0; i < sorted.length; i++) {
-      html += renderPickCard(sorted[i], i);
+    for (var i = 0; i < groups.length; i++) {
+      html += renderPickCardWithLadder(groups[i], i);
     }
 
     html += '</div>';
@@ -915,6 +1098,14 @@
 
     graded.sort(function(a, b) { return b.date.localeCompare(a.date); });
 
+    var groups = groupByPitcher(graded);
+
+    var primaryCount = 0;
+    for (var g = 0; g < groups.length; g++) {
+      if (groups[g].primary) primaryCount++;
+      primaryCount += groups[g].ladders.filter(function(l) { return !groups[g].primary; }).length;
+    }
+
     var html =
       '<div class="history-section">' +
         '<div class="section-header">' +
@@ -922,17 +1113,43 @@
           '<span class="section-badge">' + graded.length + ' graded</span>' +
         '</div>';
 
-    var limit = Math.min(graded.length, 15);
-    for (var i = 0; i < limit; i++) {
-      var p = graded[i];
+    var shown = 0;
+    for (var i = 0; i < groups.length && shown < 15; i++) {
+      var group = groups[i];
+      var p = group.primary || group.ladders[0];
+      if (!p) continue;
+
       var resultClass = 'result-' + p.graded_result;
       var pv = p.profit_loss_units ? p.profit_loss_units.value : 0;
+      var nameLabel = p.pitcher_name;
+      if (group.ladders.length > 0 && group.primary) {
+        nameLabel += ' <span style="color:var(--accent);font-size:10px;font-family:var(--font-mono)">+' + group.ladders.length + ' ladder</span>';
+      }
+
+      var totalPnl = pv;
+      for (var k = 0; k < group.ladders.length; k++) {
+        totalPnl += group.ladders[k].profit_loss_units ? group.ladders[k].profit_loss_units.value : 0;
+      }
+
       html += '<div class="history-item">' +
         '<span class="history-date">' + p.date + '</span>' +
-        '<span class="history-name">' + p.pitcher_name + '</span>' +
-        '<span class="history-result ' + resultClass + '">' + p.graded_result + '</span>' +
-        '<span class="history-pnl ' + pnlClass(pv) + '">' + pnlStr(pv) + '</span>' +
+        '<span class="history-name">' + nameLabel + '</span>' +
+        '<span class="history-result ' + resultClass + '">' + p.pick_label + '</span>' +
+        '<span class="history-pnl ' + pnlClass(totalPnl) + '">' + pnlStr(totalPnl) + '</span>' +
       '</div>';
+
+      for (var j = 0; j < group.ladders.length; j++) {
+        var lp = group.ladders[j];
+        var lResultClass = 'result-' + lp.graded_result;
+        var lpv = lp.profit_loss_units ? lp.profit_loss_units.value : 0;
+        html += '<div class="history-item" style="padding-left:20px;opacity:0.7">' +
+          '<span class="history-date" style="width:52px;color:var(--accent);font-size:10px">LADDER</span>' +
+          '<span class="history-name" style="font-size:12px">' + lp.pick_label + '</span>' +
+          '<span class="history-result ' + lResultClass + '">' + lp.graded_result + '</span>' +
+          '<span class="history-pnl ' + pnlClass(lpv) + '">' + pnlStr(lpv) + '</span>' +
+        '</div>';
+      }
+      shown++;
     }
 
     html += '</div>';

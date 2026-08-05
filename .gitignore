@@ -19,3 +19,5 @@ data/odds/
 models/*.pkl
 *.db
 *.sqlite3
+
+.vercel
