@@ -120,6 +120,10 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
           {sorted.map((r) => {
             const isBet = isBetRung(r);
             const isEquivalent = r.status === "primary_equivalent";
+            // The equivalent rung IS the primary bet (or its inverse on
+            // an under card) — when the primary was placed, it gets the
+            // side-colored bet highlight and shows the primary's stake.
+            const isPrimaryBetRow = isEquivalent && primaryBet;
             // On UNDER cards, non-bet rungs display as their under-side
             // twin: "6+ K" (six or more) flips to UNDER 5.5 (five or
             // fewer), with under-probabilities. Bet rungs are real over
@@ -139,8 +143,12 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
                   "border-b border-line/50",
                   isBet &&
                     "border-l-2 border-l-accent bg-accent-dim/60 [&>td:first-child]:pl-1.5",
+                  isPrimaryBetRow &&
+                    (primaryIsOver
+                      ? "border-l-2 border-l-over bg-over-dim/50 [&>td:first-child]:pl-1.5"
+                      : "border-l-2 border-l-under bg-under-dim/50 [&>td:first-child]:pl-1.5"),
                   !isBet && !isEquivalent && "opacity-55",
-                  isEquivalent && "opacity-80",
+                  isEquivalent && !isPrimaryBetRow && "opacity-80",
                 )}
               >
                 <td className={cn(
@@ -174,9 +182,19 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
                       : "—"}
                 </td>
                 <td className="py-1.5 pr-3">
-                  {isEquivalent ? (
+                  {isPrimaryBetRow ? (
+                    <span
+                      className={cn(
+                        "figure font-semibold",
+                        primaryIsOver ? "text-over" : "text-under",
+                      )}
+                    >
+                      BET {(primaryPick?.units_risked ?? 0).toFixed(2)}u · primary (
+                      {primaryIsOver ? "OVER" : "UNDER"} {line})
+                    </span>
+                  ) : isEquivalent ? (
                     <span className="figure text-[10.5px] text-ink-secondary">
-                      = primary bet ({primaryIsOver ? "OVER" : "UNDER"} {line})
+                      = primary line ({primaryIsOver ? "OVER" : "UNDER"} {line}, not bet)
                     </span>
                   ) : isBet ? (
                     <span className="figure font-semibold text-accent">
@@ -416,19 +434,34 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
                 (acc, r) => acc + (r.pick?.units_risked ?? r.units_risked ?? 0),
                 0,
               );
+              const primaryUnits =
+                pick?.bet_placed ? (pick?.units_risked ?? 0) : 0;
+              const total = primaryUnits + ladderUnits;
               return (
                 <div className="mb-1 flex items-baseline justify-between">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
                     Ladder — every rung evaluated
                   </span>
                   <span className="figure text-[10.5px]">
-                    {betRungs.length > 0 ? (
-                      <span className="text-accent">
-                        {betRungs.length} rung{betRungs.length !== 1 ? "s" : ""} bet
-                        · {ladderUnits.toFixed(2)}u
+                    {total > 0 ? (
+                      <span className="text-ink-secondary">
+                        {primaryUnits > 0 && (
+                          <span className={side === "UNDER" ? "text-under" : "text-over"}>
+                            primary {primaryUnits.toFixed(2)}u
+                          </span>
+                        )}
+                        {primaryUnits > 0 && ladderUnits > 0 && " + "}
+                        {ladderUnits > 0 && (
+                          <span className="text-accent">
+                            ladder {ladderUnits.toFixed(2)}u ({betRungs.length} rung
+                            {betRungs.length !== 1 ? "s" : ""})
+                          </span>
+                        )}
+                        {" = "}
+                        {total.toFixed(2)}u on this pitcher
                       </span>
                     ) : (
-                      <span className="text-ink-muted">no rungs bet</span>
+                      <span className="text-ink-muted">no bets</span>
                     )}
                   </span>
                 </div>
