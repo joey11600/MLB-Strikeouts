@@ -1,0 +1,6 @@
+{
+  "outputDirectory": "dashboard",
+  "rewrites": [
+    { "source": "/brief", "destination": "/brief.html" }
+  ]
+}
