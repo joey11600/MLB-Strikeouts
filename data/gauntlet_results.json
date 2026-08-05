@@ -1,0 +1,442 @@
+{
+  "a9_zone_pct": {
+    "feature": "a9_zone_pct",
+    "gate1": {
+      "gate": 1,
+      "feature": "a9_zone_pct",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "a9_zone_pct",
+      "passed": true,
+      "splits": {
+        "A": {
+          "brier_base": 0.12642202746654363,
+          "brier_aug": 0.1262121985969123,
+          "improvement_pct": 0.1659749284489711,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.13015111696619672,
+          "brier_aug": 0.12992215772456497,
+          "improvement_pct": 0.175917999759625,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Improves in both temporal directions"
+    },
+    "gate3": {
+      "gate": 3,
+      "feature": "a9_zone_pct",
+      "passed": null,
+      "reason": "No coefficient available (run Gate 2 first)"
+    },
+    "gate4": {
+      "gate": 4,
+      "feature": "a9_zone_pct",
+      "passed": true,
+      "correlations": {},
+      "collinear_with": [],
+      "reason": "No problematic collinearity"
+    },
+    "gate5": {
+      "gate": 5,
+      "feature": "a9_zone_pct",
+      "passed": true,
+      "avg_brier_improvement_pct": 0.17094646410429803,
+      "split_improvements": {
+        "A": 0.1659749284489711,
+        "B": 0.175917999759625,
+        "C": null
+      },
+      "reason": "Brier improvement: A:+0.17%, B:+0.18%"
+    },
+    "verdict": "PROMOTED",
+    "failed_at": null
+  },
+  "a10_fps_pct": {
+    "feature": "a10_fps_pct",
+    "gate1": {
+      "gate": 1,
+      "feature": "a10_fps_pct",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "a10_fps_pct",
+      "passed": true,
+      "splits": {
+        "A": {
+          "brier_base": 0.12660888920287597,
+          "brier_aug": 0.12659473527565707,
+          "improvement_pct": 0.011179252347930898,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.13271456204582563,
+          "brier_aug": 0.13261644769368616,
+          "improvement_pct": 0.07392885198655771,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Improves in both temporal directions"
+    },
+    "gate3": {
+      "gate": 3,
+      "feature": "a10_fps_pct",
+      "passed": null,
+      "reason": "No coefficient available (run Gate 2 first)"
+    },
+    "gate4": {
+      "gate": 4,
+      "feature": "a10_fps_pct",
+      "passed": true,
+      "correlations": {},
+      "collinear_with": [
+        "a2_csw_pct"
+      ],
+      "reason": "No problematic collinearity"
+    },
+    "gate5": {
+      "gate": 5,
+      "feature": "a10_fps_pct",
+      "passed": true,
+      "avg_brier_improvement_pct": 0.042554052167244304,
+      "split_improvements": {
+        "A": 0.011179252347930898,
+        "B": 0.07392885198655771,
+        "C": null
+      },
+      "reason": "Brier improvement: A:+0.01%, B:+0.07%"
+    },
+    "verdict": "PROMOTED",
+    "failed_at": null
+  },
+  "a18_spin_delta": {
+    "feature": "a18_spin_delta",
+    "gate1": {
+      "gate": 1,
+      "feature": "a18_spin_delta",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "a18_spin_delta",
+      "passed": false,
+      "splits": {
+        "A": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null,
+          "reason": "Insufficient data: 0/422"
+        },
+        "B": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null,
+          "reason": "Insufficient data: 422/0"
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Does NOT help in both directions"
+    },
+    "verdict": "REJECTED",
+    "failed_at": 2
+  },
+  "a20_extension": {
+    "feature": "a20_extension",
+    "gate1": {
+      "gate": 1,
+      "feature": "a20_extension",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "a20_extension",
+      "passed": false,
+      "splits": {
+        "A": {
+          "brier_base": 0.12642202746654363,
+          "brier_aug": 0.12656418930854468,
+          "improvement_pct": -0.11245021524328562,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.13015111696619672,
+          "brier_aug": 0.1298481705727698,
+          "improvement_pct": 0.23276511219309054,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Does NOT help in both directions"
+    },
+    "verdict": "REJECTED",
+    "failed_at": 2
+  },
+  "c5_tto_decay": {
+    "feature": "c5_tto_decay",
+    "gate1": {
+      "gate": 1,
+      "feature": "c5_tto_decay",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "c5_tto_decay",
+      "passed": false,
+      "splits": {
+        "A": {
+          "brier_base": 0.1313138325233941,
+          "brier_aug": 0.1347334566351275,
+          "improvement_pct": -2.6041613789043816,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.13560935887554104,
+          "brier_aug": 0.13567937226253826,
+          "improvement_pct": -0.05162872797111023,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Does NOT help in both directions"
+    },
+    "verdict": "REJECTED",
+    "failed_at": 2
+  },
+  "c7_prior_pitches": {
+    "feature": "c7_prior_pitches",
+    "gate1": {
+      "gate": 1,
+      "feature": "c7_prior_pitches",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "c7_prior_pitches",
+      "passed": false,
+      "splits": {
+        "A": {
+          "brier_base": 0.12659163740811438,
+          "brier_aug": 0.12762430063800242,
+          "improvement_pct": -0.8157436391780565,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.12972278481770091,
+          "brier_aug": 0.12965282483206292,
+          "improvement_pct": 0.053930376021691796,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Does NOT help in both directions"
+    },
+    "verdict": "REJECTED",
+    "failed_at": 2
+  },
+  "c8_days_rest": {
+    "feature": "c8_days_rest",
+    "gate1": {
+      "gate": 1,
+      "feature": "c8_days_rest",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "c8_days_rest",
+      "passed": false,
+      "splits": {
+        "A": {
+          "brier_base": 0.12642202746654363,
+          "brier_aug": 0.12878868657063197,
+          "improvement_pct": -1.8720306512365146,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.1283258500449859,
+          "brier_aug": 0.12788690240614276,
+          "improvement_pct": 0.34205706698164295,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Does NOT help in both directions"
+    },
+    "verdict": "REJECTED",
+    "failed_at": 2
+  },
+  "c9_season_bf": {
+    "feature": "c9_season_bf",
+    "gate1": {
+      "gate": 1,
+      "feature": "c9_season_bf",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "c9_season_bf",
+      "passed": false,
+      "splits": {
+        "A": {
+          "brier_base": 0.12606876546847035,
+          "brier_aug": 0.14129265080511494,
+          "improvement_pct": -12.075858187452521,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.12668791138817168,
+          "brier_aug": 0.1266420591656814,
+          "improvement_pct": 0.03619305266608896,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Does NOT help in both directions"
+    },
+    "verdict": "REJECTED",
+    "failed_at": 2
+  },
+  "c16_is_debut": {
+    "feature": "c16_is_debut",
+    "gate1": {
+      "gate": 1,
+      "feature": "c16_is_debut",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "c16_is_debut",
+      "passed": false,
+      "splits": {
+        "A": {
+          "brier_base": 0.12606876546847035,
+          "brier_aug": 0.12578266633189397,
+          "improvement_pct": 0.22693895312866078,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.12668791138817168,
+          "brier_aug": 0.12834129081955106,
+          "improvement_pct": -1.3050806610217398,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Does NOT help in both directions"
+    },
+    "verdict": "REJECTED",
+    "failed_at": 2
+  },
+  "f7_month_factor": {
+    "feature": "f7_month_factor",
+    "gate1": {
+      "gate": 1,
+      "feature": "f7_month_factor",
+      "passed": true,
+      "reason": "Known before first pitch via as-of filtering"
+    },
+    "gate2": {
+      "gate": 2,
+      "feature": "f7_month_factor",
+      "passed": true,
+      "splits": {
+        "A": {
+          "brier_base": 0.12606876546847035,
+          "brier_aug": 0.1258087827600866,
+          "improvement_pct": 0.20622293509231981,
+          "n_lines": 6
+        },
+        "B": {
+          "brier_base": 0.12668791138817168,
+          "brier_aug": 0.1263151520458242,
+          "improvement_pct": 0.2942343419060321,
+          "n_lines": 6
+        },
+        "C": {
+          "brier_base": null,
+          "brier_aug": null,
+          "improvement": null
+        }
+      },
+      "reason": "Improves in both temporal directions"
+    },
+    "gate3": {
+      "gate": 3,
+      "feature": "f7_month_factor",
+      "passed": null,
+      "reason": "No coefficient available (run Gate 2 first)"
+    },
+    "gate4": {
+      "gate": 4,
+      "feature": "f7_month_factor",
+      "passed": true,
+      "correlations": {},
+      "collinear_with": [],
+      "reason": "No problematic collinearity"
+    },
+    "gate5": {
+      "gate": 5,
+      "feature": "f7_month_factor",
+      "passed": true,
+      "avg_brier_improvement_pct": 0.250228638499176,
+      "split_improvements": {
+        "A": 0.20622293509231981,
+        "B": 0.2942343419060321,
+        "C": null
+      },
+      "reason": "Brier improvement: A:+0.21%, B:+0.29%"
+    },
+    "verdict": "PROMOTED",
+    "failed_at": null
+  }
+}
