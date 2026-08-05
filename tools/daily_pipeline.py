@@ -529,16 +529,20 @@ def run_daily(
                 continue
 
             primary_units = 0.0
+            primary_side = None
             for play in all_plays:
                 if (play.get("pitcher_id") == pred.get("pitcher_id")
                         and play.get("pick_type") == "primary"):
                     primary_units = play.get("units_risked", 0.0)
+                    primary_side = play.get("pick_side")
 
             rungs = evaluate_ladder(
                 k_dist, pitcher_alts,
                 primary_line=dk_line,
                 primary_units=primary_units,
                 calibrate_fn=predictor.calibrate_prob,
+                expected_k=expected_k,
+                primary_side=primary_side,
             )
             pred["ladder_eval"] = rungs
 

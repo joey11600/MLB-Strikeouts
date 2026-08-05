@@ -260,7 +260,27 @@ Portfolio daily cap: 6.0u total. Same-game pitchers get a 15%
 correlation haircut (same umpire, weather, game environment).
 Picks are allocated best-edge-first.
 
-### Ladder/milestone betting
+### Ladder/milestone betting (operator rules, 2026-08-05)
+
+The ladder is a small ADD-ON to a conviction over pick, not a
+parallel betting system:
+
+1. **Gap gate** — fires only when the primary is a PLACED OVER bet
+   and E[K] ≥ line + `LADDER_GAP_MIN` (1.5). Line 6.5 needs a
+   projection of 8.0+.
+2. **Next rungs only** — at most `LADDER_RUNG_COUNT` (2) lines above
+   the primary: line 6.5 → alt 7.5 and 8.5 (milestones 8+ and 9+).
+3. **Small** — each rung ≤ `LADDER_RUNG_STAKE_FRACTION` (50%) of the
+   primary stake, on top of quarter-Kelly, the 2u per-bet cap, and
+   the 3u per-pitcher cap.
+4. Every rung still clears `LADDER_EDGE_THRESHOLD` (10%).
+
+Every posted rung is evaluated and stored with a pass/bet status so
+the dashboard shows the whole board. DK's alt board is over-only
+(probed 2026-08-05); the morning automation re-probes candidate
+under subcategories daily and flags if one appears.
+
+Original design notes below for history:
 
 When the model predicts a pitcher's K total well above or below the
 primary O/U line, there's edge at multiple K thresholds. Instead of

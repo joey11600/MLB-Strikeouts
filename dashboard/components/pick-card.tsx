@@ -16,6 +16,8 @@ const STATUS_LABEL: Record<string, string> = {
   passed_below_threshold: "PASS · below 10% bar",
   passed_pitcher_cap: "PASS · pitcher cap",
   passed_daily_cap: "PASS · daily cap",
+  passed_gap_gate: "PASS · gap gate (needs E[K] ≥ line +1.5)",
+  passed_not_next_rung: "PASS · beyond next 2 rungs",
 };
 
 function ResultBadge({ result, pnl, actualK }: {

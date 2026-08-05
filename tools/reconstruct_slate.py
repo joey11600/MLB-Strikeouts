@@ -59,7 +59,7 @@ def _load_odds(iso_date: str):
 
 
 def _load_actual_bets(iso_date: str) -> dict:
-    """Map (pitcher_id, line_str) -> units actually risked, from the ledger."""
+    """Map (pitcher_id, line_str) -> {units, side} actually risked."""
     bets = {}
     if not PICKS_PATH.exists():
         return bets
@@ -67,7 +67,10 @@ def _load_actual_bets(iso_date: str) -> dict:
         for row in csv.DictReader(f):
             if row.get("date") == iso_date and (row.get("bet_placed") or "").upper() == "Y":
                 key = (str(row.get("pitcher_id")), str(row.get("line")))
-                bets[key] = float(row.get("units_risked") or 0)
+                bets[key] = {
+                    "units": float(row.get("units_risked") or 0),
+                    "side": (row.get("pick_side") or "").upper(),
+                }
     return bets
 
 
@@ -187,17 +190,20 @@ def reconstruct(iso_date: str):
         strength = pick_strength(ei["best_edge"], ei["threshold"])
 
         primary_key = (str(pid), str(dk_line))
-        primary_units = actual_bets.get(primary_key, 0.0)
+        primary_bet = actual_bets.get(primary_key, {})
+        primary_units = primary_bet.get("units", 0.0)
 
         rungs_out = []
         rungs = evaluate_ladder(
             result["k_dist"], alts_by_name.get(norm, []),
             primary_line=dk_line, primary_units=primary_units,
             calibrate_fn=predictor.calibrate_prob,
+            expected_k=float(result["expected_k"]),
+            primary_side=primary_bet.get("side"),
         )
         for r in rungs:
             ladder_key = (str(pid), f"{r['milestone']}+")
-            actual_units = actual_bets.get(ladder_key, 0.0)
+            actual_units = actual_bets.get(ladder_key, {}).get("units", 0.0)
             rungs_out.append({
                 "milestone": r["milestone"],
                 "odds": r["odds_str"],

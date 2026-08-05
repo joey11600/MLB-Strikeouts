@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-08-05 — Ladder discipline: gap gate, next-2 rungs, half-stakes
+
+Operator rules, confirmed via questions before implementation
+(models/ladder.py):
+
+- **LADDER_GAP_MIN = 1.5** — the ladder fires only when the primary is
+  a placed OVER bet and E[K] beats the line by 1.5+ (line 6.5 needs a
+  projection of 8.0+). No gate, no rungs. Under primaries and no-bet
+  pitchers never ladder.
+- **LADDER_RUNG_COUNT = 2** — only the next two lines above the
+  primary (6.5 → alt 7.5 + 8.5, i.e. 8+ and 9+ K).
+- **LADDER_RUNG_STAKE_FRACTION = 0.5** — each rung caps at half the
+  primary stake, under quarter-Kelly, the 2u per-bet cap, and the 3u
+  pitcher cap. The 10% edge bar is unchanged.
+- New pass statuses (gap gate / beyond next 2 rungs) flow to the
+  dashboard ladder table. Synthetic tests cover the gate, eligibility,
+  stake cap, under-gate, and no-primary-gate paths. Historical bets in
+  reconstructed slates keep their BET flag from the ledger; the pass
+  reasons shown are the current rules' view.
+- Under the new rules, yesterday's Ginn 6+ ladder (gap 0.7) would not
+  fire; today's Anderson 5+ (gap 2.9, next-rung, would size 0.85u vs
+  the 1.00u placed) remains a qualifying ladder.
+
 ## 2026-08-05 — Chart outcome colors, side-labeled pick line, alt-under probe
 
 - The dashed pick line on the K-distribution now reads "OVER 4.5" /

@@ -1,22 +1,28 @@
 """Ladder/milestone betting — evaluate and size alt K lines.
 
-When the model predicts a pitcher's K total is well above (or below) the
-primary O/U line, there's edge at multiple milestone thresholds. Instead
-of betting only Over 6.5, also bet the 6+, 7+, 8+ milestones — each at
-its own DK odds. This is called "laddering" props.
+The ladder is a small ADD-ON to a conviction over pick, not a parallel
+betting system (operator rule, 2026-08-05):
+
+  1. GAP GATE — the ladder fires only when the primary bet is an OVER
+     that was actually placed AND the model projects at least
+     LADDER_GAP_MIN strikeouts above the line (line 6.5 needs
+     E[K] >= 8.0). No gate, no rungs.
+  2. NEXT RUNGS ONLY — at most the next LADDER_RUNG_COUNT lines above
+     the primary (line 6.5 -> alt 7.5 and alt 8.5, i.e. milestones
+     8+ and 9+). Nothing below the line, nothing further out.
+  3. SMALL — each rung's stake caps at LADDER_RUNG_STAKE_FRACTION of
+     the primary stake, on top of quarter-Kelly, MAX_STAKE_UNITS, and
+     the LADDER_MAX_UNITS per-pitcher cap.
+  4. Every rung still must clear LADDER_EDGE_THRESHOLD (money rule).
+
+Every posted rung is still EVALUATED and returned with a status so the
+slate sidecar can show the whole board and why each rung passed.
 
 The compound model already computes the full P(K = k) distribution, so
 P(K >= milestone) for any milestone is a single array slice — free.
-
-Staking rules:
-- Each rung is a separate bet sized via quarter-Kelly.
-- Per-rung cap: MAX_STAKE_UNITS (2.0u).
-- Per-pitcher cap: LADDER_MAX_UNITS (3.0u) across all rungs combined.
-  Bets on 6+, 7+, 8+ for the same pitcher are highly correlated
-  (nested events), so the combined exposure must be limited.
-- Best-edge-first allocation within each pitcher's ladder.
-- The primary O/U bet counts toward the per-pitcher cap.
 """
+import math
+
 import numpy as np
 
 from models.edge import (
@@ -33,6 +39,12 @@ from tracker import MAX_STAKE_UNITS
 
 LADDER_MAX_UNITS = 3.0
 
+# Operator ladder rules (confirmed 2026-08-05): fire only on a big
+# model-vs-line gap, take only the next rungs up, size small.
+LADDER_GAP_MIN = 1.5
+LADDER_RUNG_COUNT = 2
+LADDER_RUNG_STAKE_FRACTION = 0.5
+
 # One-sided markets carry the book's margin on the only quoted side, and
 # nothing to strip it against. Treat the two-sided-equivalent hold as
 # 2 * ALT_SIDE_MARGIN and demand the same discipline as the primary
@@ -48,6 +60,8 @@ def evaluate_ladder(
     primary_line: float | None = None,
     primary_units: float = 0.0,
     calibrate_fn=None,
+    expected_k: float | None = None,
+    primary_side: str | None = None,
 ) -> list[dict]:
     """Evaluate all available milestone lines for one pitcher.
 
@@ -87,6 +101,20 @@ def evaluate_ladder(
     if k_dist is None or len(k_dist) == 0:
         return []
 
+    # Gap gate: ladder only rides on a placed OVER primary whose
+    # projection clears the line by LADDER_GAP_MIN.
+    gate_open = (
+        primary_side == "OVER"
+        and primary_units > 0
+        and primary_line is not None
+        and expected_k is not None
+        and (expected_k - primary_line) >= LADDER_GAP_MIN
+    )
+    eligible: set[int] = set()
+    if gate_open and primary_line is not None:
+        base = math.ceil(primary_line)
+        eligible = {base + i for i in range(1, LADDER_RUNG_COUNT + 1)}
+
     rungs = []
     for alt in alt_lines:
         try:
@@ -101,7 +129,6 @@ def evaluate_ladder(
 
         is_primary_equivalent = False
         if primary_line is not None:
-            import math
             is_primary_equivalent = milestone == math.ceil(primary_line)
 
         raw_model_prob = float(np.sum(k_dist[milestone:]))
@@ -123,6 +150,10 @@ def evaluate_ladder(
         # complete sequence but never separately bettable.
         if is_primary_equivalent:
             status = "primary_equivalent"
+        elif not gate_open:
+            status = "passed_gap_gate"
+        elif milestone not in eligible:
+            status = "passed_not_next_rung"
         elif edge <= 0:
             status = "passed_no_edge"
         elif raw_units < 0.1:
@@ -152,6 +183,7 @@ def evaluate_ladder(
     rungs.sort(key=lambda r: r["edge"], reverse=True)
 
     remaining = LADDER_MAX_UNITS - primary_units
+    rung_stake_ceiling = LADDER_RUNG_STAKE_FRACTION * primary_units
     for rung in rungs:
         if rung["status"] != "candidate":
             continue
@@ -159,7 +191,12 @@ def evaluate_ladder(
             rung["status"] = "passed_pitcher_cap"
             continue
 
-        capped = min(rung["raw_units"], remaining, MAX_STAKE_UNITS)
+        capped = min(
+            rung["raw_units"], remaining, MAX_STAKE_UNITS, rung_stake_ceiling,
+        )
+        if capped < 0.1:
+            rung["status"] = "passed_stake_too_small"
+            continue
         rung["units_risked"] = round(capped, 2)
         rung["status"] = "bet"
         remaining -= capped
