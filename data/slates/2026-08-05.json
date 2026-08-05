@@ -3975,7 +3975,7 @@
    "edge_best": 0.1708,
    "threshold": 0.0774,
    "strength": "STRONG",
-   "primary_units_risked": 1.7,
+   "primary_units_risked": 2.0,
    "k_dist": [
     0.004118,
     0.02302,
@@ -4058,15 +4058,15 @@
     },
     {
      "milestone": 4,
-     "odds": "+142",
+     "odds": "+134",
      "raw_model_prob": 0.7925,
      "model_prob": 0.8147,
-     "fair_prob": 0.3973,
-     "blended_prob": 0.606,
-     "edge": 0.2087,
+     "fair_prob": 0.4109,
+     "blended_prob": 0.6128,
+     "edge": 0.2019,
      "strength": "STRONG",
-     "units_risked": 0.0,
-     "status": "not_bet_rule_change",
+     "units_risked": 1.0,
+     "status": "bet",
      "current_rules_units": 1.0
     },
     {
@@ -4078,7 +4078,7 @@
      "blended_prob": 0.4672,
      "edge": 0.2219,
      "strength": "STRONG",
-     "units_risked": 1.0,
+     "units_risked": 0.5,
      "status": "bet",
      "current_rules_units": 0.5
     },
