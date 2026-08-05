@@ -143,7 +143,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T18:10:00.0000000Z"
   },
   {
    "pitcher_id": 592791,
@@ -285,7 +286,8 @@
      "units_risked": 0.0,
      "status": "passed_below_threshold"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T18:10:00.0000000Z"
   },
   {
    "pitcher_id": 684007,
@@ -427,7 +429,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T18:20:00.0000000Z"
   },
   {
    "pitcher_id": 641778,
@@ -557,7 +560,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T18:20:00.0000000Z"
   },
   {
    "pitcher_id": 687931,
@@ -699,7 +703,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T18:35:00.0000000Z"
   },
   {
    "pitcher_id": 607259,
@@ -829,7 +834,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T19:10:00.0000000Z"
   },
   {
    "pitcher_id": 608372,
@@ -959,7 +965,8 @@
      "units_risked": 0.0,
      "status": "passed_below_threshold"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T19:10:00.0000000Z"
   },
   {
    "pitcher_id": 672282,
@@ -1125,7 +1132,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T22:35:00.0000000Z"
   },
   {
    "pitcher_id": 669432,
@@ -1279,7 +1287,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T22:35:00.0000000Z"
   },
   {
    "pitcher_id": 691725,
@@ -1421,7 +1430,8 @@
      "units_risked": 0.0,
      "status": "passed_stake_too_small"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T22:40:00.0000000Z"
   },
   {
    "pitcher_id": 681035,
@@ -1563,7 +1573,8 @@
      "units_risked": 0.0,
      "status": "passed_below_threshold"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T22:40:00.0000000Z"
   },
   {
    "pitcher_id": 676440,
@@ -1705,7 +1716,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T22:40:00.0000000Z"
   },
   {
    "pitcher_id": 682052,
@@ -1847,7 +1859,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T22:40:00.0000000Z"
   },
   {
    "pitcher_id": 695076,
@@ -1989,7 +2002,8 @@
      "units_risked": 0.0,
      "status": "passed_stake_too_small"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T22:40:00.0000000Z"
   },
   {
    "pitcher_id": 669467,
@@ -2131,7 +2145,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:05:00.0000000Z"
   },
   {
    "pitcher_id": 701542,
@@ -2273,7 +2288,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:05:00.0000000Z"
   },
   {
    "pitcher_id": 680732,
@@ -2439,7 +2455,8 @@
      "units_risked": 0.0,
      "status": "passed_below_threshold"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:10:00.0000000Z"
   },
   {
    "pitcher_id": 543243,
@@ -2581,7 +2598,8 @@
      "units_risked": 0.0,
      "status": "passed_stake_too_small"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:10:00.0000000Z"
   },
   {
    "pitcher_id": 691587,
@@ -2735,7 +2753,8 @@
      "units_risked": 0.0,
      "status": "passed_stake_too_small"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:15:00.0000000Z"
   },
   {
    "pitcher_id": 693821,
@@ -2877,7 +2896,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:15:00.0000000Z"
   },
   {
    "pitcher_id": 694973,
@@ -3043,7 +3063,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:40:00.0000000Z"
   },
   {
    "pitcher_id": 690986,
@@ -3185,7 +3206,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:40:00.0000000Z"
   },
   {
    "pitcher_id": 702070,
@@ -3327,7 +3349,8 @@
      "units_risked": 0.0,
      "status": "passed_stake_too_small"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:40:00.0000000Z"
   },
   {
    "pitcher_id": 665152,
@@ -3469,7 +3492,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-05T23:40:00.0000000Z"
   },
   {
    "pitcher_id": 693433,
@@ -3623,7 +3647,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-06T01:40:00.0000000Z"
   },
   {
    "pitcher_id": 623454,
@@ -3765,7 +3790,8 @@
      "units_risked": 0.0,
      "status": "passed_below_threshold"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-06T01:40:00.0000000Z"
   },
   {
    "pitcher_id": 663554,
@@ -3907,7 +3933,8 @@
      "units_risked": 0.0,
      "status": "passed_below_threshold"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-06T01:40:00.0000000Z"
   },
   {
    "pitcher_id": 683352,
@@ -4037,7 +4064,8 @@
      "units_risked": 0.0,
      "status": "passed_no_edge"
     }
-   ]
+   ],
+   "start_time_utc": "2026-08-06T01:40:00.0000000Z"
   }
  ]
 }

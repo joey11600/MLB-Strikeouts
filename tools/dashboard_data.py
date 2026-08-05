@@ -207,6 +207,7 @@ def _build_slates(picks: list[dict]) -> tuple[dict, list[str]]:
                     "opponent_team": row.get("opponent_team"),
                     "is_home": row.get("is_home") == "Y",
                     "venue": row.get("venue"),
+                    "start_time_utc": "",
                     "line": _safe_float(row.get("line")),
                     "over_odds": row.get("market_over_odds", ""),
                     "under_odds": row.get("market_under_odds", ""),

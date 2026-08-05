@@ -42,6 +42,7 @@ export interface SlatePitcher {
   is_home: boolean;
   venue: string;
   game_pk?: number;
+  start_time_utc?: string;
   line: number | null;
   over_odds: string;
   under_odds: string;

@@ -7,7 +7,7 @@
 // for comparison, NRFI-style.
 import { motion } from "framer-motion";
 import type { SlatePitcher, LadderRung } from "@/lib/types";
-import { cn, oddsStr, pctStr, pnlStr } from "@/lib/utils";
+import { cn, gameTimeET, oddsStr, pctStr, pnlStr } from "@/lib/utils";
 import { KDistChart } from "./kdist-chart";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -188,6 +188,11 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
               {p.pitcher_name}
             </span>
             <span className="text-xs text-ink-muted">{matchup}</span>
+            {gameTimeET(p.start_time_utc) && (
+              <span className="figure text-[11px] text-ink-secondary">
+                {gameTimeET(p.start_time_utc)}
+              </span>
+            )}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {hasBet && pick ? (

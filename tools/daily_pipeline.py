@@ -272,6 +272,7 @@ def _write_slate_sidecar(game_date: str, predictions: list) -> None:
             "is_home": bool(pred.get("is_home")),
             "venue": pred.get("venue"),
             "game_pk": pred.get("game_pk"),
+            "start_time_utc": str(pred.get("start_time_utc", "") or ""),
             "line": pred.get("line"),
             "over_odds": str(pred.get("over_odds", "")),
             "under_odds": str(pred.get("under_odds", "")),

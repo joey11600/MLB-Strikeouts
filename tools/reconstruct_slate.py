@@ -221,6 +221,7 @@ def reconstruct(iso_date: str):
             "is_home": info["is_home"],
             "venue": info["venue"],
             "game_pk": int(game_pk),
+            "start_time_utc": prop.get("start_time_utc", ""),
             "line": dk_line,
             "over_odds": over_odds,
             "under_odds": under_odds,

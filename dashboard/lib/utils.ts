@@ -32,6 +32,19 @@ export function relTime(iso: string | null | undefined): string {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+export function gameTimeET(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return (
+    d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "America/New_York",
+    }) + " ET"
+  );
+}
+
 export function pastDelta(dateStr: string, todayStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
   const t = new Date(todayStr + "T12:00:00");
