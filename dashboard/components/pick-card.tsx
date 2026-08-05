@@ -65,17 +65,49 @@ function Chip({ children, className }: { children: React.ReactNode; className?: 
   );
 }
 
-function LadderTable({ rungs }: { rungs: LadderRung[] }) {
-  if (!rungs || rungs.length === 0) {
+interface LadderTableProps {
+  rungs: LadderRung[];
+  line: number | null;
+  side: string;
+  primaryPick: SlatePitcher["pick"];
+}
+
+function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
+  if ((!rungs || rungs.length === 0) && line == null) {
     return <p className="py-2 text-xs text-ink-muted">No alt lines were posted for this pitcher.</p>;
   }
-  const sorted = [...rungs].sort((a, b) => a.milestone - b.milestone);
+
+  // Older slates evaluated the ladder without the primary-equivalent
+  // rung (ceil of the line) — synthesize a marker row so the sequence
+  // reads complete. Newer slates carry it with real alt-board odds.
+  const all = [...(rungs ?? [])];
+  const eq = line != null ? Math.ceil(line) : null;
+  if (eq != null && !all.some((r) => r.milestone === eq)) {
+    all.push({
+      milestone: eq,
+      odds: "",
+      edge: null,
+      units_risked: 0,
+      status: "primary_equivalent",
+    } as LadderRung);
+  }
+
+  const isBetRung = (r: LadderRung) =>
+    r.status === "bet" || (r.pick?.bet_placed ?? false);
+  const sorted = all.sort((a, b) => {
+    if (isBetRung(a) !== isBetRung(b)) return isBetRung(a) ? -1 : 1;
+    return a.milestone - b.milestone;
+  });
+
+  const primaryIsOver = side === "OVER";
+  const primaryBet = (primaryPick?.bet_placed && (primaryPick?.units_risked ?? 0) > 0) ?? false;
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-xs">
         <thead>
           <tr className="border-b border-line text-[10px] uppercase tracking-wider text-ink-muted">
-            <th className="py-1.5 pr-3 font-medium">Rung</th>
+            <th className="py-1.5 pl-2 pr-3 font-medium">Rung</th>
             <th className="py-1.5 pr-3 font-medium">Odds</th>
             <th className="py-1.5 pr-3 font-medium">Model</th>
             <th className="py-1.5 pr-3 font-medium">Fair</th>
@@ -86,16 +118,22 @@ function LadderTable({ rungs }: { rungs: LadderRung[] }) {
         </thead>
         <tbody>
           {sorted.map((r) => {
-            const isBet = r.status === "bet" || (r.pick?.bet_placed ?? false);
+            const isBet = isBetRung(r);
+            const isEquivalent = r.status === "primary_equivalent";
             return (
               <tr
                 key={r.milestone}
                 className={cn(
                   "border-b border-line/50",
-                  isBet ? "" : "opacity-55",
+                  isBet &&
+                    "border-l-2 border-l-accent bg-accent-dim/60 [&>td:first-child]:pl-1.5",
+                  !isBet && !isEquivalent && "opacity-55",
+                  isEquivalent && "opacity-80",
                 )}
               >
-                <td className="figure py-1.5 pr-3 font-medium">{r.milestone}+ K</td>
+                <td className={cn("figure py-1.5 pl-2 pr-3 font-medium", isBet && "text-accent")}>
+                  {r.milestone}+ K
+                </td>
                 <td className="figure py-1.5 pr-3">{oddsStr(r.odds)}</td>
                 <td className="figure py-1.5 pr-3">{pctStr(r.model_prob ?? r.raw_model_prob)}</td>
                 <td className="figure py-1.5 pr-3">{pctStr(r.fair_prob)}</td>
@@ -106,8 +144,14 @@ function LadderTable({ rungs }: { rungs: LadderRung[] }) {
                   {r.edge != null ? `${r.edge >= 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}%` : "—"}
                 </td>
                 <td className="py-1.5 pr-3">
-                  {isBet ? (
-                    <span className="figure font-medium text-accent">
+                  {isEquivalent ? (
+                    <span className="figure text-[10.5px] text-ink-secondary">
+                      {primaryIsOver
+                        ? `= primary bet (OVER ${line})`
+                        : `= inverse of primary (UNDER ${line})`}
+                    </span>
+                  ) : isBet ? (
+                    <span className="figure font-semibold text-accent">
                       BET {r.units_risked > 0 ? `${r.units_risked.toFixed(2)}u` : ""}
                     </span>
                   ) : (
@@ -117,7 +161,12 @@ function LadderTable({ rungs }: { rungs: LadderRung[] }) {
                   )}
                 </td>
                 <td className="py-1.5">
-                  {r.pick?.graded_result ? (
+                  {isEquivalent && primaryIsOver && primaryBet && primaryPick?.graded_result ? (
+                    <ResultBadge
+                      result={primaryPick.graded_result}
+                      pnl={primaryPick.profit_loss_units.value}
+                    />
+                  ) : r.pick?.graded_result ? (
                     <ResultBadge
                       result={r.pick.graded_result}
                       pnl={r.pick.profit_loss_units.value}
@@ -255,20 +304,31 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
 
       {expanded && (
         <div className="border-t border-line px-4 pb-4 pt-3">
+          <div className="mb-1.5 text-[9.5px] uppercase tracking-wider text-ink-muted">
+            All probabilities are{" "}
+            <span className={cn("font-semibold", side === "UNDER" ? "text-under" : "text-over")}>
+              P({side || "OVER"} {p.line})
+            </span>{" "}
+            — the chance this side wins
+          </div>
           <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-5">
-            {[
-              ["Model (raw)", pctStr(p.p_over_raw)],
-              ["Calibrated", pctStr(p.p_over_calibrated)],
-              ["Blended", pctStr(p.blended_prob_over)],
-              ["Market fair", pctStr(p.fair_over)],
-              [
-                "Edge / bar",
-                p.edge_best != null
-                  ? `${(p.edge_best * 100).toFixed(1)}% / ${((p.threshold ?? 0) * 100).toFixed(1)}%`
-                  : "—",
-              ],
-            ].map(([label, value]) => (
-              <div key={label as string}>
+            {(() => {
+              const flip = (v: number | null | undefined) =>
+                v == null ? null : side === "UNDER" ? 1 - v : v;
+              return [
+                ["Model (raw)", pctStr(flip(p.p_over_raw))],
+                ["Calibrated", pctStr(flip(p.p_over_calibrated))],
+                ["Blended", pctStr(flip(p.blended_prob_over))],
+                ["Market fair", pctStr(flip(p.fair_over))],
+                [
+                  "Edge / bar",
+                  p.edge_best != null
+                    ? `${(p.edge_best * 100).toFixed(1)}% / ${((p.threshold ?? 0) * 100).toFixed(1)}%`
+                    : "—",
+                ],
+              ] as [string, string][];
+            })().map(([label, value]) => (
+              <div key={label}>
                 <div className="text-[9.5px] uppercase tracking-wider text-ink-muted">{label}</div>
                 <div className="figure text-[13px] font-medium">{value}</div>
               </div>
@@ -277,7 +337,7 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
 
           <div className="mb-1 flex items-baseline justify-between">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-              Model K distribution · P(over {p.line}) marked
+              Model K distribution · P({side || "OVER"} {p.line}) marked
             </span>
             {pick?.lineup_source && (
               <span
@@ -300,7 +360,12 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
               Ladder — every rung evaluated
             </div>
-            <LadderTable rungs={p.ladder} />
+            <LadderTable
+              rungs={p.ladder}
+              line={p.line}
+              side={side}
+              primaryPick={pick}
+            />
           </div>
 
           {pick?.clv_pct != null && (

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-08-05 — Pick card readability (operator feedback)
+
+- **Complete ladder sequence.** The rung equal to the primary line's
+  ceiling is no longer silently skipped: `evaluate_ladder` keeps it
+  with status `primary_equivalent` (never bettable). The card shows it
+  in order, labeled "= primary bet (OVER x.5)" — with the primary's
+  result badge — or "= inverse of primary (UNDER x.5)". Older sidecars
+  without the row get a synthesized marker row (no odds fabricated).
+- **Bets stand out.** Bet rungs sort to the top of the ladder table
+  with an amber left border, tinted background, and bold BET label;
+  passed rungs stay dim below.
+- **Every card reads from the pick's side.** On UNDER cards all
+  probabilities (model raw/calibrated/blended/market fair) now display
+  as under-probabilities, with an explicit caption ("All probabilities
+  are P(UNDER 6.5) — the chance this side wins") and a side-aware
+  distribution label. Over and under cards now read identically:
+  bigger number = better for the bet.
+- 8/4 reconstruction re-run (picks up real alt-board odds for the
+  equivalent rungs; re-priced by the current Phase 10 core model).
+
 ## 2026-08-05 — Phase 11: Daily automation (Windows Task Scheduler)
 
 Five user-level scheduled tasks now run the daily rhythm unattended

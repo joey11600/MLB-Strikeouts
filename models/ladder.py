@@ -99,10 +99,10 @@ def evaluate_ladder(
         if milestone < 1 or milestone > 39:
             continue
 
+        is_primary_equivalent = False
         if primary_line is not None:
             import math
-            if milestone == math.ceil(primary_line):
-                continue
+            is_primary_equivalent = milestone == math.ceil(primary_line)
 
         raw_model_prob = float(np.sum(k_dist[milestone:]))
         model_prob = calibrate_fn(raw_model_prob) if calibrate_fn else raw_model_prob
@@ -118,7 +118,12 @@ def evaluate_ladder(
 
         # Every evaluated rung is kept — passed rungs carry a status so
         # the slate sidecar can show the full board, not just the bets.
-        if edge <= 0:
+        # The rung at ceil(primary_line) is the primary bet's own event
+        # (its inverse when the primary is an under) — displayed for a
+        # complete sequence but never separately bettable.
+        if is_primary_equivalent:
+            status = "primary_equivalent"
+        elif edge <= 0:
             status = "passed_no_edge"
         elif raw_units < 0.1:
             status = "passed_stake_too_small"
