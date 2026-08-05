@@ -73,9 +73,10 @@ interface LadderTableProps {
   line: number | null;
   side: string;
   primaryPick: SlatePitcher["pick"];
+  currentRulesPrimary?: number;
 }
 
-function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
+function LadderTable({ rungs, line, side, primaryPick, currentRulesPrimary }: LadderTableProps) {
   if ((!rungs || rungs.length === 0) && line == null) {
     return <p className="py-2 text-xs text-ink-muted">No alt lines were posted for this pitcher.</p>;
   }
@@ -192,14 +193,33 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
                     >
                       BET {(primaryPick?.units_risked ?? 0).toFixed(2)}u · primary (
                       {primaryIsOver ? "OVER" : "UNDER"} {line})
+                      {currentRulesPrimary != null &&
+                        currentRulesPrimary !== (primaryPick?.units_risked ?? 0) && (
+                          <span className="ml-1.5 font-normal text-ink-muted">
+                            · now {currentRulesPrimary}u
+                          </span>
+                        )}
                     </span>
                   ) : isEquivalent ? (
                     <span className="figure text-[10.5px] text-ink-secondary">
                       = primary line ({primaryIsOver ? "OVER" : "UNDER"} {line}, not bet)
                     </span>
+                  ) : r.status === "not_bet_rule_change" ? (
+                    <span className="figure text-[11px] font-medium text-accent">
+                      current rules: BET {r.current_rules_units != null ? `${r.current_rules_units}u` : ""}
+                      <span className="ml-1.5 font-normal text-ink-muted">
+                        · placed before rule change
+                      </span>
+                    </span>
                   ) : isBet ? (
                     <span className="figure font-semibold text-accent">
                       BET {r.units_risked > 0 ? `${r.units_risked.toFixed(2)}u` : ""}
+                      {r.current_rules_units != null &&
+                        r.current_rules_units !== r.units_risked && (
+                          <span className="ml-1.5 font-normal text-ink-muted">
+                            · now {r.current_rules_units}u
+                          </span>
+                        )}
                     </span>
                   ) : flipRow ? (
                     <span className="figure text-[10.5px] text-ink-muted">
@@ -473,6 +493,7 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
               line={p.line}
               side={side}
               primaryPick={pick}
+              currentRulesPrimary={p.current_rules_primary_units}
             />
           </div>
 

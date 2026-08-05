@@ -1229,7 +1229,8 @@
      "status": "passed_gap_gate"
     }
    ],
-   "start_time_utc": "2026-08-05T22:35:00.0000000Z"
+   "start_time_utc": "2026-08-05T22:35:00.0000000Z",
+   "current_rules_primary_units": 2.0
   },
   {
    "pitcher_id": 669432,
@@ -2660,7 +2661,8 @@
      "status": "passed_gap_gate"
     }
    ],
-   "start_time_utc": "2026-08-05T23:10:00.0000000Z"
+   "start_time_utc": "2026-08-05T23:10:00.0000000Z",
+   "current_rules_primary_units": 1.0
   },
   {
    "pitcher_id": 543243,
@@ -4064,7 +4066,8 @@
      "edge": 0.2087,
      "strength": "STRONG",
      "units_risked": 0.0,
-     "status": "not_bet_rule_change"
+     "status": "not_bet_rule_change",
+     "current_rules_units": 1.0
     },
     {
      "milestone": 5,
@@ -4076,7 +4079,8 @@
      "edge": 0.2219,
      "strength": "STRONG",
      "units_risked": 1.0,
-     "status": "bet"
+     "status": "bet",
+     "current_rules_units": 0.5
     },
     {
      "milestone": 6,
@@ -4103,7 +4107,8 @@
      "status": "passed_not_next_rung"
     }
    ],
-   "start_time_utc": "2026-08-06T01:40:00.0000000Z"
+   "start_time_utc": "2026-08-06T01:40:00.0000000Z",
+   "current_rules_primary_units": 2.0
   },
   {
    "pitcher_id": 663554,

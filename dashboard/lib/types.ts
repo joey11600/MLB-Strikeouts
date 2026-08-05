@@ -31,6 +31,7 @@ export interface LadderRung {
   strength?: string;
   units_risked: number;
   status: string;
+  current_rules_units?: number;
   pick?: PickInfo | null;
 }
 
@@ -59,6 +60,7 @@ export interface SlatePitcher {
   threshold?: number;
   strength?: string;
   primary_units_risked?: number;
+  current_rules_primary_units?: number;
   k_dist: number[];
   ladder: LadderRung[];
   pick: PickInfo | null;
