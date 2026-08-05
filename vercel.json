@@ -1,6 +1,5 @@
 {
-  "outputDirectory": "dashboard",
-  "rewrites": [
-    { "source": "/brief", "destination": "/brief.html" }
-  ]
+  "buildCommand": "cd dashboard && npm install && npm run build",
+  "outputDirectory": "dashboard/out",
+  "cleanUrls": true
 }

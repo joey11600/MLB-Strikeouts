@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-08-05 — Phase 8: Dashboard rebuild (Next.js + 21st.dev)
+
+Replaced the single-file static dashboard with a Next.js App Router app
+(static export, same Vercel project). Built with Tailwind v4 + real
+21st.dev components retrieved via the operator's account:
+@originui/accordion (ladder tables), @ssicevs/market-snapshot (P&L
+chart: pointer scrubbing, hovered value reads into the header, period
+switcher), @aghasisahakyan1/expandable-card interaction (card corner
+button rotates 45° on expand; operator's bookmark). Interaction
+vocabulary ported from the NRFI Terminal survey.
+
+- **Slate view (/)** — date stepper ◂ select ▸ with LIVE / PAST · nd
+  ago (click → jump to newest) / SCHEDULED badge; `?date=` URL param is
+  the source of truth (shareable slate links); segmented filters
+  (side / bets / graded) + pitcher find persisted to URL +
+  localStorage; expandable pick cards (whole card is the button,
+  aria-expanded, multi-pin Set) showing the probability pipeline (raw →
+  calibrated → blended vs fair → edge vs bar), the full P(K=k)
+  histogram with book line + actual K marked, and the COMPLETE ladder
+  table — every evaluated rung with model/fair/edge and its
+  bet-or-passed reason. #1 badge on the slate's best-edge bet.
+- **Performance view** — KPI tiles (record, P&L, ROI, avg CLV),
+  cumulative P&L line + daily bars with hover scrubbing and 7D/30D/
+  Season tabs, splits by side / strength / primary-vs-ladder,
+  every-bet ledger with CLV column and date links into slates.
+- **Model view** — honest out-of-sample backtest front and center
+  (0.1481 vs 0.1505, 618 starts, split methodology in plain English),
+  calibration curve (raw vs calibrated vs perfect diagonal),
+  Brier-by-line bars, full gauntlet table with 5 gate dots and
+  verdicts from data/gauntlet_results.json.
+- **/brief** — filming page: today's bets, big type, zero chrome.
+- Data layer v2 (`tools/dashboard_data.py`): per-date slates (sidecar +
+  ledger merged, actual K from Statcast cache), performance aggregates,
+  model analytics; P&L exclusively via tracker._calc_pnl; FlatUnits
+  guard runs before every write; output to dashboard/public/data.json.
+- Deploy: vercel.json builds the subdirectory app (static export,
+  cleanUrls); trailingSlash for dumb-static-host compatibility.
+
 ## 2026-08-05 — Phase 7: Model truth audit — leakage fix, calibration, market shrinkage
 
 A full pipeline audit after the first live slate (1W-3L, -4.34u) found

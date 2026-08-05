@@ -108,14 +108,18 @@
 - [ ] Raise MODEL_TRUST_WEIGHT only after 100+ graded bets with
   positive average CLV (A-006)
 
-## Phase 8 — Dashboard rebuild (Next.js + 21st.dev)
-- [ ] Next.js App Router app in `dashboard/`, static export, Dark
-  Terminal tokens, Tailwind + shadcn (21st.dev components)
-- [ ] Data layer v2: per-date slates, availableDates, performance
+## Phase 8 — Dashboard rebuild (Next.js + 21st.dev) ✅ (2026-08-05)
+- [x] Next.js App Router app in `dashboard/`, static export, Dark
+  Terminal tokens, Tailwind v4 + real 21st.dev components (accordion,
+  market-snapshot chart, expandable-card interaction)
+- [x] Data layer v2: per-date slates, availableDates, performance
   aggregates, model analytics
-- [ ] Slate view: date stepper, filters, expandable pick cards with
+- [x] Slate view: date stepper, filters, expandable pick cards with
   full ladder + K-distribution histogram
-- [ ] Performance view: P&L chart with scrubbing, window tabs,
-  splits, ledger
-- [ ] Model view: calibration curve, Brier-by-line, gauntlet results
-- [ ] Deploy to existing Vercel project
+- [x] Performance view: P&L chart with scrubbing, window tabs,
+  splits, ledger with CLV column
+- [x] Model view: calibration curve, Brier-by-line, gauntlet results
+- [x] /brief filming page
+- [x] Deploy to existing Vercel project
+- Deferred: PWA/service worker, browser notifications, per-pick brief
+  narratives, Supabase realtime

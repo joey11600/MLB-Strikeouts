@@ -10,6 +10,8 @@ venv/
 node_modules/
 .next/
 .vercel/
+dashboard/out/
+dashboard/next-env.d.ts
 *.tmp
 data/statcast_cache/
 data/backfill/

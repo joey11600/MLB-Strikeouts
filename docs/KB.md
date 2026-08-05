@@ -316,21 +316,33 @@ python run.py status       # show record and P&L
 python run.py backfill     # refresh Statcast cache
 ```
 
-## Dashboard (Phase 5)
+## Dashboard (Phase 8 — Next.js rebuild; Phase 5 static page retired)
 
 ### Data pipeline
 
 ```
-data/picks_2026.csv → tools/dashboard_data.py → pnl_guard → dashboard/data.json
-                                                                   ↓
-                                                          dashboard/index.html
-                                                          dashboard/brief.html
+data/picks_2026.csv ─┐
+data/slates/*.json  ─┼→ tools/dashboard_data.py → pnl_guard → dashboard/public/data.json
+data/backtest_predictions.csv ─┤                                     ↓
+data/gauntlet_results.json ────┘                    Next.js app (dashboard/), static export
+                                                    routes: /  /performance  /model  /brief
 ```
 
-`dashboard_data.py` reads the picks CSV, computes all P&L via
-`tracker._calc_pnl` (canonical source), tags every P&L value with
-`{"value": float, "basis": "flat_100u"}`, runs the FlatUnits guard,
-then writes `data.json`.
+`dashboard_data.py` merges the picks ledger with slate sidecars
+(grades + stakes attached to every board pitcher and ladder rung),
+computes all P&L via `tracker._calc_pnl` (canonical source), tags
+every P&L value with `{"value": float, "basis": "flat_100u"}`, runs
+the FlatUnits guard, then writes `data.json` into the app's public dir.
+
+Operator flow after any data change:
+`python tools/dashboard_data.py` → commit → push (Vercel builds), or
+`npx vercel --prod --yes` from the repo root.
+
+Stack: Next.js App Router (static export, trailingSlash), Tailwind v4
+tokens from the Dark Terminal palette, 21st.dev components
+(@originui/accordion, @ssicevs/market-snapshot P&L chart,
+@aghasisahakyan1/expandable-card interaction), hand-rolled SVG charts
+elsewhere (NRFI geometry idiom), Outfit display / DM Mono figures.
 
 ### FlatUnits / CumulativeUnits guard
 

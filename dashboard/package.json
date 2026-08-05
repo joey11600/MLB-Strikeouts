@@ -1,0 +1,29 @@
+{
+  "name": "strikeouts-terminal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@radix-ui/react-accordion": "^1.2.20",
+    "@radix-ui/react-icons": "^1.3.2",
+    "clsx": "^2.1.1",
+    "framer-motion": "^13.0.0",
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.0.9",
+    "@types/node": "22.10.5",
+    "@types/react": "19.0.4",
+    "@types/react-dom": "19.0.2",
+    "tailwindcss": "4.0.9",
+    "typescript": "5.7.3"
+  }
+}

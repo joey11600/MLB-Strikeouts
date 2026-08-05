@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+/* ============ Dark Terminal — design tokens (CLAUDE.md palette) ============ */
+@theme {
+  --color-bg: #08080a;
+  --color-surface: #111113;
+  --color-surface-2: #19191d;
+  --color-surface-3: #222228;
+  --color-line: rgba(255, 255, 255, 0.06);
+  --color-line-strong: rgba(255, 255, 255, 0.12);
+  --color-ink: #ededef;
+  --color-ink-secondary: #8b8b96;
+  --color-ink-muted: #55555e;
+  --color-over: #10b981;
+  --color-over-dim: rgba(16, 185, 129, 0.12);
+  --color-under: #f43f5e;
+  --color-under-dim: rgba(244, 63, 94, 0.12);
+  --color-accent: #f59e0b;
+  --color-accent-dim: rgba(245, 158, 11, 0.12);
+  --color-lean: #6366f1;
+
+  --font-display: var(--font-outfit), sans-serif;
+  --font-mono: var(--font-dm-mono), monospace;
+
+  --radius-card: 14px;
+  --radius-badge: 6px;
+
+  --animate-accordion-down: accordion-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-accordion-up: accordion-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+/* Market-snapshot component expects these shadcn-style vars */
+:root {
+  --card: #111113;
+  --foreground: #ededef;
+  --muted-foreground: #8b8b96;
+  --chart-2: #10b981;
+}
+
+html {
+  background: var(--color-bg);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Atmosphere: radial glows + noise (palette rule) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.05), transparent),
+    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(244, 63, 94, 0.04), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.noise {
+  position: fixed;
+  inset: 0;
+  opacity: 0.02;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}
+
+/* Figures are ALWAYS mono — that prohibition is what makes mono mean "number" */
+.figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Staggered entrance */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stagger > * {
+  animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0.02s; }
+.stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger > *:nth-child(3) { animation-delay: 0.1s; }
+.stagger > *:nth-child(4) { animation-delay: 0.14s; }
+.stagger > *:nth-child(5) { animation-delay: 0.18s; }
+.stagger > *:nth-child(6) { animation-delay: 0.22s; }
+.stagger > *:nth-child(7) { animation-delay: 0.26s; }
+.stagger > *:nth-child(8) { animation-delay: 0.3s; }
+.stagger > *:nth-child(n + 9) { animation-delay: 0.34s; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+.live-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger > * { animation: none; }
+  .live-dot { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
