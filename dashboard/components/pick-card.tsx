@@ -107,7 +107,7 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
       <table className="w-full text-left text-xs">
         <thead>
           <tr className="border-b border-line text-[10px] uppercase tracking-wider text-ink-muted">
-            <th className="py-1.5 pl-2 pr-3 font-medium">Rung</th>
+            <th className="py-1.5 pl-2 pr-3 font-medium">Line</th>
             <th className="py-1.5 pr-3 font-medium">Odds</th>
             <th className="py-1.5 pr-3 font-medium">Model</th>
             <th className="py-1.5 pr-3 font-medium">Fair</th>
@@ -120,6 +120,18 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
           {sorted.map((r) => {
             const isBet = isBetRung(r);
             const isEquivalent = r.status === "primary_equivalent";
+            // On UNDER cards, non-bet rungs display as their under-side
+            // twin: "6+ K" (six or more) flips to UNDER 5.5 (five or
+            // fewer), with under-probabilities. Bet rungs are real over
+            // bets and keep their over framing. DK posts no under
+            // prices on the alt board, so the over price shows muted
+            // for provenance — never fabricated.
+            const flipRow = !primaryIsOver && !isBet;
+            const label = flipRow
+              ? `UNDER ${(r.milestone - 0.5).toFixed(1)}`
+              : `${r.milestone}+ K`;
+            const modelP = r.model_prob ?? r.raw_model_prob;
+            const fairP = r.fair_prob;
             return (
               <tr
                 key={r.milestone}
@@ -131,28 +143,48 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
                   isEquivalent && "opacity-80",
                 )}
               >
-                <td className={cn("figure py-1.5 pl-2 pr-3 font-medium", isBet && "text-accent")}>
-                  {r.milestone}+ K
+                <td className={cn(
+                  "figure py-1.5 pl-2 pr-3 font-medium",
+                  isBet && "text-accent",
+                  flipRow && !isEquivalent && "text-under/90",
+                )}>
+                  {label}
                 </td>
-                <td className="figure py-1.5 pr-3">{oddsStr(r.odds)}</td>
-                <td className="figure py-1.5 pr-3">{pctStr(r.model_prob ?? r.raw_model_prob)}</td>
-                <td className="figure py-1.5 pr-3">{pctStr(r.fair_prob)}</td>
+                <td className={cn("figure py-1.5 pr-3", flipRow && "text-ink-muted")}>
+                  {r.odds
+                    ? flipRow
+                      ? `o ${oddsStr(r.odds)}`
+                      : oddsStr(r.odds)
+                    : "—"}
+                </td>
+                <td className="figure py-1.5 pr-3">
+                  {pctStr(flipRow && modelP != null ? 1 - modelP : modelP)}
+                </td>
+                <td className="figure py-1.5 pr-3">
+                  {pctStr(flipRow && fairP != null ? 1 - fairP : fairP)}
+                </td>
                 <td className={cn(
                   "figure py-1.5 pr-3",
-                  (r.edge ?? 0) > 0 ? "text-over" : "text-ink-muted",
+                  !flipRow && (r.edge ?? 0) > 0 ? "text-over" : "text-ink-muted",
                 )}>
-                  {r.edge != null ? `${r.edge >= 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}%` : "—"}
+                  {flipRow
+                    ? "—"
+                    : r.edge != null
+                      ? `${r.edge >= 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}%`
+                      : "—"}
                 </td>
                 <td className="py-1.5 pr-3">
                   {isEquivalent ? (
                     <span className="figure text-[10.5px] text-ink-secondary">
-                      {primaryIsOver
-                        ? `= primary bet (OVER ${line})`
-                        : `= inverse of primary (UNDER ${line})`}
+                      = primary bet ({primaryIsOver ? "OVER" : "UNDER"} {line})
                     </span>
                   ) : isBet ? (
                     <span className="figure font-semibold text-accent">
                       BET {r.units_risked > 0 ? `${r.units_risked.toFixed(2)}u` : ""}
+                    </span>
+                  ) : flipRow ? (
+                    <span className="figure text-[10.5px] text-ink-muted">
+                      no under market
                     </span>
                   ) : (
                     <span className="figure text-[10.5px] text-ink-muted">
@@ -161,7 +193,7 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
                   )}
                 </td>
                 <td className="py-1.5">
-                  {isEquivalent && primaryIsOver && primaryBet && primaryPick?.graded_result ? (
+                  {isEquivalent && primaryBet && primaryPick?.graded_result ? (
                     <ResultBadge
                       result={primaryPick.graded_result}
                       pnl={primaryPick.profit_loss_units.value}
@@ -180,6 +212,12 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
           })}
         </tbody>
       </table>
+      {!primaryIsOver && (
+        <p className="figure mt-1.5 text-[10px] text-ink-muted">
+          DraftKings sells only the over side of strikeout alt lines — unders
+          shown with model probabilities for context (o = the posted over price).
+        </p>
+      )}
     </div>
   );
 }

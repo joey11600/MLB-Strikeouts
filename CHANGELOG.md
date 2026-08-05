@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-05 — Under-card ladders read as unders (operator feedback)
+
+On UNDER cards, non-bet ladder rungs now display as their under-side
+twin: "6+ K" (six or more) flips to UNDER 5.5 (five or fewer), with
+under-probabilities for model and fair. The primary bet appears in
+sequence as its own line ("UNDER 6.5 · = primary bet") with its
+result. DK posts no under prices on the alt board, so the over price
+shows muted with an "o" prefix and a footnote — provenance without
+fabrication (money rule: never fabricate odds). Real over-side bets
+keep over framing regardless of card side.
+
 ## 2026-08-05 — Pick card readability (operator feedback)
 
 - **Complete ladder sequence.** The rung equal to the primary line's
