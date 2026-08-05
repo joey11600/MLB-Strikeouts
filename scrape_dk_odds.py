@@ -547,12 +547,43 @@ def write_csv(rows: list[dict], path: Path, fields: list[str]) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+# Subcategories in Pitcher Props that could someday carry an under-side
+# alt strikeout market. Probed empty on 2026-08-05 (evening); the
+# morning automation re-probes daily and logs if one ever populates.
+ALT_UNDER_PROBE_SUBS = [16217, 16268, 12975]
+
+
+def probe_alt_under_markets() -> None:
+    """Check candidate subcategories for an under-side alt K market.
+
+    DK's known alt board (17323) sells only "X+" overs. If DK ever
+    lists alternate unders, one of these probes will light up in the
+    morning log and we wire it into the ladder for real under pricing.
+    """
+    for sub in ALT_UNDER_PROBE_SUBS:
+        try:
+            d = fetch_dk_strikeout_data(sub, retries=1)
+            markets = d.get("markets", [])
+            sels = d.get("selections", [])
+            labels = sorted({str(s.get("label")) for s in sels})[:6]
+            print(f"  probe sub {sub}: {len(markets)} markets, "
+                  f"{len(sels)} selections{', labels: ' + str(labels) if sels else ''}")
+            if any("under" in str(s.get("label", "")).lower() for s in sels):
+                print(f"  *** sub {sub} HAS UNDER SELECTIONS — wire it in! ***")
+        except Exception as exc:
+            print(f"  probe sub {sub}: failed ({exc})")
+
+
 def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
         description="Scrape DraftKings pitcher strikeout prop odds",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--probe-unders", action="store_true",
+        help="Probe candidate subcategories for an under-side alt K market",
     )
     parser.add_argument(
         "--output", metavar="FILE",
@@ -567,6 +598,11 @@ def main() -> None:
         help="Print parsed odds to stdout",
     )
     args = parser.parse_args()
+
+    if args.probe_unders:
+        print("Probing candidate under-side alt K subcategories...")
+        probe_alt_under_markets()
+        return
 
     et_today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
 

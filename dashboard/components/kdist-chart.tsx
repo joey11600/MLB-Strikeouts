@@ -16,9 +16,12 @@ interface Props {
   kDist: number[];
   line: number | null;
   actualK: number | null;
+  side?: string;
+  /** "won" = green, "lost" = red (every bet on the card lost), null = neutral */
+  outcome?: "won" | "lost" | null;
 }
 
-export function KDistChart({ kDist, line, actualK }: Props) {
+export function KDistChart({ kDist, line, actualK, side, outcome }: Props) {
   const [hover, setHover] = useState<number | null>(null);
 
   if (!kDist || kDist.length === 0) {
@@ -63,8 +66,14 @@ export function KDistChart({ kDist, line, actualK }: Props) {
         {bars.map((p, k) => {
           const h = hFor(p);
           const isActual = actualK != null && k === actualK;
+          const actualColor =
+            outcome === "lost"
+              ? "var(--color-under)"
+              : outcome === "won"
+                ? "var(--color-over)"
+                : "rgba(237,237,239,0.85)";
           const fill = isActual
-            ? "var(--color-over)"
+            ? actualColor
             : hover === k
               ? "rgba(237,237,239,0.55)"
               : "rgba(237,237,239,0.18)";
@@ -86,7 +95,7 @@ export function KDistChart({ kDist, line, actualK }: Props) {
                 textAnchor="middle"
                 fontSize="9.5"
                 className="figure"
-                fill={isActual ? "var(--color-over)" : "var(--color-ink-muted)"}
+                fill={isActual ? actualColor : "var(--color-ink-muted)"}
                 fontWeight={isActual ? 700 : 400}
               >
                 {k}
@@ -106,14 +115,15 @@ export function KDistChart({ kDist, line, actualK }: Props) {
               strokeDasharray="4 3"
             />
             <text
-              x={lineX}
+              x={Math.min(Math.max(lineX, PAD_L + 34), W - PAD_R - 34)}
               y={PAD_T - 4}
               textAnchor="middle"
               fontSize="9.5"
               className="figure"
               fill="var(--color-accent)"
+              fontWeight={600}
             >
-              {line}
+              {side ? `${side} ${line}` : line}
             </text>
           </>
         )}
@@ -122,7 +132,13 @@ export function KDistChart({ kDist, line, actualK }: Props) {
             cx={xFor(actualK)}
             cy={PAD_T + innerH - hFor(bars[actualK] ?? 0) - 6}
             r="2.6"
-            fill="var(--color-over)"
+            fill={
+              outcome === "lost"
+                ? "var(--color-under)"
+                : outcome === "won"
+                  ? "var(--color-over)"
+                  : "rgba(237,237,239,0.85)"
+            }
           />
         )}
       </svg>

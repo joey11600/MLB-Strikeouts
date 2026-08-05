@@ -392,6 +392,19 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
             kDist={p.k_dist}
             line={p.line}
             actualK={p.actual_strikeouts ?? pick?.actual_strikeouts ?? null}
+            side={side || undefined}
+            outcome={(() => {
+              // Green if any bet on this card won; red only when every
+              // graded bet (primary + ladder) lost; neutral otherwise.
+              const graded: string[] = [];
+              if (pick?.bet_placed && pick.graded_result) graded.push(pick.graded_result);
+              for (const r of p.ladder) {
+                if (r.pick?.bet_placed && r.pick.graded_result) graded.push(r.pick.graded_result);
+              }
+              if (graded.some((g) => g === "WIN")) return "won";
+              if (graded.length > 0 && graded.every((g) => g === "LOSS")) return "lost";
+              return null;
+            })()}
           />
 
           <div className="mt-3">

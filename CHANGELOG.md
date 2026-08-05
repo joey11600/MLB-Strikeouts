@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-05 — Chart outcome colors, side-labeled pick line, alt-under probe
+
+- The dashed pick line on the K-distribution now reads "OVER 4.5" /
+  "UNDER 6.5" (side + line), not just the number.
+- The actual-strikeouts bar is outcome-colored: red only when EVERY
+  graded bet on the card lost (primary and any ladder rungs), green
+  when any bet won, neutral while ungraded or unbet. Result badges
+  still carry the words (hue never carries meaning alone).
+- `scrape_dk_odds.py --probe-unders` checks the three candidate DK
+  subcategories that could carry an under-side alt strikeout market
+  (16217/16268/12975 — all empty at evening probe on 2026-08-05).
+  The morning automation runs the probe daily and logs loudly if one
+  ever populates, at which point real under prices get wired into the
+  ladder display and evaluation.
+
 ## 2026-08-05 — Under-card ladders read as unders (operator feedback)
 
 On UNDER cards, non-bet ladder rungs now display as their under-side

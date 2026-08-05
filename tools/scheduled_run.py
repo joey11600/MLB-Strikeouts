@@ -93,6 +93,7 @@ def _deploy_dashboard() -> bool:
 
 def task_morning():
     _run("daily-cycle", [PYTHON, "run.py"], 1800)
+    _run("probe-alt-unders", [PYTHON, "scrape_dk_odds.py", "--probe-unders"], 180)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 600)
     _commit_and_push("morning slate")
     _deploy_dashboard()
