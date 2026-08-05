@@ -127,20 +127,9 @@ export function KDistChart({ kDist, line, actualK, side, outcome }: Props) {
             </text>
           </>
         )}
-        {actualK != null && actualK <= kMax && (
-          <circle
-            cx={xFor(actualK)}
-            cy={PAD_T + innerH - hFor(bars[actualK] ?? 0) - 6}
-            r="2.6"
-            fill={
-              outcome === "lost"
-                ? "var(--color-under)"
-                : outcome === "won"
-                  ? "var(--color-over)"
-                  : "rgba(237,237,239,0.85)"
-            }
-          />
-        )}
+        {/* The actual-K bar is itself outcome-colored and its axis
+            number is bolded — no floating dot (it collided with the
+            side/line label above tall bars). */}
       </svg>
       {hover != null && (
         <div
