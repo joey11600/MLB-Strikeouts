@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-05 — Ladder table readability round 2 (operator feedback)
+
+- Rungs display in strict line order; bet rungs are highlighted in
+  place, never re-sorted to the top.
+- Ladder section header shows parts and stake: "N rungs bet · X.XXu".
+- The primary-equivalent rung always carries full odds/model/fair/edge
+  data: evaluate_ladder stores it going forward; the 2026-08-05
+  sidecar was backfilled from the day's first closing-odds capture
+  (real DK prices, never fabricated) + the stored distributions and
+  production calibrator — 28 pitchers patched.
+
 ## 2026-08-05 — Phase 12: Leash inputs + lineup-lock re-run
 
 The two changes most likely to add real edge (operator-directed):

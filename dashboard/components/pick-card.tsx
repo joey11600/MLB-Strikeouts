@@ -96,10 +96,8 @@ function LadderTable({ rungs, line, side, primaryPick }: LadderTableProps) {
 
   const isBetRung = (r: LadderRung) =>
     r.status === "bet" || (r.pick?.bet_placed ?? false);
-  const sorted = all.sort((a, b) => {
-    if (isBetRung(a) !== isBetRung(b)) return isBetRung(a) ? -1 : 1;
-    return a.milestone - b.milestone;
-  });
+  // Strict line order — bets are highlighted in place, never re-sorted.
+  const sorted = all.sort((a, b) => a.milestone - b.milestone);
 
   const primaryIsOver = side === "OVER";
   const primaryBet = (primaryPick?.bet_placed && (primaryPick?.units_risked ?? 0) > 0) ?? false;
@@ -410,9 +408,32 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
           />
 
           <div className="mt-3">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-              Ladder — every rung evaluated
-            </div>
+            {(() => {
+              const betRungs = p.ladder.filter(
+                (r) => r.status === "bet" || r.pick?.bet_placed,
+              );
+              const ladderUnits = betRungs.reduce(
+                (acc, r) => acc + (r.pick?.units_risked ?? r.units_risked ?? 0),
+                0,
+              );
+              return (
+                <div className="mb-1 flex items-baseline justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                    Ladder — every rung evaluated
+                  </span>
+                  <span className="figure text-[10.5px]">
+                    {betRungs.length > 0 ? (
+                      <span className="text-accent">
+                        {betRungs.length} rung{betRungs.length !== 1 ? "s" : ""} bet
+                        · {ladderUnits.toFixed(2)}u
+                      </span>
+                    ) : (
+                      <span className="text-ink-muted">no rungs bet</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })()}
             <LadderTable
               rungs={p.ladder}
               line={p.line}
