@@ -351,15 +351,41 @@ def _write_slate_sidecar(game_date: str, predictions: list) -> None:
             "ladder": rungs,
         })
 
+    out_path = SLATES_DIR / f"{game_date}.json"
+
+    # MERGE, don't replace. A re-price later in the day sees a smaller
+    # board, because DK pulls a pitcher's market once his game starts:
+    # the 10:30 run priced 20, the 14:10 re-price saw 14. Overwriting
+    # would silently drop the 6 whose games had begun, and those rows
+    # are the only record the model log has for them -- roughly a third
+    # of the day's testable predictions, thrown away every re-run.
+    #
+    # Newest wins per pitcher (a lineup-lock price beats a projected
+    # one); pitchers absent from this run keep their earlier entry.
+    carried = 0
+    if out_path.exists():
+        try:
+            with open(out_path, encoding="utf-8") as f:
+                prior = json.load(f)
+            if not prior.get("reconstructed"):
+                fresh = {p.get("pitcher_id") for p in pitchers}
+                for p in prior.get("pitchers", []):
+                    if p.get("pitcher_id") not in fresh:
+                        pitchers.append(p)
+                        carried += 1
+        except (OSError, ValueError) as exc:
+            print(f"  (could not read prior sidecar to merge: {exc})")
+
     payload = {
         "date": game_date,
         "generated_at": datetime.now(UTC).isoformat(),
         "reconstructed": False,
         "pitchers": pitchers,
     }
-    out_path = SLATES_DIR / f"{game_date}.json"
     _write_json_atomic(out_path, payload)
-    print(f"  Slate sidecar written: {out_path} ({len(pitchers)} pitchers)")
+    print(f"  Slate sidecar written: {out_path} ({len(pitchers)} pitchers"
+          + (f", {carried} carried from an earlier run" if carried else "")
+          + ")")
 
 
 def _load_pitch_limits(iso_date: str) -> dict:
