@@ -26,6 +26,7 @@ Environment:
 """
 import csv
 import json
+import urllib.request
 import os
 import shutil
 import subprocess
@@ -697,10 +698,18 @@ def main() -> None:
                     continue
 
                 log(f"--- running {key} ({late:.0f} min after due) ---")
-                try:
-                    TASKS[name]()
-                except Exception as exc:
-                    log(f"TASK ERROR {key}: {exc}")
+                # Prefer GitHub Actions: it can reach DraftKings, this
+                # container cannot. This loop is the reliable clock --
+                # GitHub's own cron is best-effort and had not fired once
+                # in the 6.5 hours after the workflow was created, while
+                # every one of these six windows hit on time. Falls back
+                # to running here when there is no token, which still
+                # grades, logs and rebuilds the dashboard.
+                if not dispatch_github(name):
+                    try:
+                        TASKS[name]()
+                    except Exception as exc:
+                        log(f"TASK ERROR {key}: {exc}")
                 state[key] = today
                 _save_state(state)
                 log(f"--- finished {key} ---")
@@ -709,6 +718,42 @@ def main() -> None:
             log(f"LOOP ERROR: {exc}")
 
         time.sleep(POLL_SECONDS)
+
+
+def dispatch_github(task: str) -> bool:
+    """Ask GitHub Actions to run a task, and report whether it accepted.
+
+    Division of labour: Railway is a resident process whose ET scheduler
+    fires reliably (all six windows hit on 2026-08-06), but DraftKings
+    403s its datacenter IP. GitHub Actions can reach DraftKings but its
+    cron is best-effort and had not fired once in the 6.5 hours after
+    the workflow was created. Neither is sufficient alone; together
+    Railway is the clock and Actions are the hands.
+
+    Needs GITHUB_TOKEN (repo scope). Without it this is a no-op and the
+    resident loop runs the task locally as before -- which still grades,
+    logs and rebuilds the dashboard, just without fresh odds.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return False
+    url = (f"https://api.github.com/repos/{GITHUB_REPO}"
+           f"/actions/workflows/daily.yml/dispatches")
+    body = json.dumps({"ref": "master", "inputs": {"task": task}}).encode()
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("X-GitHub-Api-Version", "2022-11-28")
+    req.add_header("User-Agent", "strikeouts-worker")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            ok = 200 <= resp.status < 300
+        log(f"dispatched '{task}' to GitHub Actions -> {'accepted' if ok else 'rejected'}")
+        return ok
+    except Exception as exc:
+        log(f"GitHub dispatch for '{task}' failed ({type(exc).__name__}: {exc}) "
+            f"-- falling back to running it here")
+        return False
 
 
 def run_due_once() -> int:

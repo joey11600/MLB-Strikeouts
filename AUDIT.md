@@ -344,6 +344,37 @@ Tracks open items, resolved items, and known risks.
   question that pays: is there any subpopulation where we beat the
   closing line? If there is not, no amount of model work fixes it.
 
+### A-019: GitHub's cron has never fired — the schedule is unproven
+- **Filed:** 2026-08-06
+- **Status:** OPEN and unresolved. Watch this before trusting an
+  unattended stretch.
+- **Description:** the workflow was created 2026-08-06 13:12 ET. In the
+  following 6.5 hours, twelve-plus cron windows passed and **zero**
+  schedule-triggered runs occurred. Every run so far is a manual
+  `workflow_dispatch`. Configuration is provably fine: workflow state
+  `active`, Actions enabled with `allowed_actions: all`, repo public,
+  not a fork, not archived, `daily.yml` present on the default branch
+  (`master`), both crons parsed (`0,30 6-23 * * *`, `0,30 0-2 * * *`).
+  GitHub's `schedule` trigger is documented as best-effort and is
+  deprioritised under load; the sibling NRFI repo's daily.yml carries
+  the same observation ("9am ET cron firing at 11:16 AM ET").
+- **Why it matters:** if cron never fires, nothing runs. The whole cloud
+  path silently does nothing, which is the exact failure mode this
+  system keeps producing.
+- **Mitigation shipped:** `railway_worker.dispatch_github()`. The
+  Railway container is a resident process whose ET scheduler DID fire
+  all six windows on 2026-08-06; it now dispatches the Actions workflow
+  instead of running the pipeline itself, so Railway is the clock and
+  Actions are the hands (Actions can reach DraftKings, Railway cannot).
+  Falls back to running locally when no token is present.
+- **Blocked on the operator:** dispatch needs `GITHUB_TOKEN` (repo
+  scope) on the Railway service — the same credential A-013 needs for
+  pushing. One token closes both.
+- **Until then:** the cloud path depends on GitHub's cron actually
+  firing, which is unverified. `tools/watchdog.py` cannot cover this:
+  it runs inside the workflow, so a workflow that never starts produces
+  no alarm.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)
