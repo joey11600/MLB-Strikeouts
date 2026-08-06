@@ -23,7 +23,7 @@ grading, and vice versa).
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -118,7 +118,12 @@ def task_night():
     # Refresh the Statcast cache FIRST: bullpen fatigue reads yesterday's
     # relief usage, so a stale cache silently degrades the leash inputs.
     _run("statcast-backfill", [PYTHON, "run.py", "backfill"], 1800)
-    _run("grade", [PYTHON, "run.py", "grade"], 900)
+    # Both dates: at 3am ET yesterday is the finished slate, but a late
+    # or forced run needs today. Grading is idempotent.
+    today = datetime.now(ET).date()
+    _run("grade-yesterday",
+         [PYTHON, "run.py", "grade", (today - timedelta(days=1)).isoformat()], 900)
+    _run("grade-today", [PYTHON, "run.py", "grade", today.isoformat()], 900)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 600)
     _commit_and_push("overnight grading")
     _deploy_dashboard()

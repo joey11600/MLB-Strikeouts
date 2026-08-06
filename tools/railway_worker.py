@@ -315,7 +315,17 @@ def task_close() -> None:
 def task_night() -> None:
     sync_repo()
     refresh_cache()
-    _run("grade", [PYTHON, "run.py", "grade"], 1200)
+    # Grade BOTH dates explicitly rather than relying on run.py's
+    # "yesterday" default: at 3am ET yesterday is the finished slate,
+    # but a forced/late run at 10pm needs today. Grading is idempotent
+    # (graded rows are locked, non-final games are skipped), so doing
+    # both is always safe and makes the job time-of-day robust.
+    today = datetime.now(ET).date()
+    yesterday = today - timedelta(days=1)
+    _run("grade-yesterday",
+         [PYTHON, "run.py", "grade", yesterday.isoformat()], 1200)
+    _run("grade-today",
+         [PYTHON, "run.py", "grade", today.isoformat()], 1200)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("overnight grading")
 
