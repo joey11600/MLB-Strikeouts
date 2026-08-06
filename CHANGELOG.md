@@ -1,6 +1,69 @@
 
 # Changelog
 
+## 2026-08-06 — Odds run on GitHub Actions; empty-board guard (A-012, A-014)
+
+The operator pushed back on being told the cloud could not fetch odds:
+if the first-inning model does it off a server, why can't this one? The
+answer is that it doesn't, and I had not checked.
+
+What NRFI actually does, read from its source rather than assumed:
+
+- `workers/predictor_loop.py`: `PREDICTOR_SCRAPE_DK` defaults to
+  `"skip"` **"because DK's CDN blocks Railway egress — see T2.56"**.
+  Identical 403, identical cause.
+- Its `Procfile` runs `workers/live_state.py`, which polls the MLB
+  Stats API (free, ungated). Railway there has never touched DK.
+- DK scraping runs under **GitHub Actions**, on a self-hosted runner:
+  repo variable `RUNNER_LABEL=self-hosted` resolving to a Contabo VPS.
+
+So an always-on cloud path existed the whole time. The earlier option
+set (PC relay / paid proxy / paid odds API) was wrong because it was
+reasoned from this repo instead of the sibling that already solved it.
+
+**And the free runner works.** NRFI's notes say GitHub's shared runners
+are blocked too (Azure ranges, "failing every tick for weeks"), but
+that was May. Tested directly rather than inherited: `ubuntu-latest`
+fetched **16 O/U props and 119 alt rungs, zero 403s**, and committed
+the closing snapshot itself. No VPS, no proxy, no subscription.
+
+`.github/workflows/daily.yml` fires hourly and calls a new
+`railway_worker.py --due`, which reuses the SAME ET schedule table,
+grace windows and once-per-day state as the resident worker. GitHub
+cron is UTC-only, so hand-written ET cron lines silently shift an hour
+at every DST boundary; asking the existing scheduler what is due makes
+that correct by construction and stops the two schedulers drifting
+apart. `runs-on` reads `vars.RUNNER_LABEL` exactly like NRFI, so
+moving to a VPS later is a settings change, not a code change.
+
+### A-014 — a run that could not compute published an empty board
+
+The first full CI pricing run "succeeded" and wrote a **0-pitcher**
+slate sidecar over a good 20-pitcher one, deleting 3,225 lines of the
+day's evidence. Cause: the Statcast cache is gitignored, so a fresh
+runner has none, and every pitcher failed with `insufficient data
+(0 BF)`.
+
+Two fixes:
+
+- `daily_pipeline` now **raises** when DK supplied pitchers to price
+  and none could be priced. That is an environment fault, not an empty
+  slate, and publishing it is the same class of lie as an odds figure
+  we never observed. Verified by pointing `STATCAST_CACHE_DIR` at an
+  empty directory: refuses loudly instead of writing.
+- The workflow caches `data/statcast_cache` via `actions/cache` and
+  tops it up for the current season each run. CI needs only the current
+  season (~88 MB) — `daily_pipeline` loads from Mar 26 of the game year
+  — not the full 355 MB, since 2024/2025 are for training and the
+  production models are already fitted and committed. `backfill()`
+  skips days already on disk, so a warm cache makes this a fast no-op.
+
+Also fixed: `reconcile_ledger()` raised `FileNotFoundError` on CI,
+where `DATA_STATE_DIR=data` makes the checkout itself the ledger and
+there is no second copy to merge. It now detects that and skips.
+
+The 20-pitcher board was restored from `d2ea288`.
+
 ## 2026-08-06 — Ledger split-brain between the PC and the container (A-013)
 
 Found while verifying the deploy above. The container's jobs read and

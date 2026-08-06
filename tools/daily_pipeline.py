@@ -637,6 +637,24 @@ def run_daily(
             f"[{strength}]"
         )
 
+    # Systemic-failure gate. A slate where DK gave us pitchers to price
+    # but NONE could be priced is an environment fault (empty Statcast
+    # cache, unreadable models), not a real empty board. Writing the
+    # sidecar anyway publishes a 0-pitcher board over a good one and
+    # deletes the day's evidence -- which is exactly what a CI runner
+    # with no cache did on 2026-08-06. Refuse loudly instead: an empty
+    # board we could not compute is the same class of lie as an odds
+    # figure we did not observe.
+    if matched and not predictions:
+        raise RuntimeError(
+            f"Priced 0 of {len(matched)} matched pitchers for {game_date}. "
+            f"Every one was skipped, which means the inputs are missing, "
+            f"not that the slate is empty -- check the Statcast cache at "
+            f"{os.environ.get('STATCAST_CACHE_DIR', 'data/statcast_cache')} "
+            f"(a fresh CI runner has none). Refusing to overwrite the "
+            f"board with an empty one."
+        )
+
     # 6. Filter primary picks + evaluate ladder
     print(f"\n[6/8] Filtering primary picks and evaluating ladder...")
     primary_plays = [p for p in predictions if p["clears_threshold"]]

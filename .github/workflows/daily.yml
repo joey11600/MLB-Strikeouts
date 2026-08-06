@@ -75,6 +75,44 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # The Statcast cache (~355 MB, 1.95M pitches) is gitignored, so a
+      # fresh runner has none -- and without it EVERY pitcher fails
+      # feature computation with "insufficient data (0 BF)". On
+      # 2026-08-06 that published a 0-pitcher board over a good 20-pitcher
+      # one. daily_pipeline now refuses rather than writing an empty
+      # board, but the real fix is having the cache here at all.
+      #
+      # restore-keys lets today's run start from yesterday's cache and
+      # top it up, instead of re-downloading three seasons every day.
+      - name: Restore Statcast cache
+        uses: actions/cache@v4
+        with:
+          path: data/statcast_cache
+          key: statcast-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            statcast-${{ runner.os }}-
+
+      # Pricing loads the CURRENT season only (daily_pipeline:
+      # season_start = Mar 26 of the game year), so CI needs ~88 MB, not
+      # the full 355 MB of 2024+2025 -- those are for training, and the
+      # production models are already fitted and committed.
+      #
+      # backfill() skips any day already on disk, so calling it with the
+      # whole season range is a fast no-op against a warm cache and a
+      # one-time ~130-day fetch against a cold one.
+      - name: Top up the Statcast cache for the current season
+        env:
+          STATCAST_CACHE_DIR: data/statcast_cache
+        run: |
+          python -c "
+          from datetime import date
+          from zoneinfo import ZoneInfo
+          from datetime import datetime
+          from data.backfill_statcast import backfill
+          today = datetime.now(ZoneInfo('America/New_York')).date()
+          backfill(date(today.year, 3, 26), today)
+          "
+
       - name: Run whatever is due (ET-aware, DST-correct)
         env:
           # Keep scheduler state and the ledger inside the repo so the

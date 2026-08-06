@@ -465,6 +465,21 @@ def reconcile_ledger() -> None:
     ok, no changes" and no line at all must not look identical in the
     job log.
     """
+    # On a CI runner the checkout IS the ledger (DATA_STATE_DIR=data),
+    # so there are not two copies to merge and VOLUME_STATE does not
+    # exist. Merging would be a no-op at best; as written it raised
+    # FileNotFoundError and logged a scary warning on every run.
+    try:
+        if VOLUME_STATE.resolve() == (REPO / "data").resolve():
+            LAST_RECONCILE.update(
+                ok=True, at=datetime.now(ET).isoformat(timespec="seconds"),
+                error=None, picks=None, graded=None,
+            )
+            log("reconcile skipped — checkout is the ledger (no volume to merge)")
+            return
+    except OSError:
+        pass
+
     try:
         for name, key in _MERGE_KEYS.items():
             _merge_csv(name, key)

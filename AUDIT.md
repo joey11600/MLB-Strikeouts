@@ -166,9 +166,16 @@ Tracks open items, resolved items, and known risks.
   that inflates a price gets selected INTO the bet list by the edge
   filter, so odds provenance is a money-safety property, not hygiene.
 
-### A-012: DK blocks the container on IP reputation — no code fix exists
-- **Filed:** 2026-08-06
-- **Status:** Open — awaiting an operator decision on cost/ToS
+### A-012: DK blocks the container on IP reputation
+- **Filed/Resolved:** 2026-08-06
+- **Status:** RESOLVED — GitHub Actions' shared runners are not blocked.
+  Verified live: `ubuntu-latest` fetched 16 O/U props + 119 alt rungs,
+  zero 403s. No VPS, proxy, or paid API needed. The sibling NRFI repo
+  reaches DK the same way (Actions, not Railway); its Railway service
+  only polls the MLB Stats API. `runs-on` reads `vars.RUNNER_LABEL`, so
+  if GitHub's ranges are ever blocked again, pointing at a self-hosted
+  VPS runner is a settings change rather than a code change.
+- **Original description (kept: the measurement stands)**
 - **Description:** DraftKings returns 403 to Railway's datacenter IP and
   200 to a residential IP for byte-identical requests. Measured, not
   assumed: the gate is **User-Agent**, not TLS/JA3 (plain `requests`
@@ -210,6 +217,23 @@ Tracks open items, resolved items, and known risks.
 - **Fix requires the operator:** create a repo-scoped GitHub token and
   set `GITHUB_TOKEN` on the Railway service. Claude cannot create or
   enter credentials.
+
+### A-014: A run that could not compute published an empty board
+- **Filed/Resolved:** 2026-08-06
+- **Description:** the first full CI pricing run wrote a 0-pitcher slate
+  sidecar over a good 20-pitcher one and pushed it, deleting 3,225 lines
+  of that day's evidence. The Statcast cache is gitignored, so a fresh
+  runner has none and every pitcher failed with `insufficient data
+  (0 BF)`. The pipeline treated "nothing priced" as a legitimately empty
+  slate.
+- **Resolution:** `daily_pipeline` raises when DK supplied pitchers and
+  none could be priced -- an environment fault is not an empty slate,
+  and publishing one is the same class of lie as an unobserved odds
+  figure. Workflow caches `data/statcast_cache` and tops up the current
+  season each run (~88 MB; CI needs only the current season).
+- **Generalises to:** any derived artifact written from a possibly-empty
+  computation. Ask whether "no results" is a real answer or a missing
+  input, and refuse to publish when it cannot tell.
 
 ## Resolved
 
