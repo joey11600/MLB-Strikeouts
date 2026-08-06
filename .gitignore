@@ -18,7 +18,9 @@ data/statcast_cache/
 data/backfill/
 data/chadwick_cache/
 data/game_context_cache/
-data/odds/
+# data/odds/ is tracked: the opening + closing snapshots are what CLV
+# is computed from, so they need to reach the worker image and be
+# backed up offsite. They're small CSVs.
 # Fitted model coefficients are tiny (~2KB total) and the Railway
 # worker needs them in the image — tracked deliberately.
 !models/*.pkl

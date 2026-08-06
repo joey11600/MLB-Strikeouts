@@ -144,6 +144,21 @@ def bind_state_to_volume() -> None:
             else:
                 shutil.copy2(repo_path, vol_path)
             log(f"seeded volume state: {name}")
+        elif vol_path.is_dir() and repo_path.is_dir():
+            # Merge in files the image has but the volume doesn't (e.g.
+            # odds snapshots committed after the volume was created).
+            # Volume copies always win — they're the live ones.
+            added = 0
+            for src in repo_path.rglob("*"):
+                if not src.is_file():
+                    continue
+                dest = vol_path / src.relative_to(repo_path)
+                if not dest.exists():
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dest)
+                    added += 1
+            if added:
+                log(f"merged {added} new file(s) into volume state: {name}")
 
         if not vol_path.exists():
             vol_path.mkdir(parents=True) if not name.endswith(".csv") else vol_path.touch()
