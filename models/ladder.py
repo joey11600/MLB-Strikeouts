@@ -33,9 +33,12 @@ from models.edge import (
     ALT_SIDE_MARGIN,
     EDGE_MARGIN,
     MIN_EDGE_PCT,
+    MIN_EV,
+    PROJECTED_LINEUP_EDGE_PENALTY,
     american_to_decimal,
     american_to_implied,
     blend_with_market,
+    expected_value,
     pick_strength,
 )
 from models.staking import kelly_stake, quantize_stake_down, KELLY_FRACTION
@@ -67,6 +70,7 @@ def evaluate_ladder(
     calibrate_fn=None,
     expected_k: float | None = None,
     primary_side: str | None = None,
+    lineup_confirmed: bool = True,
 ) -> list[dict]:
     """Evaluate all available milestone lines for one pitcher.
 
@@ -146,7 +150,13 @@ def evaluate_ladder(
         edge = blended_prob - fair_prob
 
         raw_units = kelly_stake(blended_prob, decimal_odds, KELLY_FRACTION) if edge > 0 else 0.0
-        strength = pick_strength(edge, LADDER_EDGE_THRESHOLD)
+        rung_threshold = LADDER_EDGE_THRESHOLD + (
+            0.0 if lineup_confirmed else PROJECTED_LINEUP_EDGE_PENALTY
+        )
+        strength = pick_strength(edge, rung_threshold)
+        # EV against the ACTUAL posted price (A-009) — immune to the
+        # de-vig assumption baked into fair_prob.
+        ev = expected_value(blended_prob, decimal_odds)
 
         # Every evaluated rung is kept — passed rungs carry a status so
         # the slate sidecar can show the full board, not just the bets.
@@ -161,6 +171,8 @@ def evaluate_ladder(
             status = "passed_not_next_rung"
         elif edge <= 0:
             status = "passed_no_edge"
+        elif ev < MIN_EV:
+            status = "passed_below_ev"
         elif raw_units < 0.1:
             status = "passed_stake_too_small"
         elif strength == "NO_PLAY":
@@ -178,6 +190,7 @@ def evaluate_ladder(
             "fair_prob": fair_prob,
             "blended_prob": blended_prob,
             "edge": edge,
+            "ev": ev,
             "strength": strength,
             "raw_units": raw_units,
             "units_risked": 0.0,

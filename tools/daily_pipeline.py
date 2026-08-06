@@ -592,7 +592,13 @@ def run_daily(
         result = predictor.predict(features, lineup_k_pcts=lineup_k_pcts, lines=lines_to_check)
 
         model_prob_over = result["per_line"][dk_line]
-        edge_info = compute_edge(model_prob_over, over_odds, under_odds)
+        # A-008: an unposted lineup is real uncertainty (~5pp on P(over)),
+        # so it costs edge rather than being ignored.
+        lineup_confirmed = lineup_source == "confirmed"
+        edge_info = compute_edge(
+            model_prob_over, over_odds, under_odds,
+            lineup_confirmed=lineup_confirmed,
+        )
         strength = pick_strength(edge_info["best_edge"], edge_info["threshold"])
 
         entry_result = {
@@ -666,6 +672,7 @@ def run_daily(
                 calibrate_fn=predictor.calibrate_prob,
                 expected_k=expected_k,
                 primary_side=primary_side,
+                lineup_confirmed=pred.get("lineup_source") == "confirmed",
             )
             pred["ladder_eval"] = rungs
 

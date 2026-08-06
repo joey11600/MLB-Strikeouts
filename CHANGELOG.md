@@ -1,4 +1,42 @@
+
 # Changelog
+
+## 2026-08-06 — Lineup-uncertainty penalty + real-EV gate (A-008, A-009)
+
+Both audit findings implemented as gates rather than parameter tweaks.
+
+**A-008 — unposted lineups now cost edge.**
+`PROJECTED_LINEUP_EDGE_PENALTY = 0.05` is added to the threshold
+whenever `lineup_source != "confirmed"`, sized to the measured
+uncertainty (league-average lineups move P(over) 5.1pp on average).
+Applies to primaries and ladder rungs. The morning run mostly sees
+unposted lineups, so this deliberately shifts action to the 4:45pm
+lineup-lock re-run, where the inputs are real.
+
+**A-009 — a real-EV gate on the actual posted price.**
+`MIN_EV = 0.04`: a bet must clear `blended_prob × decimal_odds − 1 ≥
+4%`, computed against the vigged price. Break-even is the *vigged*
+implied probability, not the de-vigged fair one, so this is the only
+threshold that speaks directly in money and it cannot be gamed by the
+`ALT_SIDE_MARGIN` assumption. Deliberately did NOT retune that
+constant to the measured 24% overround: because `edge = blended −
+fair` and `blended` is half market, raising the margin *lowers* fair
+faster than blended and makes the system more aggressive — the
+opposite of the intent. Both gates must pass; `clears_edge` and
+`clears_ev` are reported separately and stored on every rung.
+
+Checked against real graded bets (not fitted to outcomes):
+
+| Bet | Now |
+|---|---|
+| Henderson UNDER 6.5, projected lineup, lost 2u | **rejected** — edge 7.8% vs 13.1% bar |
+| Burke OVER 6.5, confirmed, lost 1u | still bet — fairly priced, simply lost |
+| Detmers UNDER 7.5, confirmed, won 1.32u | still bet |
+| 97% model view at −2000 | **rejected** — EV −1.6% despite a positive-looking edge |
+
+Burke surviving is the point: the gates filter *uncertainty*, not
+losers with hindsight. Board-level effect: 8/4 goes 5 qualifying picks
+with confirmed lineups vs 0 with projected; 8/5 goes 3 vs 1.
 
 ## 2026-08-06 — Default audit: 7 landmines now fail loudly (A-007/8/9)
 

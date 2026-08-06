@@ -186,7 +186,8 @@ def reconstruct(iso_date: str):
         }
         result = predictor.predict(features, lineup_k_pcts=kpcts, lines=[dk_line])
         p_over = result["per_line"][dk_line]
-        ei = compute_edge(p_over, over_odds, under_odds)
+        # Reconstructions use the actual batters faced, i.e. a known lineup.
+        ei = compute_edge(p_over, over_odds, under_odds, lineup_confirmed=True)
         strength = pick_strength(ei["best_edge"], ei["threshold"])
 
         primary_key = (str(pid), str(dk_line))

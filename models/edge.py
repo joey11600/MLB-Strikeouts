@@ -24,7 +24,37 @@ MODEL_TRUST_WEIGHT = 0.5
 # One-sided markets (ladder/milestone alt lines) can't be de-vigged from
 # two sides. Assume the book's margin on a single quoted side; alt boards
 # are juiced harder than mainlines.
+#
+# AUDIT A-009: measured overround on real alt boards is ~24% (implied
+# 47.1% vs realized 37.9%, n=190 rungs over 2 slates), not 4%. This
+# constant is deliberately NOT retuned to that figure: because
+# edge = blended - fair and blended is half market, lowering `fair`
+# lowers `blended` only half as fast, so raising the margin makes the
+# system MORE aggressive. The honest guard is MIN_EV below, which is
+# computed against the actual posted price and can't be gamed by a
+# de-vig assumption.
 ALT_SIDE_MARGIN = 0.04
+
+# Real expected value per unit staked, measured against the ACTUAL
+# vigged price: ev = p * decimal_odds - 1. Break-even is the vigged
+# implied probability, NOT the de-vigged fair probability, so this is
+# the only threshold that directly reflects money. A bet must clear
+# both the edge-vs-fair bar (do we disagree with the market?) and this
+# one (is the disagreement worth backing at the offered price?).
+MIN_EV = 0.04
+
+# AUDIT A-008: with no posted lineup the pipeline feeds league-average
+# hitters. Measured on the 8/4 board, that moves P(over) by 5.1pp on
+# average (10.9pp worst case, 12 of 25 starters >5pp) — the same order
+# as the edge being bet. Symmetric noise still manufactures edge,
+# because the filter selects the cases where noise flattered us. Charge
+# the uncertainty to the threshold instead of pretending it isn't there.
+PROJECTED_LINEUP_EDGE_PENALTY = 0.05
+
+
+def expected_value(prob: float, decimal_odds: float) -> float:
+    """EV per unit staked at the offered (vigged) price."""
+    return prob * decimal_odds - 1.0
 
 
 def blend_with_market(model_prob: float, fair_prob: float,
@@ -92,6 +122,7 @@ def compute_edge(
     model_prob_over: float,
     over_odds: int | str,
     under_odds: int | str,
+    lineup_confirmed: bool = True,
 ) -> dict:
     """Compute market-anchored edge for both sides of a strikeout prop.
 
@@ -124,7 +155,14 @@ def compute_edge(
         model_prob_best = blended_under
 
     threshold = max(nv["hold_pct"] + EDGE_MARGIN, MIN_EDGE_PCT)
-    clears = best_edge >= threshold
+    lineup_penalty = 0.0 if lineup_confirmed else PROJECTED_LINEUP_EDGE_PENALTY
+    threshold += lineup_penalty
+
+    # Two independent gates. Edge-vs-fair asks "do we disagree with the
+    # market?"; EV asks "is that disagreement worth backing at the price
+    # actually offered?" A bet must clear both.
+    ev = expected_value(model_prob_best, american_to_decimal(best_odds))
+    clears = best_edge >= threshold and ev >= MIN_EV
 
     return {
         "fair_over": nv["fair_over"],
@@ -139,6 +177,11 @@ def compute_edge(
         "best_odds": best_odds,
         "model_prob_best": model_prob_best,
         "threshold": threshold,
+        "lineup_penalty": lineup_penalty,
+        "ev": ev,
+        "min_ev": MIN_EV,
+        "clears_edge": best_edge >= threshold,
+        "clears_ev": ev >= MIN_EV,
         "clears_threshold": clears,
     }
 

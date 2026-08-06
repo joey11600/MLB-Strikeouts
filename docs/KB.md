@@ -248,12 +248,26 @@ total_implied = implied_over + implied_under   (> 1.0 by the hold)
 fair_over     = implied_over / total_implied
 ```
 
-### Edge threshold
+### Edge threshold — two independent gates
 
-Every bet must clear: `max(hold% + 2%, 3%)`. On a typical -120/-110
-market (hold = 4.5%), the threshold is 6.5%. A bet must have at
-least 6.5pp of edge against the no-vig fair probability before it
-qualifies.
+A bet must clear BOTH:
+
+1. **Edge vs fair** — `max(hold% + 2%, 3%)`, plus
+   `PROJECTED_LINEUP_EDGE_PENALTY` (5pp) when the lineup isn't
+   confirmed. Asks: *do we disagree with the market?* The penalty is
+   sized to measured uncertainty — league-average lineups move
+   P(over) 5.1pp on average, 10.9pp worst case (AUDIT A-008).
+2. **Real EV** — `blended_prob × decimal_odds − 1 ≥ MIN_EV` (4%),
+   computed against the ACTUAL vigged price. Asks: *is the
+   disagreement worth backing at the price offered?* Break-even is the
+   vigged implied probability, not the de-vigged fair one, so this is
+   the gate that speaks in money and it is immune to the
+   `ALT_SIDE_MARGIN` assumption (AUDIT A-009).
+
+Note `ALT_SIDE_MARGIN` is deliberately NOT set to the measured ~24%
+alt-board overround: since `edge = blended − fair` and `blended` is
+half market, raising the margin makes the system *more* aggressive.
+The EV gate is the correct guard.
 
 ### Quarter-Kelly staking
 
