@@ -450,6 +450,12 @@ def reconcile_ledger() -> None:
     Runs after every pull. Idempotent, union-only, and it never deletes
     or downgrades a row -- so running it twice, or against an identical
     repo, is a no-op.
+
+    Always logs a one-line summary, including when nothing changed. The
+    bug this function exists to fix was a mechanism that silently did
+    nothing, so silence is exactly the wrong success signal: "reconcile
+    ok, no changes" and no line at all must not look identical in the
+    job log.
     """
     try:
         for name, key in _MERGE_KEYS.items():
@@ -462,6 +468,13 @@ def reconcile_ledger() -> None:
         # still run against the volume copy; it is just possibly behind.
         log(f"WARNING reconcile failed ({type(exc).__name__}: {exc}) — "
             f"jobs continue against the volume copy, which may be stale")
+        return
+
+    picks = VOLUME_STATE / "picks_2026.csv"
+    rows, _ = _read_csv(picks)
+    graded = sum(1 for r in rows
+                 if (r.get("graded_result") or "").strip().upper() in TERMINAL_GRADES)
+    log(f"reconcile ok — volume ledger: {len(rows)} pick(s), {graded} graded")
 
 
 def refresh_cache() -> None:
@@ -582,6 +595,12 @@ def main() -> None:
     log("=== Strikeouts Railway worker starting ===")
     log(f"cache: {CACHE_DIR}  state: {STATE_PATH}")
     seed_volume_state()
+    # A redeploy is exactly when the checkout changes, so reconcile here
+    # too and not only at task time. Without it, a deploy that carries
+    # new picks leaves them invisible to the volume ledger until the
+    # next scheduled job -- and the boot rebuild of data.json below
+    # would publish the pre-merge numbers in the meantime.
+    reconcile_ledger()
     start_http_server()
     configure_git()
 
