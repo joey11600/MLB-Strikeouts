@@ -133,10 +133,21 @@ def seed_volume_state() -> None:
     Volume copies always win; the image only fills gaps (a fresh
     volume, or snapshots committed after the volume was created).
     """
+    # FORCE_SEED=a,b or "all" overwrites volume copies from the image.
+    # Escape hatch for when the volume has drifted from the repo (e.g.
+    # writes that never landed) — set it, deploy, verify, then remove.
+    raw = os.environ.get("FORCE_SEED", "").strip()
+    force = set(PERSISTED) if raw.lower() == "all" else {
+        n.strip() for n in raw.split(",") if n.strip()
+    }
+    if force:
+        log(f"FORCE_SEED active — overwriting from image: {sorted(force)}")
+
     VOLUME_STATE.mkdir(parents=True, exist_ok=True)
     for name in PERSISTED:
         src_path = REPO / "data" / name
         vol_path = VOLUME_STATE / name
+        forced = name in force
 
         if not src_path.exists():
             continue
@@ -148,13 +159,13 @@ def seed_volume_state() -> None:
                 if not src.is_file():
                     continue
                 dest = vol_path / src.relative_to(src_path)
-                if not dest.exists():
+                if forced or not dest.exists():
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dest)
                     added += 1
             if added:
                 log(f"seeded {added} file(s) into volume state: {name}")
-        elif not vol_path.exists():
+        elif forced or not vol_path.exists():
             shutil.copy2(src_path, vol_path)
             log(f"seeded volume state: {name}")
 
