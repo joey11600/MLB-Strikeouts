@@ -23,12 +23,25 @@ from pathlib import Path
 
 BASIS_LABEL = "flat_100u"
 
+# Counterfactual units from tools/shadow.py: bets the model WOULD have
+# placed under a different trust weight. Real money never moved on any
+# of them. They carry their own basis and live under the "shadow"
+# subtree, and the guard enforces the separation in BOTH directions --
+# a real basis inside shadow, or a shadow basis outside it, is a
+# violation. Mixing the two would let a counterfactual profit be read
+# as money the operator actually made, which is the single most
+# dangerous confusion this file exists to prevent.
+SHADOW_BASIS_LABEL = "shadow_flat_100u"
+SHADOW_SUBTREE = "shadow"
+
 PNL_FIELD_NAMES = {
     "profit_loss_units",
     "daily_pnl",
     "cumulative_pnl",
     "total",
     "total_risked",
+    "pnl",
+    "units_staked",
 }
 
 
@@ -36,14 +49,14 @@ class BasisViolation(Exception):
     pass
 
 
-def validate_tagged_value(value, path: str) -> list[str]:
+def validate_tagged_value(value, path: str, expected: str = BASIS_LABEL) -> list[str]:
     """Check that a tagged P&L value has the correct shape and basis."""
     errors = []
 
     if isinstance(value, (int, float)):
         errors.append(
             f"BARE FLOAT at {path}: {value} — must be "
-            f'{{"value": {value}, "basis": "{BASIS_LABEL}"}}'
+            f'{{"value": {value}, "basis": "{expected}"}}'
         )
         return errors
 
@@ -56,30 +69,51 @@ def validate_tagged_value(value, path: str) -> list[str]:
 
     if "basis" not in value:
         errors.append(f"MISSING 'basis' key at {path}")
-    elif value["basis"] != BASIS_LABEL:
+    elif value["basis"] != expected:
         errors.append(
             f"WRONG BASIS at {path}: got '{value['basis']}', "
-            f"expected '{BASIS_LABEL}'"
+            f"expected '{expected}'"
         )
 
     return errors
 
 
-def walk_and_validate(obj, path: str = "$") -> list[str]:
-    """Recursively walk JSON and validate all P&L fields."""
+def walk_and_validate(obj, path: str = "$", in_shadow: bool = False) -> list[str]:
+    """Recursively walk JSON and validate all P&L fields.
+
+    in_shadow flips the expected basis once we descend into the shadow
+    subtree. Enforced both ways: real units inside shadow, and shadow
+    units anywhere outside it, are equally violations.
+    """
     errors = []
+    expected = SHADOW_BASIS_LABEL if in_shadow else BASIS_LABEL
 
     if isinstance(obj, dict):
         for key, val in obj.items():
             child_path = f"{path}.{key}"
-            if key in PNL_FIELD_NAMES:
-                errors.extend(validate_tagged_value(val, child_path))
+            child_shadow = in_shadow or key == SHADOW_SUBTREE
+            # Some names are containers in one place and tagged values in
+            # another: the real payload's `pnl` holds {total,
+            # total_risked, roi}, while shadow's `pnl` IS the tagged
+            # value. A dict carrying NEITHER 'value' nor 'basis' is a
+            # container -- recurse. Carrying either one means it was
+            # meant to be tagged, so validate it strictly and keep
+            # catching half-tagged values.
+            is_container = (
+                isinstance(val, dict)
+                and "value" not in val
+                and "basis" not in val
+            )
+            if key in PNL_FIELD_NAMES and not is_container:
+                errors.extend(validate_tagged_value(
+                    val, child_path,
+                    SHADOW_BASIS_LABEL if child_shadow else BASIS_LABEL))
             else:
-                errors.extend(walk_and_validate(val, child_path))
+                errors.extend(walk_and_validate(val, child_path, child_shadow))
 
     elif isinstance(obj, list):
         for i, item in enumerate(obj):
-            errors.extend(walk_and_validate(item, f"{path}[{i}]"))
+            errors.extend(walk_and_validate(item, f"{path}[{i}]", in_shadow))
 
     return errors
 

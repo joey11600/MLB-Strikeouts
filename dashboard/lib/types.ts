@@ -213,6 +213,54 @@ export interface LiveModel {
   dates: string[];
 }
 
+/* ---- shadow portfolio (tools/shadow.py) ------------------------------
+ * Counterfactual: what the model WOULD have bet at other trust weights.
+ * Every P&L here is tagged "shadow_flat_100u", never the real basis —
+ * tools/pnl_guard.py enforces that separation in both directions. */
+
+export interface ShadowPick {
+  date: string;
+  pitcher_name: string;
+  line: number | null;
+  side: string;
+  odds: number;
+  edge: number;
+  threshold: number;
+  units: number;
+  won: boolean;
+  pnl: TaggedPnl;
+  clv_pct: number | null;
+}
+
+export interface ShadowGridRow {
+  trust_weight: number;
+  /** True for the weight production actually uses. */
+  is_production: boolean;
+  n_bets: number;
+  wins: number;
+  losses: number;
+  hit_rate: number | null;
+  units_staked: TaggedPnl;
+  pnl: TaggedPnl;
+  roi: number | null;
+  clv_n: number;
+  avg_clv_pct: number | null;
+  picks: ShadowPick[];
+}
+
+export interface Shadow {
+  basis: string;
+  n_observations: number;
+  n_dates: number;
+  dates: string[];
+  includes_reconstructed: boolean;
+  production_trust_weight: number;
+  grid: ShadowGridRow[];
+  target_observations: number;
+  ready_to_decide: boolean;
+  note: string;
+}
+
 export interface GauntletFeature {
   feature: string;
   gates: Record<string, boolean | null>;
@@ -271,4 +319,6 @@ export interface DashboardData {
   };
   /** null until tools/model_log.py has written data/model_log.csv */
   live_model: LiveModel | null;
+  /** Counterfactual portfolio. NOT money that moved. */
+  shadow: Shadow | null;
 }

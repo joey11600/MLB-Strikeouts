@@ -921,6 +921,33 @@ def _build_live_model(backtest: dict | None = None) -> dict | None:
     }
 
 
+def _build_shadow() -> dict | None:
+    """Counterfactual portfolio from tools/shadow.py.
+
+    Answers the question the live filter can't: the bar is currently set
+    so high that almost nothing qualifies, which deadlocks AUDIT A-006
+    (raise trust only after 100+ graded bets) because we never
+    accumulate bets. Scoring what WOULD have been bet gathers that
+    evidence at ~20 rows a night with no money at risk.
+
+    Every P&L value here is tagged `shadow_flat_100u` and lives under
+    the "shadow" key; tools/pnl_guard.py refuses to let those two facts
+    come apart in either direction.
+    """
+    try:
+        from tools.shadow import build as build_shadow
+        # Reconstructed rows are priced against known outcomes, so they
+        # are diagnostic only. Included until enough live rows exist to
+        # stand alone, and flagged in the payload either way.
+        live = build_shadow(include_reconstructed=False)
+        if live["n_observations"] >= MIN_LIVE_ROWS:
+            return live
+        return build_shadow(include_reconstructed=True)
+    except Exception as exc:
+        print(f"  (shadow block skipped: {type(exc).__name__}: {exc})")
+        return None
+
+
 def build_dashboard_data() -> dict:
     picks = _load_picks()
 
@@ -975,6 +1002,7 @@ def build_dashboard_data() -> dict:
         "performance": _build_performance(picks),
         "model": model,
         "live_model": _build_live_model(model.get("backtest")),
+        "shadow": _build_shadow(),
     }
 
 

@@ -615,6 +615,11 @@ def task_night() -> None:
     # bets: ~28 observations a night instead of ~3, and it measures the
     # model rather than the threshold-filtered bet sample.
     _run("model-log", [PYTHON, "tools/model_log.py"], 900)
+    # Shadow portfolio: what the model WOULD have bet at other trust
+    # weights. Printed nightly so the evidence for the A-006 decision
+    # accumulates visibly instead of needing someone to remember to
+    # look. Read-only over model_log.csv; it writes nothing.
+    _run("shadow", [PYTHON, "tools/shadow.py"], 300)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("overnight grading")
 

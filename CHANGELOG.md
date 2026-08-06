@@ -1,6 +1,67 @@
 
 # Changelog
 
+## 2026-08-06 — Shadow portfolio breaks the A-006 deadlock (A-015)
+
+The live filter bets almost nothing, and the reason is arithmetic, not
+a quiet slate. `MODEL_TRUST_WEIGHT = 0.5` halves every edge before it
+meets a ~8% bar, so a bet needs a **~16% raw disagreement with
+DraftKings — 26% on a projected lineup**. Real prop edges live at 3-8%.
+On 2026-08-06, 5 of 15 confirmed-lineup pitchers had raw gaps of 8-12%
+(Mikolas 11.6%) and **zero** cleared.
+
+Each gate was justified alone — half-trust blend, vig margin, EV floor,
+lineup penalty, all added after 8/4-8/5 lost money on phantom edges.
+Stacked, they multiply into a wall.
+
+Worse, it deadlocks A-006, which permits raising trust only "after 100+
+graded bets with positive CLV". At ~0 bets a day that evidence is never
+collected: the gate demands proof the configuration prevents gathering.
+
+`tools/shadow.py` resolves this with no money at risk. Every evaluated
+pitcher is already logged with its settled outcome (~20/night), so the
+counterfactual is directly scorable: for a grid of trust weights
+(0.5/0.65/0.8/1.0), which pitchers WOULD have cleared, at what stake,
+and what would the portfolio have returned — including CLV, which is
+available for the whole board rather than just the bets.
+
+Design constraints that matter:
+
+- **One implementation of the edge formula.** `compute_edge` gained an
+  optional `trust_weight` override so shadow sweeps run through the
+  production function. A second copy would drift and quietly invalidate
+  the evidence we intend to change money rules on. Verified the default
+  path is byte-identical to before.
+- **Shadow units cannot be mistaken for real ones.** They carry basis
+  `shadow_flat_100u` under a `shadow` subtree, and `tools/pnl_guard.py`
+  now enforces the separation **in both directions** — a real basis
+  inside shadow, or a shadow basis outside it, both fail the build. The
+  guard immediately earned its keep by rejecting the first version of
+  this work, which emitted bare floats for per-pick P&L.
+- The guard also learned that some names (`pnl`) are a container in one
+  place and a tagged value in another; a dict carrying neither `value`
+  nor `basis` is now treated as a container, while a half-tagged value
+  still fails.
+
+First run (26 reconstructed rows, diagnostic only): higher trust would
+have lost money too — 0.8 → −6.04u, 1.0 → −4.15u. That is a useful
+early answer, and precisely why the decision needs evidence rather than
+a guess.
+
+Wired into the nightly job so the evidence accumulates without anyone
+remembering to look, and rendered on `/model` with an explicit
+progress-to-100 bar and a "these bets were never placed" banner.
+
+### Non-bet pitchers now show the model's read
+
+A 20-pitcher board rendered 20 near-blank rows: a card that was not bet
+showed only "no bet". The day's actual work — a probability and an
+expected strikeout count for every starter — was invisible without
+expanding each card. Non-bet cards now carry the model's side, its
+probability, the two prices, **how many points short of the bar it
+fell**, and E[K]. Not betting something is not the same as having no
+opinion about it.
+
 ## 2026-08-06 — Odds run on GitHub Actions; empty-board guard (A-012, A-014)
 
 The operator pushed back on being told the cloud could not fetch odds:

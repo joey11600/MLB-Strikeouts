@@ -235,6 +235,35 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-015: The bet filter is set where nothing can pass (A-006 deadlock)
+- **Filed:** 2026-08-06
+- **Status:** Evidence collection shipped; the money decision is the
+  operator's and needs ~2 weeks of data
+- **Description:** `MODEL_TRUST_WEIGHT = 0.5` halves every edge before a
+  ~8% threshold, so a bet requires a **~16% raw disagreement with
+  DraftKings (26% on a projected lineup)**. Real prop edges are 3-8%.
+  On 2026-08-06, 5 of 15 confirmed-lineup pitchers had raw gaps of
+  8-12% and none cleared. Each gate (half-trust blend, vig margin, EV
+  floor, lineup penalty) was justified individually after the 8/4-8/5
+  losses; stacked they multiply into an unreachable bar.
+- **The deadlock:** A-006 allows raising trust only after "100+ graded
+  bets with positive CLV". At ~0 bets/day that evidence is never
+  collected. The gate requires proof that the configuration prevents
+  gathering.
+- **Shipped:** `tools/shadow.py` scores the counterfactual portfolio for
+  a grid of trust weights off `model_log.csv` (~20 rows/night, already
+  captured with outcomes), including CLV, with no money at risk. Uses
+  the production edge/staking functions via a `trust_weight` override
+  rather than a reimplementation. Shadow P&L is tagged
+  `shadow_flat_100u` and `pnl_guard` enforces bidirectional separation
+  from real units. Runs nightly; rendered on /model.
+- **Early read (26 reconstructed rows — diagnostic only):** higher trust
+  loses too (0.8 -> -6.04u, 1.0 -> -4.15u). Do NOT act on this; it is
+  one reconstructed slate.
+- **Decision rule:** watch CLV, not W/L — it converges in weeks rather
+  than months. A trust weight is only worth adopting if its CLV stays
+  positive as the sample grows toward 100.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

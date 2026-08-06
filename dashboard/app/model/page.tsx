@@ -13,6 +13,7 @@ import type {
   LiveModel,
   LiveModelDate,
   PerLineBrier,
+  Shadow,
 } from "@/lib/types";
 
 function CalibrationChart({ bins }: { bins: CalibrationBin[] }) {
@@ -767,6 +768,165 @@ function LiveModelSection({ live }: { live: LiveModel | null }) {
   );
 }
 
+function ShadowSection({ shadow }: { shadow: Shadow | null }) {
+  if (!shadow) {
+    return (
+      <div className="rounded-card border border-line bg-surface p-8 text-center text-sm text-ink-muted">
+        No shadow portfolio yet — it fills in once a graded slate exists.
+      </div>
+    );
+  }
+
+  const pct = (v: number | null, dp = 1) =>
+    v == null ? "—" : `${(v * 100).toFixed(dp)}%`;
+  const progress = Math.min(
+    1,
+    shadow.n_observations / Math.max(1, shadow.target_observations),
+  );
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-ink">
+          Shadow portfolio
+        </h2>
+        <span className="text-[11px] text-ink-muted">
+          counterfactual · no money was placed on any of these
+        </span>
+      </div>
+
+      <div className="rounded-card border border-accent/40 bg-accent-dim px-4 py-3">
+        <div className="figure text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">
+          Not P&amp;L — these bets were never placed
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-ink-secondary">
+          The live filter halves every edge (trust {shadow.production_trust_weight})
+          and then asks for ~8%, so a bet needs roughly a {(
+            0.08 / shadow.production_trust_weight * 100
+          ).toFixed(0)}% raw disagreement with the book — which almost never
+          happens. That deadlocks the rule for raising trust, which wants 100+
+          graded bets we never place. This table scores what each setting{" "}
+          <span className="font-semibold text-ink">would</span> have done, using
+          the production edge and staking functions with only the trust weight
+          varied. It costs nothing and grows ~20 rows a night.
+          {shadow.includes_reconstructed && (
+            <>
+              {" "}
+              <span className="font-semibold text-ink">
+                Currently includes reconstructed slates
+              </span>{" "}
+              — priced retroactively, so diagnostic only.
+            </>
+          )}
+        </p>
+      </div>
+
+      <div className="rounded-card border border-line bg-surface p-4">
+        <div className="mb-2 flex items-baseline justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
+            Evidence collected
+          </span>
+          <span className="figure text-[11px] text-ink-secondary">
+            {shadow.n_observations} / {shadow.target_observations} observations
+            · {shadow.n_dates} slate{shadow.n_dates === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+          <div
+            className={cn(
+              "h-full rounded-full",
+              shadow.ready_to_decide ? "bg-over" : "bg-accent",
+            )}
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        <div className="mt-1.5 figure text-[10.5px] text-ink-muted">
+          {shadow.ready_to_decide
+            ? "Enough rows to judge — check that CLV held up before changing anything."
+            : `${shadow.target_observations - shadow.n_observations} more before this is worth acting on.`}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-card border border-line bg-surface p-4">
+        <table className="w-full min-w-[560px] text-left text-xs">
+          <thead>
+            <tr className="border-b border-line text-[10px] uppercase tracking-wider text-ink-muted">
+              <th className="py-1.5 pr-3 font-medium">Trust</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Bets</th>
+              <th className="py-1.5 pr-3 text-right font-medium">W–L</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Hit</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Staked</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Shadow P&amp;L</th>
+              <th className="py-1.5 pr-3 text-right font-medium">ROI</th>
+              <th className="py-1.5 text-right font-medium">CLV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shadow.grid.map((g) => (
+              <tr
+                key={g.trust_weight}
+                className={cn(
+                  "border-b border-line/50 last:border-0",
+                  g.is_production && "bg-surface-2",
+                )}
+              >
+                <td className="figure py-1.5 pr-3">
+                  {g.trust_weight.toFixed(2)}
+                  {g.is_production && (
+                    <span className="ml-1.5 text-[9.5px] uppercase tracking-wider text-accent">
+                      live
+                    </span>
+                  )}
+                </td>
+                <td className="figure py-1.5 pr-3 text-right">{g.n_bets}</td>
+                <td className="figure py-1.5 pr-3 text-right text-ink-secondary">
+                  {g.wins}–{g.losses}
+                </td>
+                <td className="figure py-1.5 pr-3 text-right">{pct(g.hit_rate, 0)}</td>
+                <td className="figure py-1.5 pr-3 text-right text-ink-secondary">
+                  {g.units_staked.value.toFixed(2)}u
+                </td>
+                <td
+                  className={cn(
+                    "figure py-1.5 pr-3 text-right",
+                    g.pnl.value > 0 ? "text-over" : g.pnl.value < 0 ? "text-under" : "",
+                  )}
+                >
+                  {g.pnl.value > 0 ? "+" : ""}
+                  {g.pnl.value.toFixed(2)}u
+                </td>
+                <td className="figure py-1.5 pr-3 text-right">{pct(g.roi)}</td>
+                <td
+                  className={cn(
+                    "figure py-1.5 text-right",
+                    g.avg_clv_pct == null
+                      ? "text-ink-muted"
+                      : g.avg_clv_pct > 0
+                        ? "text-over"
+                        : "text-under",
+                  )}
+                  title={g.clv_n ? `${g.clv_n} pick(s) with a closing line` : undefined}
+                >
+                  {g.avg_clv_pct == null
+                    ? "—"
+                    : `${g.avg_clv_pct > 0 ? "+" : ""}${g.avg_clv_pct.toFixed(2)}%`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-2.5 text-[10.5px] leading-relaxed text-ink-muted">
+          <span className="font-semibold text-ink-secondary">Watch the CLV column.</span>{" "}
+          Closing-line value converges in weeks where win/loss needs months, so it
+          is the column that will justify a change first. A setting is only worth
+          adopting if its CLV stays positive as the sample grows — a good W–L over
+          a handful of bets is noise.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function ModelPage() {
   const { data, error } = useDashboard();
 
@@ -852,6 +1012,8 @@ export default function ModelPage() {
       )}
 
       <LiveModelSection live={data.live_model ?? null} />
+
+      <ShadowSection shadow={data.shadow ?? null} />
 
       {gauntlet && (
         <div className="rounded-card border border-line bg-surface p-4">

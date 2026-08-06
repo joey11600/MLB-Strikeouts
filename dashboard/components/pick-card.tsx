@@ -337,11 +337,34 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
               </>
             ) : (
               <>
+                {/* Not betting it is not the same as having no opinion.
+                    Show the model's lean, its probability, and HOW FAR
+                    short of the bar it fell — otherwise a 20-pitcher
+                    board reads as 20 blanks and the day's real work is
+                    invisible. */}
                 <span className="figure text-[13px] text-ink-secondary">
-                  line {p.line ?? "—"}
+                  {p.best_side ?? ""} {p.line ?? "—"}
                 </span>
+                {p.blended_prob_over != null && (
+                  <Chip>
+                    {pctStr(
+                      p.best_side === "UNDER"
+                        ? 1 - p.blended_prob_over
+                        : p.blended_prob_over,
+                    )}
+                  </Chip>
+                )}
                 <Chip>{oddsStr(p.over_odds)} / {oddsStr(p.under_odds)}</Chip>
-                <span className="figure text-[10.5px] text-ink-muted">no bet</span>
+                {p.edge_best != null && p.threshold != null ? (
+                  <span
+                    className="figure text-[10.5px] text-ink-muted"
+                    title={`Edge ${(p.edge_best * 100).toFixed(1)}% vs a ${(p.threshold * 100).toFixed(1)}% bar`}
+                  >
+                    no bet · {((p.edge_best - p.threshold) * 100).toFixed(1)} pts short
+                  </span>
+                ) : (
+                  <span className="figure text-[10.5px] text-ink-muted">no bet</span>
+                )}
               </>
             )}
             {ladderBets > 0 && (

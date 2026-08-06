@@ -123,6 +123,7 @@ def compute_edge(
     over_odds: int | str,
     under_odds: int | str,
     lineup_confirmed: bool = True,
+    trust_weight: float | None = None,
 ) -> dict:
     """Compute market-anchored edge for both sides of a strikeout prop.
 
@@ -130,14 +131,22 @@ def compute_edge(
     blended with the no-vig fair probability (MODEL_TRUST_WEIGHT) before
     the edge is measured, so edge = w * (model - fair).
 
+    trust_weight overrides MODEL_TRUST_WEIGHT for one call. Production
+    always leaves it None; it exists so the shadow tracker
+    (tools/shadow.py) can sweep alternative trust settings through THIS
+    function rather than a reimplementation of it. A second copy of the
+    edge formula would drift from this one and quietly invalidate the
+    evidence we plan to change the money rules on.
+
     Returns dict with: fair_over, fair_under, hold_pct,
     blended_prob_over, raw_model_prob_over, edge_over, edge_under,
     best_side, best_edge, best_odds, model_prob_best (blended, for
     staking), threshold, clears_threshold.
     """
+    w = MODEL_TRUST_WEIGHT if trust_weight is None else trust_weight
     nv = no_vig_fair_prob(over_odds, under_odds)
 
-    blended_over = blend_with_market(model_prob_over, nv["fair_over"])
+    blended_over = blend_with_market(model_prob_over, nv["fair_over"], weight=w)
     blended_under = 1.0 - blended_over
 
     edge_over = blended_over - nv["fair_over"]
