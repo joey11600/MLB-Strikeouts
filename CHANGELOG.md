@@ -1,6 +1,34 @@
 
 # Changelog
 
+## 2026-08-06 — Model log: track every pitcher, not just the bets
+
+Each slate produced ~28 model predictions but we durably recorded the
+outcome for only the ~3 we bet. P&L and CLV can only ever evaluate bet
+selection — a threshold-filtered, biased sample of the model's
+opinions — and at 3/night it takes months to say anything.
+
+`tools/model_log.py` joins every evaluated pitcher's prediction with
+the actual result from Statcast into an append-only
+`data/model_log.csv` (idempotent per date): ~28 observations a night
+instead of 3, a ~9x faster feedback loop, measuring the MODEL rather
+than the bet filter. Wired into both night jobs and persisted on the
+Railway volume. `--report` prints live calibration, Brier vs the
+0.1491 backtest baseline, and — most importantly — workload error,
+which is the failure mode that has actually cost money.
+
+Reconstructed slates are flagged and excluded from validation: they
+were priced retroactively and their dates may sit inside the training
+window. Only live slates count as prospective predictions.
+
+First run (8/4, 26 pairs, reconstructed → diagnostic only) immediately
+surfaced what 3 bets never could: mean absolute workload error 3.38 BF
+with only 62% of starts within ±3. The worst miss (Yesavage: expected
+22.5 BF, faced 7) is correctly NOT a role-gate case — 17 prior
+appearances averaging 25 BF, a genuine starter who got knocked out
+early. That distinction matters: Anderson was predictable from
+history, Yesavage was not.
+
 ## 2026-08-06 — Lineup-uncertainty penalty + real-EV gate (A-008, A-009)
 
 Both audit findings implemented as gates rather than parameter tweaks.

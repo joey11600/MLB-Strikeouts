@@ -124,6 +124,8 @@ def task_night():
     _run("grade-yesterday",
          [PYTHON, "run.py", "grade", (today - timedelta(days=1)).isoformat()], 900)
     _run("grade-today", [PYTHON, "run.py", "grade", today.isoformat()], 900)
+    # Every evaluated pitcher, not just the bets (~28/night vs ~3).
+    _run("model-log", [PYTHON, "tools/model_log.py"], 900)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 600)
     _commit_and_push("overnight grading")
     _deploy_dashboard()

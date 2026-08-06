@@ -52,6 +52,7 @@ STATE_PATH = STATE_DIR / "worker_state.json"
 PERSISTED = [
     "picks_2026.csv",
     "pick_changes.csv",
+    "model_log.csv",
     "slates",
     "odds",
 ]
@@ -344,6 +345,10 @@ def task_night() -> None:
          [PYTHON, "run.py", "grade", yesterday.isoformat()], 1200)
     _run("grade-today",
          [PYTHON, "run.py", "grade", today.isoformat()], 1200)
+    # Log prediction-vs-outcome for EVERY evaluated pitcher, not just the
+    # bets: ~28 observations a night instead of ~3, and it measures the
+    # model rather than the threshold-filtered bet sample.
+    _run("model-log", [PYTHON, "tools/model_log.py"], 900)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("overnight grading")
 
