@@ -548,14 +548,14 @@ separately; conflating them once advertised 22 observations beside a
 
 ## Two ledgers, one truth (Phase 9)
 
-The container's jobs read and write  (the Railway
-volume). Already up to date. only updates the  checkout. Those are
+The container's jobs read and write `DATA_STATE_DIR` (the Railway
+volume). `git pull` only updates the `/app` checkout. Those are
 different paths, so a pull alone does NOT bring the PC's picks into the
 ledger the jobs use — that was a live split-brain (AUDIT A-013), and it
 showed up as a quietly wrong record on the dashboard rather than an
-error, because the site prefers the worker's .
+error, because the site prefers the worker's `/data.json`.
 
- runs after every pull and merges checkout into
+`reconcile_ledger()` runs after every pull and merges checkout into
 volume:
 
 - **Union only.** Rows are added or advanced to a more complete version
@@ -563,11 +563,11 @@ volume:
   holds across machines, not just within one.
 - **Conflict order:** graded beats ungraded (a grade is strictly the
   later state; reopening one violates the locked-picks rule), then
-  later , then the row with more populated fields.
-- **Key:**  — the same key
-   uses. Unique across the ledger
-  including ladder rungs, whose  is  rather than .
-- **Files (slates, odds):** compare  /  read
+  later `updated_at`, then the row with more populated fields.
+- **Key:** `(date, game_pk, pitcher_id, line)` — the same key
+  `daily_pipeline._load_existing_picks` uses. Unique across the ledger
+  including ladder rungs, whose `line` is `6+` rather than `6.5`.
+- **Files (slates, odds):** compare `generated_at` / `captured_at` read
   from *inside* the file. Never mtime — git checkout resets it on every
   deploy, which is the same trap as the odds staleness clock.
 
