@@ -27,13 +27,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from data.game_context import fetch_boxscore, fetch_schedule
 from models.edge import no_vig_fair_prob, american_to_implied, ALT_SIDE_MARGIN
 from tracker import (
-    FIELDS, PICKS_PATH, _write_rows, _calc_pnl, grade_pick,
+    FIELDS, PICKS_PATH, DATA_STATE_DIR, _write_rows, _calc_pnl, grade_pick,
 )
 
 ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
 
-ODDS_DIR = Path(__file__).parent.parent / "data" / "odds"
+ODDS_DIR = DATA_STATE_DIR / "odds"
 
 
 def _norm_name(name: str) -> str:

@@ -56,7 +56,9 @@ UTC = ZoneInfo("UTC")
 LEAGUE_K_RATE = 0.225
 SHRINKAGE_BF = PITCHER_K_PSEUDO_BF
 
-SLATES_DIR = Path(__file__).parent.parent / "data" / "slates"
+from tracker import DATA_STATE_DIR
+
+SLATES_DIR = DATA_STATE_DIR / "slates"
 
 
 def _normalize_name(name: str) -> str:

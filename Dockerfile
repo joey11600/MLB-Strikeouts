@@ -19,7 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Volume mount point (Railway attaches the persistent disk here).
+# DATA_STATE_DIR must be a REAL directory on the volume — the ledger's
+# atomic writes replace destination paths, so symlinks don't survive.
 ENV STATCAST_CACHE_DIR=/data/statcast_cache
+ENV DATA_STATE_DIR=/data/state
 ENV PYTHONUNBUFFERED=1
 
 CMD ["python", "tools/railway_worker.py"]

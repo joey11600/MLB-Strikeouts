@@ -37,7 +37,9 @@ UTC = ZoneInfo("UTC")
 
 ROOT = Path(__file__).parent.parent
 OUTPUT_PATH = ROOT / "dashboard" / "public" / "data.json"
-SLATES_DIR = ROOT / "data" / "slates"
+from tracker import DATA_STATE_DIR
+
+SLATES_DIR = DATA_STATE_DIR / "slates"
 PREDICTIONS_PATH = ROOT / "data" / "backtest_predictions.csv"
 GAUNTLET_PATH = ROOT / "data" / "gauntlet_results.json"
 

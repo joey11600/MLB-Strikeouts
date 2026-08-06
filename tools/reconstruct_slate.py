@@ -32,12 +32,12 @@ from models.stage_b_rate import ROOKIE_BF_THRESHOLD
 from models.edge import compute_edge, pick_strength
 from models.ladder import evaluate_ladder
 from strikeout_predictor import StrikeoutPredictor
-from tracker import PICKS_PATH
+from tracker import PICKS_PATH, DATA_STATE_DIR
 from tools.daily_pipeline import (
     _normalize_name, _write_json_atomic, SLATES_DIR,
 )
 
-ODDS_DIR = Path(__file__).parent.parent / "data" / "odds"
+ODDS_DIR = DATA_STATE_DIR / "odds"
 
 
 def _load_odds(iso_date: str):

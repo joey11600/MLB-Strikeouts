@@ -35,7 +35,9 @@ from scrape_dk_odds import fetch_dk_strikeout_props, fetch_dk_strikeout_alts
 ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
 
-ODDS_DIR = Path(__file__).parent.parent / "data" / "odds"
+from tracker import DATA_STATE_DIR
+
+ODDS_DIR = DATA_STATE_DIR / "odds"
 
 PRIMARY_FIELDS = [
     "captured_at", "date", "pitcher_name", "team", "line",

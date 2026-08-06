@@ -20,8 +20,18 @@ UTC = ZoneInfo("UTC")
 
 MAX_STAKE_UNITS = 2.0
 
-PICKS_PATH = Path(__file__).parent / "data" / "picks_2026.csv"
-CHANGES_PATH = Path(__file__).parent / "data" / "pick_changes.csv"
+# Mutable state root. The Railway worker points this at its persistent
+# volume (DATA_STATE_DIR=/data/state); everywhere else it's the repo's
+# data/ directory. It must be a real directory, NOT a symlink: the
+# atomic-write pattern (tempfile + os.replace) replaces the target
+# path, which would silently destroy a symlinked file and drop the
+# write onto ephemeral container disk.
+DATA_STATE_DIR = Path(
+    os.environ.get("DATA_STATE_DIR") or (Path(__file__).parent / "data")
+)
+
+PICKS_PATH = DATA_STATE_DIR / "picks_2026.csv"
+CHANGES_PATH = DATA_STATE_DIR / "pick_changes.csv"
 
 FIELDS = [
     "date",

@@ -121,52 +121,44 @@ def _run(label: str, cmd: list[str], timeout: int) -> bool:
     return True
 
 
-def bind_state_to_volume() -> None:
-    """Point the ledger and slate/odds archives at the volume.
+def seed_volume_state() -> None:
+    """Copy any state the image has that the volume is missing.
 
-    The container is rebuilt from git on every deploy, so anything the
-    pipeline writes under /app/data would be lost. Each mutable path is
-    replaced with a symlink into the volume, seeded once from the image
-    so the first boot inherits the committed ledger. Code files under
-    data/ stay in the image and keep updating normally.
+    The pipeline reads/writes DATA_STATE_DIR (set to the volume), so no
+    symlinks are involved — deliberately. The atomic-write pattern
+    (tempfile + os.replace) REPLACES the destination path, which
+    silently destroys a symlinked file and drops the write onto
+    ephemeral container disk. That bug cost a graded ledger once.
+
+    Volume copies always win; the image only fills gaps (a fresh
+    volume, or snapshots committed after the volume was created).
     """
     VOLUME_STATE.mkdir(parents=True, exist_ok=True)
     for name in PERSISTED:
-        repo_path = REPO / "data" / name
+        src_path = REPO / "data" / name
         vol_path = VOLUME_STATE / name
 
-        if repo_path.is_symlink():
+        if not src_path.exists():
             continue
 
-        if not vol_path.exists() and repo_path.exists():
-            if repo_path.is_dir():
-                shutil.copytree(repo_path, vol_path)
-            else:
-                shutil.copy2(repo_path, vol_path)
-            log(f"seeded volume state: {name}")
-        elif vol_path.is_dir() and repo_path.is_dir():
-            # Merge in files the image has but the volume doesn't (e.g.
-            # odds snapshots committed after the volume was created).
-            # Volume copies always win — they're the live ones.
+        if src_path.is_dir():
+            vol_path.mkdir(parents=True, exist_ok=True)
             added = 0
-            for src in repo_path.rglob("*"):
+            for src in src_path.rglob("*"):
                 if not src.is_file():
                     continue
-                dest = vol_path / src.relative_to(repo_path)
+                dest = vol_path / src.relative_to(src_path)
                 if not dest.exists():
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dest)
                     added += 1
             if added:
-                log(f"merged {added} new file(s) into volume state: {name}")
+                log(f"seeded {added} file(s) into volume state: {name}")
+        elif not vol_path.exists():
+            shutil.copy2(src_path, vol_path)
+            log(f"seeded volume state: {name}")
 
-        if not vol_path.exists():
-            vol_path.mkdir(parents=True) if not name.endswith(".csv") else vol_path.touch()
-
-        if repo_path.exists():
-            shutil.rmtree(repo_path) if repo_path.is_dir() else repo_path.unlink()
-        repo_path.symlink_to(vol_path, target_is_directory=vol_path.is_dir())
-    log(f"state bound to volume: {', '.join(PERSISTED)}")
+    log(f"volume state ready at {VOLUME_STATE}")
 
 
 class DataHandler(BaseHTTPRequestHandler):
@@ -356,7 +348,7 @@ TASKS = {
 def main() -> None:
     log("=== Strikeouts Railway worker starting ===")
     log(f"cache: {CACHE_DIR}  state: {STATE_PATH}")
-    bind_state_to_volume()
+    seed_volume_state()
     start_http_server()
     configure_git()
 
