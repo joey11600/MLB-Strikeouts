@@ -208,6 +208,8 @@ class DataHandler(BaseHTTPRequestHandler):
                 "jobs_run_today": _load_state(),
                 "cache_months": sorted(p.name for p in CACHE_DIR.glob("*")) if CACHE_DIR.exists() else [],
                 "data_json_present": DASHBOARD_JSON.exists(),
+                "last_reconcile": LAST_RECONCILE,
+                "can_push_to_git": bool(os.environ.get("GITHUB_TOKEN")),
             }
             self._send(200, json.dumps(payload, indent=1).encode(), "application/json")
             return
@@ -264,6 +266,12 @@ def sync_repo() -> None:
 
 
 TERMINAL_GRADES = {"WIN", "LOSS", "VOID", "PUSH", "POSTPONED"}
+
+# Outcome of the most recent reconcile, surfaced on /health so the merge
+# can be checked without deploy-log access. "never run" is a distinct
+# state from "ran and changed nothing" on purpose.
+LAST_RECONCILE: dict = {"ok": None, "at": None, "error": None,
+                        "picks": None, "graded": None}
 
 # Natural keys for the mergeable CSVs. picks_2026.csv uses the same key
 # daily_pipeline._load_existing_picks does -- verified unique across the
@@ -466,6 +474,10 @@ def reconcile_ledger() -> None:
     except Exception as exc:
         # A reconcile failure must not take the slate down. The job can
         # still run against the volume copy; it is just possibly behind.
+        LAST_RECONCILE.update(
+            ok=False, at=datetime.now(ET).isoformat(timespec="seconds"),
+            error=f"{type(exc).__name__}: {exc}",
+        )
         log(f"WARNING reconcile failed ({type(exc).__name__}: {exc}) — "
             f"jobs continue against the volume copy, which may be stale")
         return
@@ -474,6 +486,15 @@ def reconcile_ledger() -> None:
     rows, _ = _read_csv(picks)
     graded = sum(1 for r in rows
                  if (r.get("graded_result") or "").strip().upper() in TERMINAL_GRADES)
+    # Also published on /health. The log is not enough on its own: log
+    # access can lapse (an expired deploy credential is all it takes),
+    # and a caught-and-logged failure would then be indistinguishable
+    # from a clean run. A mechanism guarding the money ledger has to be
+    # checkable from outside the box.
+    LAST_RECONCILE.update(
+        ok=True, at=datetime.now(ET).isoformat(timespec="seconds"),
+        error=None, picks=len(rows), graded=graded,
+    )
     log(f"reconcile ok — volume ledger: {len(rows)} pick(s), {graded} graded")
 
 
