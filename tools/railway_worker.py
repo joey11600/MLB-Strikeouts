@@ -342,6 +342,21 @@ def main() -> None:
     if not DASHBOARD_JSON.exists():
         _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
 
+    # Operational escape hatch: set RUN_TASK_ON_BOOT=<task> and redeploy
+    # to force one run immediately (no waiting for the window, no public
+    # trigger endpoint). Remove the variable afterwards or it fires on
+    # every restart.
+    boot_task = os.environ.get("RUN_TASK_ON_BOOT", "").strip()
+    if boot_task in TASKS:
+        log(f"--- RUN_TASK_ON_BOOT={boot_task} — running now ---")
+        try:
+            TASKS[boot_task]()
+        except Exception as exc:
+            log(f"BOOT TASK ERROR {boot_task}: {exc}")
+        log(f"--- boot task {boot_task} finished ---")
+    elif boot_task:
+        log(f"RUN_TASK_ON_BOOT={boot_task!r} is not a known task {list(TASKS)}")
+
     log("schedule (ET): " + ", ".join(
         f"{t.strftime('%H:%M')} {name}" for name, t, _ in SCHEDULE))
 
