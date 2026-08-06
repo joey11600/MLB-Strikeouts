@@ -169,3 +169,17 @@ jobs:
           # append-mostly and losing the other side's rows is never OK.
           git pull --rebase --autostash origin master || true
           git push origin HEAD:master
+
+      # LAST on purpose. A failing invariant should turn the run red so
+      # it is visible, but it must not cost us the ledger commit above --
+      # losing data to a health check would be its own bug. Runs even
+      # when an earlier step failed, because that is exactly when the
+      # state most needs inspecting.
+      - name: Watchdog — assert the invariants
+        if: always()
+        env:
+          WORKER_STATE_DIR: data
+          DATA_STATE_DIR: data
+          STATCAST_CACHE_DIR: data/statcast_cache
+        run: |
+          python tools/watchdog.py

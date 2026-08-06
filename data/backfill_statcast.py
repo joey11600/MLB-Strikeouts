@@ -17,7 +17,7 @@ import argparse
 import os
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +28,17 @@ CACHE_DIR = Path(
     os.environ.get("STATCAST_CACHE_DIR")
     or (Path(__file__).parent / "statcast_cache")
 )
+
+
+# A parquet holding only a schema and zero rows is ~636 bytes. Any real
+# MLB day is hundreds of KB, so this threshold cleanly separates "we
+# fetched and there was nothing" from "we fetched too early".
+EMPTY_PARQUET_BYTES = 20_000
+
+
+def _today_et() -> date:
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("America/New_York")).date()
 
 
 def backfill(start_date: date, end_date: date, sleep_sec: float = 1.0) -> None:
@@ -49,12 +60,28 @@ def backfill(start_date: date, end_date: date, sleep_sec: float = 1.0) -> None:
 
         if parquet_path.exists():
             size = parquet_path.stat().st_size
-            if size > 500:
+            # A cached day counts as FINAL only if it is genuinely in the
+            # past AND holds real rows.
+            #
+            # The old rule was `size > 500`, and an empty parquet (schema
+            # only, no rows) is 636 bytes. So a day fetched while its
+            # games were still in progress got written empty and then
+            # skipped forever: 2026-08-05 sat at 636 bytes / 0 rows, and
+            # the whole slate's 28 prospective observations were lost
+            # from model_log.csv with nothing raised anywhere. That would
+            # have recurred every single day.
+            #
+            # EMPTY_PARQUET_BYTES is well above a schema-only file but
+            # far below any real day (a light slate is ~450 KB).
+            fresh_enough = size > EMPTY_PARQUET_BYTES
+            settled = current < _today_et()
+            if fresh_enough and settled:
                 print(f"  [{day_num}/{total_days}] {date_str} — cached ({size:,} bytes)")
                 current += timedelta(days=1)
                 continue
-            else:
-                print(f"  [{day_num}/{total_days}] {date_str} — cached but tiny ({size} bytes), re-fetching")
+            reason = ("today or later, games may still be live" if not settled
+                      else f"only {size} bytes, looks empty")
+            print(f"  [{day_num}/{total_days}] {date_str} — re-fetching ({reason})")
 
         print(f"  [{day_num}/{total_days}] {date_str} — fetching...", end=" ", flush=True)
         try:

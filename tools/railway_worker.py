@@ -622,6 +622,9 @@ def task_night() -> None:
     _run("shadow", [PYTHON, "tools/shadow.py"], 300)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("overnight grading")
+    # After the commit, so a failing invariant is loud without costing
+    # us the night's ledger.
+    _run("watchdog", [PYTHON, "tools/watchdog.py"], 300)
 
 
 TASKS = {

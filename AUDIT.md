@@ -264,6 +264,47 @@ Tracks open items, resolved items, and known risks.
   than months. A trust weight is only worth adopting if its CLV stays
   positive as the sample grows toward 100.
 
+### A-016: Empty Statcast day cached permanently — a full slate of evidence lost
+- **Filed/Resolved:** 2026-08-06 (found by tools/watchdog.py on its first run)
+- **Description:** `backfill()` treated any cached parquet over **500
+  bytes** as final. An empty parquet (schema, zero rows) is **636
+  bytes**. So a day fetched while its games were still in progress was
+  written empty and then skipped forever. `2026-08-05.parquet` sat at
+  636 bytes / 0 rows, so `model_log.py` could not score that slate and
+  **28 prospective observations were silently lost** — the only kind
+  that count as validation, since 8/4 is reconstructed. Nothing raised.
+  It would have recurred every single day.
+- **Resolution:** a cached day is final only if it is strictly before
+  today AND larger than `EMPTY_PARQUET_BYTES` (20 KB; a light real slate
+  is ~450 KB). Today and later are always re-fetched, because games may
+  still be live. 8/5 recovered: 4,376 pitches, 28 rows logged.
+- **Generalises to:** any "is it already cached?" test that keys on a
+  proxy (size, existence, mtime) rather than on the content being
+  complete. Ask what an EMPTY-but-valid artifact looks like, and make
+  sure the threshold sits above it.
+
+### A-017: 87% of correctness bugs fail silently — invariant watchdog
+- **Filed:** 2026-08-06
+- **Status:** Shipped; runs nightly and in CI
+- **Description:** of 16 correctness bugs found on 2026-08-06, **2
+  raised an exception and 14 did not**. The rest were successful-looking
+  runs producing wrong, empty, or stale output: a calibrator that was
+  never fit, a 0-pitcher board published over a good one, two silently
+  diverging ledgers, a reconcile gated on row count that dropped every
+  incoming grade. Error monitoring would have caught 2 of 16.
+- **Shipped:** `tools/watchdog.py` asserts invariants rather than
+  watching for exceptions — calibrator actually moves probabilities,
+  both stages carry coefficients, ledger never shrinks, stored P&L
+  recomputes, today's board is non-empty and priced, model log grew for
+  the last graded slate, Statcast covers through yesterday, no bet
+  priced from unknown odds, the scheduler actually ran, and the
+  published P&L equals the ledger. A check that cannot run reports WARN,
+  never a silent pass. Read-only by design: a self-healing watchdog
+  hides the signal it exists to surface.
+- **Proved on arrival:** first run found A-016 (28 lost observations).
+  Negative controls confirm it fails on an empty board, a missing cache,
+  and a dashboard that disagrees with the ledger.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

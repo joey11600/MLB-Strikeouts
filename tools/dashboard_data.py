@@ -1027,8 +1027,8 @@ def write_dashboard_json(output_path: Path | None = None):
               f"({bt['improvement_pct']:+.1f}%)")
     lm = data.get("live_model")
     if lm:
-        print(f"  Live model: {lm['n_scored']} scored of {lm['n_used']} rows "
-              f"({lm['n_live']} live / {lm['n_reconstructed']} reconstructed)")
+        print(f"  Live model: scoring {lm['n_scored']} {lm['row_basis']} row(s) "
+              f"— log holds {lm['n_live']} live + {lm['n_reconstructed']} reconstructed")
         print(f"    Brier {lm['brier']} vs floor {lm['brier_floor']} "
               f"-> excess {lm['excess']:+} vs backtest excess "
               f"{lm['baseline_excess']:+} (band +/-{lm['verdict_band']}) "
