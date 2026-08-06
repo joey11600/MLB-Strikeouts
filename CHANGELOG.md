@@ -17,8 +17,15 @@ America/New_York also makes the schedule DST-agnostic by construction.
 
 - `tools/railway_worker.py`: ET-aware scheduler, per-task lateness
   grace (close 45m, lineups 2h, morning/night 6h), job state persisted
-  to the volume so restarts resume mid-day, git pull before / push
-  after each job, optional Vercel deploy hook.
+  to the volume so restarts resume mid-day.
+- Ledger, journal, slate sidecars and odds snapshots are symlinked
+  onto the volume (seeded from the image once) — without this a
+  redeploy would reset the ledger to the last commit.
+- The worker serves `/data.json` and `/health` over HTTP and the
+  dashboard reads the live endpoint (static build is the fallback),
+  so the system needs NO push credential and picks appear without
+  waiting for a rebuild. Git mirroring is optional backup.
+- Live: `https://worker-production-036c.up.railway.app`.
 - `Dockerfile`, `requirements.txt`, `.dockerignore` (cache excluded
   from the build context), `STATCAST_CACHE_DIR` override, and
   `models/*.pkl` now tracked (157KB) so the image carries the model.

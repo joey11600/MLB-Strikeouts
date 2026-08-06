@@ -362,15 +362,29 @@ fires 1–3 hours late). Each job has a lateness grace: a missed closing
 snapshot is skipped and logged rather than fired uselessly after first
 pitch; grading and slates still run late.
 
-The worker pulls the repo before each job and pushes the ledger back
-after, so GitHub stays the durable source of truth and the Vercel
-build picks up `dashboard/public/data.json`. Because every task shells
-out to a fresh `python run.py`, a `git pull` means code changes take
-effect without redeploying the container.
+**Data flow — no push credential required.** The mutable state
+(`picks_2026.csv`, `pick_changes.csv`, `slates/`, `odds/`) is
+symlinked onto the volume by `bind_state_to_volume()` on boot, seeded
+once from the image. Without that, every redeploy would silently reset
+the ledger to whatever was last committed. Code under `data/` stays in
+the image so updates still ship normally.
 
-Required Railway variables: `GITHUB_TOKEN` (contents:write on the
-repo — without it the worker computes picks but they never leave the
-volume), `GITHUB_REPO`, optional `VERCEL_DEPLOY_HOOK`.
+The worker exposes a small HTTP server:
+
+- `GET /data.json` — the dashboard payload, straight off the volume
+  (CORS-open, `no-store`)
+- `GET /health` — ET clock, which jobs ran today, cached months,
+  payload presence
+
+`dashboard/lib/data-context.tsx` fetches that endpoint first and falls
+back to the snapshot bundled in the Vercel build if the worker is
+unreachable. Picks therefore appear the instant the pipeline writes
+them — no rebuild latency — and nothing needs a token.
+
+Optional Railway variables: `GITHUB_TOKEN` (+ `GITHUB_REPO`) turns on
+a git mirror of the ledger for offsite backup; `VERCEL_DEPLOY_HOOK`
+refreshes the fallback snapshot. Both are pure backup: the volume is
+the live source of truth.
 
 **Local (Windows Task Scheduler, `tools/scheduled_run.py`, ET)** —
 the pre-migration path; keep it enabled until the cloud worker is
