@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-08-06 — Role gate: no league defaults, no pricing non-starters
+
+Anderson's 0-K line (3.2 IP, 13 BF, all 3.5u lost) was not variance and
+not the market hiding information — it was a bad input. The pipeline
+fell back to `bf_mean = 21.1` (league-average starter) because he had
+< 3 starter-length games in the loaded cache. He is a reliever: 40
+appearances averaging 7 BF. That default inflated E[K] 3.1 -> 5.45,
+produced a 17pp phantom edge, made him the #1 pick, and drew the
+day's biggest stake. DK's line of 2.5 was correct all along.
+
+- No league default, ever: workload now comes from real history.
+- `is_startable` role gate — needs >= `MIN_APPEARANCES_TO_PRICE` (3)
+  appearances and a recent typical outing >= `STARTER_TYPICAL_BF`
+  (15 BF, vs a real starter's 18-22) over the last
+  `ROLE_LOOKBACK_GAMES` (8). Stage A is trained on starter workloads,
+  so pricing an opener/reliever with it is out-of-distribution.
+- Skips print a reason and appear in the run log.
+
+Verified against all 28 pitchers on the 8/5 board: skips Anderson
+only (typical recent outing 5 BF), keeps all 27 real starters
+(22-23 BF). Also verified against the thin June-onward cache the
+10:30am run actually used — the pick would not have been made and
+3.5u would not have been risked.
+
+Filed as AUDIT A-007 with the general lesson recorded: an input error
+that inflates a projection is selected INTO the bet list by the edge
+filter and concentrated at max stake. It fired on 1 of 28 pitchers but
+1 of 3 bets.
+
 ## 2026-08-06 — Cloud cutover verified; symlink/atomic-write bug fixed
 
 Forced a live grading run on the Railway worker rather than waiting

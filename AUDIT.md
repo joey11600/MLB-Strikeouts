@@ -38,6 +38,31 @@ Tracks open items, resolved items, and known risks.
   leashes, weather), so the 50% market blend and 2u cap stay until
   100+ graded live bets with positive average CLV.
 
+### A-007: Bad inputs manufacture edge and get selected INTO the bet list
+- **Filed:** 2026-08-06
+- **Status:** Guardrail shipped; structural risk remains open
+- **Description:** `_compute_pitcher_stats` fell back to
+  `bf_mean = 21.1` (league-average STARTER) whenever a pitcher lacked
+  3 starter-length games. On 2026-08-05 this priced Drew Anderson — a
+  reliever with 40 appearances averaging 7 BF — as a 21.1-BF starter,
+  inflating E[K] from ~3.1 to 5.45 and manufacturing a 17pp edge. He
+  became the #1 pick and drew the day's largest stake (3.5u). Final
+  line: 0 K in 3.2 IP, 13 BF. All three bets lost.
+  **The general lesson is bigger than the bug:** an input error that
+  inflates a projection is not a random error — the edge filter hunts
+  for high projections, so such errors are systematically selected
+  into the portfolio and concentrated at max stake. The fallback fired
+  on 1 of 28 pitchers but on 1 of 3 bets.
+- **Shipped:** role gate in the live pipeline — no league defaults
+  ever (workload comes from real history or the pitcher is skipped),
+  plus `is_startable` requiring >= 3 appearances and a recent typical
+  outing >= 15 BF. Verified on the 8/5 board: skips Anderson only,
+  keeps all 27 genuine starters (typical 22-23 BF), and catches him
+  with the thin June-onward cache the morning run actually used.
+- **Still open:** other silent defaults elsewhere in the feature path
+  have not been audited with this lens. Any default that flatters a
+  projection is a latent phantom-edge generator.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

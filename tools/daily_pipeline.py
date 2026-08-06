@@ -56,6 +56,14 @@ UTC = ZoneInfo("UTC")
 LEAGUE_K_RATE = 0.225
 SHRINKAGE_BF = PITCHER_K_PSEUDO_BF
 
+# Role gate (AUDIT A-007). Stage A is trained on starter workloads, so
+# pricing a reliever/opener with it is out-of-distribution. A genuine
+# starter's typical turn is ~18-22 batters faced; anyone whose recent
+# outings sit well below that is not priced at all.
+ROLE_LOOKBACK_GAMES = 8
+STARTER_TYPICAL_BF = 15.0
+MIN_APPEARANCES_TO_PRICE = 3
+
 from tracker import DATA_STATE_DIR
 
 SLATES_DIR = DATA_STATE_DIR / "slates"
@@ -148,7 +156,9 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
     p = completed[completed["pitcher"] == pitcher_id]
 
     if p.empty:
-        return {"season_k_pct": None, "bf_mean": None, "total_bf": 0}
+        return {"season_k_pct": None, "bf_mean": None, "total_bf": 0,
+                "is_startable": False,
+                "skip_reason": "no Statcast history"}
 
     total_bf = len(p)
     ks = p["events"].isin(["strikeout", "strikeout_double_play"]).sum()
@@ -158,13 +168,43 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
         total_bf + SHRINKAGE_BF
     )
 
+    # --- Workload / role (see AUDIT A-007) ---------------------------
+    # This used to fall back to bf_mean = 21.1 (league-average STARTER)
+    # whenever a pitcher lacked 3 starter-length games. That is the most
+    # bullish possible assumption, and a bug that inflates projections
+    # gets selected straight INTO the bet list, because inflated
+    # projections are what the edge filter hunts for. On 2026-08-05 it
+    # priced a reliever (40 appearances averaging 7 BF) as a 21.1-BF
+    # starter, manufacturing a 17pp phantom edge and the day's largest
+    # stake. Never default; establish the role from history or skip.
     game_bf = p.groupby("game_pk").size()
+    if "game_date" in p.columns:
+        order = p.groupby("game_pk")["game_date"].min().sort_values().index
+        game_bf = game_bf.reindex(order)
     starter_games = game_bf[game_bf >= 9]
 
+    n_appearances = int(len(game_bf))
+    recent = game_bf.tail(ROLE_LOOKBACK_GAMES)
+    recent_typical_bf = float(recent.quantile(0.60)) if len(recent) else 0.0
+
+    is_startable = (
+        n_appearances >= MIN_APPEARANCES_TO_PRICE
+        and recent_typical_bf >= STARTER_TYPICAL_BF
+    )
+    skip_reason = None
+    if n_appearances < MIN_APPEARANCES_TO_PRICE:
+        skip_reason = f"only {n_appearances} appearance(s) in cache"
+    elif recent_typical_bf < STARTER_TYPICAL_BF:
+        skip_reason = (
+            f"relief/short-outing usage — typical recent outing "
+            f"{recent_typical_bf:.0f} BF (< {STARTER_TYPICAL_BF} needed)"
+        )
+
+    # Real history only. No league default, ever.
     if len(starter_games) >= 3:
         bf_mean = float(starter_games.mean())
     else:
-        bf_mean = 21.1
+        bf_mean = float(game_bf.mean())
 
     zone_pct = None
     all_pitches = statcast_df[statcast_df["pitcher"] == pitcher_id]
@@ -202,6 +242,10 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
         "bf_mean": bf_mean,
         "total_bf": int(total_bf),
         "n_starts": int(len(starter_games)),
+        "n_appearances": n_appearances,
+        "recent_typical_bf": recent_typical_bf,
+        "is_startable": bool(is_startable),
+        "skip_reason": skip_reason,
         "zone_pct": zone_pct,
         "eastward_tz": float(eastward_tz),
         "days_since_last": days_since_last,
@@ -482,10 +526,18 @@ def run_daily(
                 statcast_df, pitcher_id, home_team=home_team, target_date=d,
             )
         else:
-            stats = {"season_k_pct": LEAGUE_K_RATE, "bf_mean": 21.1, "total_bf": 0}
+            stats = {"season_k_pct": None, "bf_mean": None, "total_bf": 0,
+                     "is_startable": False, "skip_reason": "no Statcast data loaded"}
 
         if stats["season_k_pct"] is None or stats["total_bf"] < 50:
             print(f"    {pitcher_name}: insufficient data ({stats['total_bf']} BF), skipping")
+            continue
+
+        # Role gate: never price a pitcher whose workload we can't
+        # establish as a starter's. A bad workload input manufactures
+        # edge and the staking engine then concentrates on it.
+        if not stats.get("is_startable", False):
+            print(f"    {pitcher_name}: SKIP — {stats.get('skip_reason')}")
             continue
 
         lineup = entry.get("lineup", [])
