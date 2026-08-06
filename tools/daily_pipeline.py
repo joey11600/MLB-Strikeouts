@@ -715,7 +715,18 @@ def run_daily(
         print(f"\n[7/8] Ladder: skipped")
 
     if not all_plays:
+        # A no-bet day is still a day of ~25 testable predictions. Bailing
+        # out here used to discard the whole board: the dashboard showed
+        # nothing for the date (indistinguishable from "the job never
+        # ran"), and model_log.py lost the evidence, since it reads
+        # slate sidecars. Record the board, then stop.
         print("  No qualifying plays today.")
+        for pred in predictions:
+            pred["primary_units_final"] = 0.0
+        if not dry_run:
+            _write_slate_sidecar(game_date, predictions)
+        else:
+            print("  DRY RUN — not writing the slate sidecar.")
         return []
 
     # Apply portfolio daily cap across ALL plays (primary + ladder)
