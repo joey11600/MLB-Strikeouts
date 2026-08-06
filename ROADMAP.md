@@ -147,5 +147,9 @@
   token gate meant the container silently never pulled
 - [ ] Decide the odds path for the blocked container: residential
   relay, paid proxy, or paid odds API (A-012) — operator call
+- [x] Reconcile the git checkout into the volume ledger on every pull
+      (A-013) — the two were independent ledgers
+- [ ] Set GITHUB_TOKEN on Railway so container writes reach git
+      (A-013 write path) — operator credential
 - [ ] Retire the local Windows scheduled tasks once the cloud path has
   run clean for a week (deliberately still enabled as backup)

@@ -24,11 +24,13 @@ Environment:
     VERCEL_DEPLOY_HOOK   POSTed after a data change to rebuild the site
     WORKER_STATE_DIR     defaults to the volume root
 """
+import csv
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import date, datetime, time as dtime, timedelta
@@ -240,16 +242,226 @@ def configure_git() -> None:
 
 
 def sync_repo() -> None:
-    """Pull before work so the container matches the repo's ledger.
+    """Pull, then merge the pulled ledger into the volume the jobs use.
 
-    No token gate: the repo is public, so an anonymous pull works. The
-    old GITHUB_TOKEN check meant the container silently never pulled,
-    which is how it ended up running against whatever ledger happened to
-    be baked into the image. A pull failure is logged and tolerated --
-    working from a slightly old checkout beats refusing to run at all.
+    No token gate on the pull: the repo is public, so an anonymous pull
+    works. The old GITHUB_TOKEN check meant the container silently never
+    pulled, which is how it ended up running against whatever ledger
+    happened to be baked into the image. A pull failure is logged and
+    tolerated -- working from a slightly old checkout beats refusing to
+    run at all.
+
+    The reconcile is the load-bearing half. The jobs read and write
+    DATA_STATE_DIR (the volume); `git pull` only touches the /app
+    checkout. Without a merge those are two independent ledgers: the PC
+    writes picks to git, the container grades a volume copy that never
+    sees them, and its /data.json -- which the dashboard PREFERS over
+    the bundled copy -- silently reports a record missing the picks.
     """
     _run("git-pull", ["git", "pull", "--rebase", "--autostash",
                       "origin", "master"], 180)
+    reconcile_ledger()
+
+
+TERMINAL_GRADES = {"WIN", "LOSS", "VOID", "PUSH", "POSTPONED"}
+
+# Natural keys for the mergeable CSVs. picks_2026.csv uses the same key
+# daily_pipeline._load_existing_picks does -- verified unique across the
+# ledger, ladder rungs included (a rung's `line` is "6+", not "6.5").
+_MERGE_KEYS = {
+    "picks_2026.csv": ("date", "game_pk", "pitcher_id", "line"),
+    "model_log.csv": ("date", "pitcher_id"),
+}
+
+
+def _read_csv(path: Path) -> tuple[list[dict], list[str]]:
+    if not path.exists():
+        return [], []
+    with open(path, encoding="utf-8", newline="") as f:
+        r = csv.DictReader(f)
+        return list(r), list(r.fieldnames or [])
+
+
+def _write_csv_atomic(path: Path, rows: list[dict], fields: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            w.writeheader()
+            w.writerows(rows)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, str(path))
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def _better_row(a: dict, b: dict) -> dict:
+    """Pick the more advanced of two versions of the same ledger row.
+
+    A graded row always beats an ungraded one -- grading is the strictly
+    later state and re-opening it would violate the locked-picks rule.
+    Then the later updated_at. Then, on a genuine tie, the row with more
+    populated fields: when both sides were written at the same instant,
+    the one carrying more information (e.g. an odds_source the other
+    lacks) is the one worth keeping. Never returns None: losing a row is
+    the one outcome that is never acceptable.
+    """
+    a_final = (a.get("graded_result") or "").strip().upper() in TERMINAL_GRADES
+    b_final = (b.get("graded_result") or "").strip().upper() in TERMINAL_GRADES
+    if a_final != b_final:
+        return a if a_final else b
+
+    a_at, b_at = (a.get("updated_at") or ""), (b.get("updated_at") or "")
+    if a_at != b_at:
+        return a if a_at > b_at else b
+
+    a_filled = sum(1 for v in a.values() if (v or "").strip())
+    b_filled = sum(1 for v in b.values() if (v or "").strip())
+    return a if a_filled >= b_filled else b
+
+
+def _merge_csv(name: str, key_fields: tuple[str, ...]) -> None:
+    """Union the repo's copy of a ledger into the volume's copy.
+
+    Union, never replace. Rows are only ever added or advanced to a more
+    complete version of themselves -- the append-mostly rule holds
+    across machines, not just within one.
+    """
+    repo_path = REPO / "data" / name
+    vol_path = VOLUME_STATE / name
+    repo_rows, repo_fields = _read_csv(repo_path)
+    vol_rows, vol_fields = _read_csv(vol_path)
+
+    if not repo_rows:
+        return
+    if not vol_rows:
+        shutil.copy2(repo_path, vol_path)
+        log(f"reconcile {name}: volume was empty, took {len(repo_rows)} row(s) from repo")
+        return
+
+    # Prefer whichever header is a superset, so a column added on one
+    # side (e.g. odds_source) is not dropped by the merge.
+    fields = vol_fields if set(vol_fields) >= set(repo_fields) else repo_fields
+    for extra in repo_fields + vol_fields:
+        if extra not in fields:
+            fields.append(extra)
+
+    merged: dict[tuple, dict] = {}
+    order: list[tuple] = []
+    for row in vol_rows + repo_rows:
+        k = tuple((row.get(f) or "") for f in key_fields)
+        if k in merged:
+            merged[k] = _better_row(merged[k], row)
+        else:
+            merged[k] = row
+            order.append(k)
+
+    out = [merged[k] for k in order]
+    added = len(merged) - len(vol_rows)
+
+    # Compare CONTENT, not row count. Gating the write on "did the row
+    # count change" silently dropped every repo-side update that did not
+    # also add a row -- i.e. exactly the overnight-grading case, where
+    # the repo carries a grade for a row the volume already has.
+    def _shape(rows):
+        return [tuple((r.get(f) or "") for f in fields) for r in rows]
+
+    if _shape(out) != _shape(vol_rows):
+        _write_csv_atomic(vol_path, out, fields)
+        changed = sum(1 for x, y in zip(_shape(out), _shape(vol_rows)) if x != y)
+        log(f"reconcile {name}: {len(vol_rows)} volume + {len(repo_rows)} repo "
+            f"-> {len(merged)} rows ({added:+d} new, {changed} updated)")
+
+
+def _merge_journal(name: str) -> None:
+    """Union an append-only journal by whole-row identity."""
+    repo_path = REPO / "data" / name
+    vol_path = VOLUME_STATE / name
+    repo_rows, repo_fields = _read_csv(repo_path)
+    vol_rows, vol_fields = _read_csv(vol_path)
+    if not repo_rows:
+        return
+    if not vol_rows:
+        shutil.copy2(repo_path, vol_path)
+        return
+    fields = vol_fields or repo_fields
+    seen = {tuple(sorted(r.items())) for r in vol_rows}
+    fresh = [r for r in repo_rows if tuple(sorted(r.items())) not in seen]
+    if fresh:
+        _write_csv_atomic(vol_path, vol_rows + fresh, fields)
+        log(f"reconcile {name}: +{len(fresh)} journal row(s) from repo")
+
+
+def _stamp_of(path: Path, field: str) -> str:
+    """Newest value of a timestamp column in a CSV, or '' if absent."""
+    try:
+        rows, _ = _read_csv(path)
+        return max(((r.get(field) or "") for r in rows), default="")
+    except Exception:
+        return ""
+
+
+def _merge_dir(name: str) -> None:
+    """Copy repo files the volume lacks, or that are demonstrably newer.
+
+    "Newer" is read from INSIDE the file (slate sidecars carry
+    generated_at, odds CSVs carry captured_at) -- never from mtime,
+    which git checkout resets to build time on every deploy.
+    """
+    repo_dir = REPO / "data" / name
+    vol_dir = VOLUME_STATE / name
+    if not repo_dir.is_dir():
+        return
+    vol_dir.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for src in repo_dir.rglob("*"):
+        if not src.is_file():
+            continue
+        dest = vol_dir / src.relative_to(repo_dir)
+        if not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+            copied += 1
+            continue
+        if src.suffix == ".json":
+            try:
+                a = json.loads(src.read_text(encoding="utf-8")).get("generated_at") or ""
+                b = json.loads(dest.read_text(encoding="utf-8")).get("generated_at") or ""
+            except Exception:
+                continue
+        elif src.suffix == ".csv":
+            a, b = _stamp_of(src, "captured_at"), _stamp_of(dest, "captured_at")
+        else:
+            continue
+        if a and a > b:
+            shutil.copy2(src, dest)
+            copied += 1
+    if copied:
+        log(f"reconcile {name}: {copied} file(s) refreshed from repo")
+
+
+def reconcile_ledger() -> None:
+    """Merge the git checkout's data into the volume the jobs read.
+
+    Runs after every pull. Idempotent, union-only, and it never deletes
+    or downgrades a row -- so running it twice, or against an identical
+    repo, is a no-op.
+    """
+    try:
+        for name, key in _MERGE_KEYS.items():
+            _merge_csv(name, key)
+        _merge_journal("pick_changes.csv")
+        for name in ("slates", "odds"):
+            _merge_dir(name)
+    except Exception as exc:
+        # A reconcile failure must not take the slate down. The job can
+        # still run against the volume copy; it is just possibly behind.
+        log(f"WARNING reconcile failed ({type(exc).__name__}: {exc}) — "
+            f"jobs continue against the volume copy, which may be stale")
 
 
 def refresh_cache() -> None:

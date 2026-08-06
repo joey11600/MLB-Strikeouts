@@ -186,6 +186,31 @@ Tracks open items, resolved items, and known risks.
   verification for pitcher-K props). Options 2 and 3 cost money and
   need credentials — operator's call.
 
+### A-013: Container writes never reach git (volume is a single point of failure)
+- **Filed:** 2026-08-06
+- **Status:** Partially resolved — read path fixed, write path needs an
+  operator credential
+- **Description:** two independent ledgers. The container's jobs
+  read/write `DATA_STATE_DIR` (the Railway volume); `git pull` only
+  updates the `/app` checkout; `seed_volume_state()` filled gaps only.
+  The PC wrote picks to git and the container graded a volume copy that
+  never saw them — and since the dashboard prefers the worker's
+  `/data.json`, the site would show a quietly wrong record rather than
+  an error. Manual `FORCE_SEED` deploys had been masking it.
+- **Resolved (read path):** `reconcile_ledger()` merges the checkout
+  into the volume after every pull. Union-only, graded-beats-ungraded,
+  keyed on `(date, game_pk, pitcher_id, line)`. Timestamps for slate and
+  odds files are read from inside the file, never mtime.
+- **Still open (write path):** no `GITHUB_TOKEN` on the service, so the
+  container commits locally and never pushes. Its work reaches the
+  dashboard live but not git, so a lost volume loses any grade the PC
+  did not independently compute. Grading is deterministic from Statcast
+  and the PC grades too, which limits the blast radius — but it is a
+  real single point of failure.
+- **Fix requires the operator:** create a repo-scoped GitHub token and
+  set `GITHUB_TOKEN` on the Railway service. Claude cannot create or
+  enter credentials.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

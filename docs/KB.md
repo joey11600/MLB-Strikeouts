@@ -545,6 +545,37 @@ probability and a settled outcome). Rows merely present are counted
 separately; conflating them once advertised 22 observations beside a
 4-row Brier.
 
+
+## Two ledgers, one truth (Phase 9)
+
+The container's jobs read and write  (the Railway
+volume). Already up to date. only updates the  checkout. Those are
+different paths, so a pull alone does NOT bring the PC's picks into the
+ledger the jobs use — that was a live split-brain (AUDIT A-013), and it
+showed up as a quietly wrong record on the dashboard rather than an
+error, because the site prefers the worker's .
+
+ runs after every pull and merges checkout into
+volume:
+
+- **Union only.** Rows are added or advanced to a more complete version
+  of themselves. Never dropped, never downgraded. The append-mostly rule
+  holds across machines, not just within one.
+- **Conflict order:** graded beats ungraded (a grade is strictly the
+  later state; reopening one violates the locked-picks rule), then
+  later , then the row with more populated fields.
+- **Key:**  — the same key
+   uses. Unique across the ledger
+  including ladder rungs, whose  is  rather than .
+- **Files (slates, odds):** compare  /  read
+  from *inside* the file. Never mtime — git checkout resets it on every
+  deploy, which is the same trap as the odds staleness clock.
+
+Idempotent: identical repo and volume is a byte-level no-op.
+
+Not yet closed: the container has no push credential, so its writes
+reach the dashboard but not git.
+
 ## Key invariants
 
 1. `f(L, L) == L` on every build.
@@ -558,3 +589,5 @@ separately; conflating them once advertised 22 observations beside a
    board from file mtime; never let `closing_odds.py` read a snapshot.
 8. Never difference two Brier scores from samples with different line
    mixes. Compare excess-over-floor instead.
+9. The volume ledger and the git ledger are merged, never replaced.
+   Any reconcile is union-only and may not drop or downgrade a row.

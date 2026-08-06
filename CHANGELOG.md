@@ -1,6 +1,58 @@
 
 # Changelog
 
+## 2026-08-06 — Ledger split-brain between the PC and the container (A-013)
+
+Found while verifying the deploy above. The container's jobs read and
+write `DATA_STATE_DIR` (the Railway volume); `git pull` only updates the
+`/app` checkout; and `seed_volume_state()` copies image → volume **only
+where the volume is missing a file**. After the first boot, nothing
+bridged them.
+
+So there were two independent ledgers. The PC writes picks and pushes
+to git; the container grades a volume copy that never sees them. And
+because the dashboard **prefers the worker's `/data.json`** over the
+bundled copy, the site would have shown a record missing the picks —
+not an error, just a quietly wrong number. It had been papered over by
+manual `FORCE_SEED` deploys, which is why it looked fine.
+
+It would have bitten tonight: PC writes picks at 16:45 ET → git; the
+container's 18:15 close and 03:00 grading run against a ledger without
+them.
+
+`reconcile_ledger()` now runs after every pull and merges the checkout
+into the volume. Union only — rows are added or advanced, never dropped
+or downgraded, so the append-mostly rule holds *across machines* and
+not just within one. Conflicts resolve by: graded beats ungraded (a
+grade is strictly the later state, and reopening one would violate the
+locked-picks rule), then later `updated_at`, then the more populated
+row. Merge key is `(date, game_pk, pitcher_id, line)` — the pipeline's
+own key, verified unique across the ledger with ladder rungs included.
+Slate sidecars and odds files compare timestamps read from *inside* the
+file (`generated_at` / `captured_at`), never mtime, which git checkout
+resets on every deploy.
+
+Two bugs caught by the tests written for it, both of which would have
+silently lost data:
+
+- The write was gated on the row **count** changing, so any repo-side
+  update that did not also add a row was discarded — i.e. exactly the
+  overnight-grading case, where the repo carries a grade for a row the
+  volume already has. Now compares content.
+- On an `updated_at` tie the incumbent won unconditionally, dropping a
+  column the other side had populated (e.g. `odds_source`). Now the
+  more complete row wins.
+
+Verified: new PC picks merge in; container grades survive a newer
+*ungraded* repo row; grades flow in the other direction too; identical
+repo and volume is a byte-level no-op; running it twice changes
+nothing.
+
+Still open: the container has no `GITHUB_TOKEN`, so its writes reach
+the dashboard (via `/data.json`) but never reach git. That is a
+single-point-of-failure on the volume, and the fix needs a credential
+only the operator can create (AUDIT A-013).
+
 ## 2026-08-06 — Live calibration on /model + snapshot odds hardening
 
 Two independent pieces, both of which failed adversarial review as
