@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-08-06 — Cloud cutover verified; symlink/atomic-write bug fixed
+
+Forced a live grading run on the Railway worker rather than waiting
+for 3am. It graded correctly (Detmers UNDER 7.5 WIN 5K +1.32u, Burke
+OVER 6.5 LOSS 4K −1.00u; Anderson's three still in progress) — and
+then lost the result on the next deploy, which exposed a real bug.
+
+**Symlinked state cannot survive atomic writes.** `bind_state_to_volume`
+symlinked `picks_2026.csv` onto the volume, but the repo's atomic-write
+pattern is tempfile + `os.replace`, and `os.replace` REPLACES the
+destination path — destroying the symlink and landing the write on
+ephemeral container disk. The grade looked successful in the logs and
+vanished on redeploy.
+
+Fixed by removing symlinks entirely in favour of a single
+`DATA_STATE_DIR` root (env-overridable, defaults to the repo's
+`data/`) that `tracker`, `daily_pipeline`, `dashboard_data`,
+`closing_odds`, `grader` and `reconstruct_slate` all derive from. The
+worker sets it to `/data/state`, a real directory on the volume.
+
+Also fixed in the same pass:
+- `data/odds/` was gitignored, so the snapshots CLV is computed from
+  never reached the worker image — the cloud graded with no CLV while
+  local had it. Now tracked (120KB) and backed up.
+- `data.json` is derived but ships in the image, so a fresh deploy
+  served a payload older than the volume's ledger. Now rebuilt from
+  volume state on every boot.
+- `RUN_TASK_ON_BOOT` (force one job immediately) and `FORCE_SEED`
+  (resync volume state from the image) added as operational controls.
+  Both are removed after use — leaving FORCE_SEED set would overwrite
+  the worker's own writes on every deploy.
+
+Verified end to end: worker endpoint and local `pl_calc` agree at
+**2W-4L, −4.01u**, first CLV recorded (n=2, avg −0.51%), and
+mlb-strikeouts.vercel.app renders it live from the worker.
+
 ## 2026-08-06 — Railway worker (cloud migration) + two defect fixes
 
 The pipeline moves off the operator's PC to Railway project
