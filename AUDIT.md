@@ -305,6 +305,45 @@ Tracks open items, resolved items, and known risks.
   Negative controls confirm it fails on an empty board, a missing cache,
   and a dashboard that disagrees with the ledger.
 
+### A-018: Both stages are at their pre-game ceiling — accuracy is not the problem
+- **Filed:** 2026-08-06
+- **Status:** Open — redirects the improvement question entirely
+- **Description:** asked to "fix the leash", measured it first. Batters
+  faced and strikeouts each split into between-pitcher variance
+  (reachable pre-game) and within-pitcher variance (game-level noise no
+  pre-game model can touch). Measured on 2,910 starts / 206 pitchers,
+  2026 season (`tools/ceiling.py`):
+
+  | stage | perfect pre-game model | ours, same sample | of ceiling |
+  |---|---|---|---|
+  | leash (BF) | 2.71 BF mean abs err | 2.89 BF | **94%** |
+  | strikeouts | 1.63 K mean abs err | 1.77 K | **92%** |
+
+  Total remaining headroom: 0.18 BF and 0.14 K. At ~0.22 K per batter
+  faced, the entire leash improvement is worth about 0.04 K — 4% of one
+  strikeout, against lines quoted in halves. Immaterial.
+  The earlier "live mean |error| 2.60 BF, only 57% within +/-3" reading
+  looked alarming but was BETTER than a perfect model would post on 28
+  rows; the 62% within-+/-3 figure is the ceiling, not a target.
+- **What this means:** prediction accuracy is essentially solved to the
+  limit of what is knowable before first pitch. Further feature work on
+  either stage cannot move the money.
+- **The real gap — we have never scored the model against the market.**
+  `data/backtest_predictions.csv` prices a fixed six-line grid
+  (3.5-8.5) and contains no market prices at all; the published
+  "+3.2% to +4.8%" is edge over a NAIVE season-K% baseline, not over
+  DraftKings. Beating season-K% is easy; DraftKings is the actual
+  opponent. This is A-002, open since 2026-08-04.
+- **Only market-relative evidence so far is negative:** shadow CLV is
+  below zero at every trust weight (0.5 -30.5%, 0.65 -7.7%, 0.8 -0.5%,
+  1.0 -0.3%) on the first 28 prospective observations. Thin, but it
+  points the same way: when we disagree with the book, the book has
+  been right.
+- **Next:** stop tuning accuracy. Let the shadow portfolio and CLV
+  accumulate (~20 rows/night, already automated) and answer the only
+  question that pays: is there any subpopulation where we beat the
+  closing line? If there is not, no amount of model work fixes it.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)
