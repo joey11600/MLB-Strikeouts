@@ -1,6 +1,104 @@
 
 # Changelog
 
+## 2026-08-06 — Live calibration on /model + snapshot odds hardening
+
+Two independent pieces, both of which failed adversarial review as
+first built and were rebuilt around what the review found.
+
+**Live calibration (A-010).** New `live_model` block in
+`tools/dashboard_data.py` and a LIVE MODEL section on `/model`,
+scoring `data/model_log.csv` against the backtest.
+
+The first cut compared raw live Brier to the flat backtest Brier
+(0.1491). That comparison is rigged. The backtest averages a fixed
+six-line grid including near-certainties (8.5 → 0.0654); the live log
+scores one row per pitcher at whatever number the book hung, and the
+book hangs its line where the game is closest to a coin flip. The
+irreducible Brier floor on the 8/4 sample is 0.2385 — the baseline sat
+0.0894 *below* what a flawless model could have scored. Monte-Carlo
+over 4,000 trials of a perfectly calibrated model: **"worse than
+backtest" 100% of the time**, at every sample size. A permanent red
+alarm is an alarm the operator learns to ignore.
+
+Fixed by comparing **calibration error** (Brier − floor, where floor =
+mean p(1−p)) instead of raw Brier. That quantity is comparable across
+line mixes: it isolates the part of the score attributable to model
+error from the part attributable to the difficulty of the board.
+`per_line` in the backtest block now carries `model_floor` and
+`model_excess` so the reference is computed on the live sample's own
+line mix. Same Monte-Carlo after the fix: **2.0% false "worse"**, and
+the 8/4 slate reads *in line with backtest* (+0.0213 live vs −0.0004
+backtest, band ±0.0435).
+
+The verdict band is 2 standard errors of the live Brier, not a fixed
+0.005. A 1-SE trigger fires on ~32% of healthy slates. The band
+tightens on its own as the log grows, so real drift becomes detectable
+without retuning a constant. Detection power at n=26 is genuinely low
+— the page says so, and points at the leash numbers and the
+calibration curve as the faster reads.
+
+Also fixed from review: the sample gate and the observations tile now
+count *scorable* rows (both a probability and an outcome) rather than
+rows merely present — the old code could advertise 22 observations
+beside a 4-row Brier with the warning banner suppressed;
+`by_date[].reconstructed` uses `any()` not `all()`, so a 24%
+reconstructed date no longer renders as LIVE; the reconstructed parser
+fails closed (an unrecognised value counts as contaminated); the
+per-date column applies the same noise band as the headline; an
+unverified "9x the picks ledger" claim was removed (actual 6.5x); and
+the empty state no longer tells the operator to run a command they
+have already run — a payload generated before this block shipped is
+indistinguishable from an empty log, and only the honest message
+covers both.
+
+**Snapshot odds hardening.** `scrape_dk_odds.py` grew a snapshot
+fallback so the Railway container can price a slate when DraftKings
+returns 403 to its datacenter IP. Review found the fallback could
+launder stale odds into the ledger as live prices, which the repo's
+"never fabricate odds" rule exists to prevent. Four fixes:
+
+- `tools/closing_odds.py` now pins `allow_snapshot=False`. It was the
+  laundering path: it re-dates every row to today, re-stamps
+  `captured_at` to now, and drops `odds_source` — so a snapshot fed
+  through it became a fresh-looking closing price that the CLV grader
+  wrote into the ledger, walked through `daily_pipeline`'s `date ==`
+  filter (the only guard against pricing an old board), and reset the
+  staleness clock permanently. Losing CLV on a blocked day is cheap;
+  recording a wrong closing price is not.
+- `captured_at` is now a real column on `dk_k_*.csv`, and the loader
+  **refuses** a board without it. The old code fell back to file mtime,
+  which git checkout and Docker `COPY` both reset to build time — a
+  week-old board arrived on the container looking freshly captured, and
+  the age ceiling could never fire. Verified against a real git clone.
+- Staleness is judged **per row**, not on the file's newest stamp. One
+  refreshed pitcher in an append-log used to re-validate every stale
+  row beside it.
+- Candidate ordering puts freshness ahead of filename prefix, so a
+  two-minute-old `closing_*` board beats a five-hour-old `dk_k_*` one.
+  The reverse was true before and contradicted the documented intent.
+- `odds_source` is now a `tracker.FIELDS` column, so a snapshot-priced
+  bet stays identifiable in the ledger after the fact. Historical rows
+  carry `""` — read as "predates provenance tracking", not as live.
+- The slate date is checked in the loader itself rather than left to a
+  downstream filter, and `daily_pipeline` prints a loud warning when
+  any row was priced from a snapshot.
+
+Measurement, not guesswork, on the 403 itself: DK gates on
+**User-Agent**, not TLS/JA3 fingerprint (plain `requests` with a
+browser UA → 200; default `python-requests` UA → 403; seven curl_cffi
+impersonation profiles → all 200). The container is blocked on egress
+IP reputation, which no client-side knob changes. That rules out the
+"try another impersonation profile" theory outright. Also fixed a
+latent bug: the urllib fallback tier could never have worked — it
+advertised gzip and never decoded it (`UnicodeDecodeError: 0x8b`).
+
+Self-test grew from 6 to 11 cases, including the two production
+scenarios that were previously untestable: old content with fresh
+mtime, and a board carrying no stamp at all.
+
+The fallback remains **off by default** and is not enabled on Railway.
+
 ## 2026-08-06 — Model log: track every pitcher, not just the bets
 
 Each slate produced ~28 model predictions but we durably recorded the

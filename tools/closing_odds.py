@@ -82,7 +82,17 @@ def capture_closing(iso_date: str | None = None) -> dict:
 
     print(f"Capturing closing odds snapshot for {iso_date} at {captured_at}...")
 
-    props = fetch_dk_strikeout_props()
+    # allow_snapshot=False is load-bearing, not defensive boilerplate.
+    # This function is what DEFINES the closing price: it re-dates every
+    # row to today and re-stamps captured_at to now. Feed it a snapshot
+    # and a stale board gets laundered into closing_<today>.csv wearing a
+    # fresh timestamp — which then (a) becomes the closing line the CLV
+    # grader writes into the ledger, (b) walks straight through
+    # daily_pipeline's date== filter, the only guard against pricing an
+    # old board, and (c) resets the staleness clock forever, since each
+    # close run re-stamps it. Losing CLV on a blocked day is the cheap
+    # failure; recording a wrong closing price is the expensive one.
+    props = fetch_dk_strikeout_props(allow_snapshot=False)
     print(f"  {len(props)} primary O/U props")
     primary_rows = []
     for p in props:
@@ -102,7 +112,7 @@ def capture_closing(iso_date: str | None = None) -> dict:
             ODDS_DIR / f"closing_{iso_date}.csv", PRIMARY_FIELDS, primary_rows
         )
 
-    alts = fetch_dk_strikeout_alts()
+    alts = fetch_dk_strikeout_alts(allow_snapshot=False)  # see note above
     print(f"  {len(alts)} milestone alt rungs")
     alt_rows = []
     for a in alts:

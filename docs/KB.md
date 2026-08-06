@@ -474,6 +474,77 @@ display, DM Mono for figures. Gradient left-borders on cards
 signal OVER (green) vs UNDER (rose). Subtle noise texture and
 radial gradient atmosphere. 21st.dev-inspired component design.
 
+## Odds provenance (Phase 9)
+
+DraftKings returns **403 to datacenter IPs** and 200 to residential
+ones. Measured: the gate is User-Agent plus egress IP reputation, NOT
+TLS/JA3 fingerprint — seven curl_cffi impersonation profiles and plain
+`requests` with a browser UA all return 200 locally; only the default
+`python-requests` UA is rejected outright. No client-side change fixes
+an IP-reputation verdict (AUDIT A-012).
+
+`scrape_dk_odds.py` can therefore fall back to a previously captured
+board. That fallback is **off by default** (`DK_ODDS_SNAPSHOT_FALLBACK=1`
+to enable) and is fenced by rules that exist because stale odds priced
+as live corrupt the ledger the same way a bad feature does — the edge
+filter selects inflated prices INTO the bet list (same principle as
+A-007):
+
+- **`captured_at` is a real CSV column, and the clock never comes from
+  the filesystem.** git checkout and Docker `COPY` both reset mtime to
+  build time, so an mtime-dated board arrives on the container looking
+  fresh no matter how old it is. A board with no stamp is refused, not
+  guessed at.
+- **Staleness is per row**, ceiling `DK_ODDS_SNAPSHOT_MAX_AGE_H`
+  (default 6h). A file-level max would let one refreshed pitcher
+  re-validate every stale row beside it in an append-log.
+- **Candidate order is date → freshness → filename prefix.** A
+  two-minute-old `closing_*` board beats a five-hour-old `dk_k_*` one.
+- **The slate date is checked in the loader**, not left to
+  `daily_pipeline`'s downstream `date ==` filter.
+- **`tools/closing_odds.py` never accepts a snapshot.** It re-dates
+  rows to today and re-stamps `captured_at` to now — feeding it a
+  snapshot launders a stale board into the closing price the CLV grader
+  writes to the ledger, defeats the date filter, and resets the
+  staleness clock permanently. Losing CLV on a blocked day is the cheap
+  failure.
+- **`odds_source` is a ledger column** (`live` / `snapshot` / `""` for
+  rows predating provenance tracking), so "were the bad bets the ones
+  priced off stale prices?" is answerable after the fact.
+
+`python scrape_dk_odds.py --self-test` covers all of it (11 cases,
+including old-content-with-fresh-mtime, which is the production case).
+
+## Live model measurement (Phase 9)
+
+`data/model_log.csv` scores every evaluated pitcher, not just the bets.
+The dashboard's `live_model` block compares it to the backtest — but
+**on calibration error, never on raw Brier**.
+
+Brier is not scale-free. It depends on how separable the sample is, and
+the book hangs its line where the game is closest to a coin flip, so a
+live board's irreducible floor sits far above the backtest's fixed
+six-line grid (which includes 8.5 at Brier 0.065). Differencing them
+directly made a *perfectly calibrated* model read "worse than backtest"
+in 100% of 4,000 Monte-Carlo trials (AUDIT A-010).
+
+The comparable quantity is `excess = Brier − floor`, where
+`floor = mean p(1−p)` — the Brier a perfectly calibrated model would
+post at exactly the confidence claimed. Zero excess means the
+confidence was earned. The backtest reference is re-weighted onto the
+live sample's own line mix via `per_line[].model_excess`.
+
+The verdict band is **2 SE of the live Brier**, not a fixed constant: a
+1-SE trigger fires on ~32% of healthy slates, and a band that tightens
+as the log grows needs no retuning. Detection power at n≈26 is low and
+the page says so — workload (leash) error and the calibration curve
+move first.
+
+Anything counted as an "observation" must be **scorable** (has both a
+probability and a settled outcome). Rows merely present are counted
+separately; conflating them once advertised 22 observations beside a
+4-row Brier.
+
 ## Key invariants
 
 1. `f(L, L) == L` on every build.
@@ -483,3 +554,7 @@ radial gradient atmosphere. 21st.dev-inspired component design.
 5. `tools/pl_calc.py` is the only source of P&L numbers.
 6. Negative controls (lunar, random, shuffled) must be rejected by
    every retrain.
+7. Odds carry provenance and an in-file capture time. Never date a
+   board from file mtime; never let `closing_odds.py` read a snapshot.
+8. Never difference two Brier scores from samples with different line
+   mixes. Compare excess-over-floor instead.

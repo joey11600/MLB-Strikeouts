@@ -240,9 +240,14 @@ def configure_git() -> None:
 
 
 def sync_repo() -> None:
-    """Pull before work so the container matches the repo's ledger."""
-    if not os.environ.get("GITHUB_TOKEN"):
-        return
+    """Pull before work so the container matches the repo's ledger.
+
+    No token gate: the repo is public, so an anonymous pull works. The
+    old GITHUB_TOKEN check meant the container silently never pulled,
+    which is how it ended up running against whatever ledger happened to
+    be baked into the image. A pull failure is logged and tolerated --
+    working from a slightly old checkout beats refusing to run at all.
+    """
     _run("git-pull", ["git", "pull", "--rebase", "--autostash",
                       "origin", "master"], 180)
 

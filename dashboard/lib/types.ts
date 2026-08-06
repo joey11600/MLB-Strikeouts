@@ -125,6 +125,94 @@ export interface CalibrationBin {
   n: number;
 }
 
+/* ---- live model log (data/model_log.csv) ---------------------------- */
+
+export interface LiveCalibrationBin {
+  pred_mean: number;
+  actual_rate: number;
+  n: number;
+}
+
+export interface WorkloadMiss {
+  date: string;
+  pitcher_name: string;
+  expected_bf: number;
+  actual_bf: number;
+  bf_error: number;
+}
+
+export interface LiveWorkload {
+  n: number;
+  mean_bf_error: number;
+  mean_abs_bf_error: number;
+  pct_within_3: number;
+  pct_badly_short: number;
+  worst_misses: WorkloadMiss[];
+}
+
+export interface LiveStrikeoutAccuracy {
+  n: number;
+  mean_k_error: number;
+  mean_abs_k_error: number;
+}
+
+export interface LiveModelDate {
+  date: string;
+  n: number;
+  n_scored: number;
+  brier: number | null;
+  /** Brier − floor for this date's own line mix. */
+  excess: number | null;
+  baseline_excess: number | null;
+  mean_abs_bf_error: number | null;
+  /** True if ANY row on this date was reconstructed. */
+  reconstructed: boolean;
+  n_reconstructed: number;
+}
+
+export interface LiveModel {
+  n_total: number;
+  n_live: number;
+  /** Live rows that can actually be scored (have both a prob and an outcome). */
+  n_live_scored: number;
+  n_reconstructed: number;
+  n_used: number;
+  n_scored: number;
+  /** "live" | "live_plus_reconstructed" */
+  row_basis: string;
+  /** Non-null whenever the sample is too thin (or contaminated) to validate. */
+  sample_warning: string | null;
+  /** Backtest Brier re-weighted onto the live line mix. */
+  backtest_brier_baseline: number;
+  /** "line_matched" | "flat" */
+  baseline_basis: string;
+  baseline_naive: number | null;
+  baseline_lines_matched: number;
+  baseline_lines_unmatched: number;
+  backtest_brier_flat: number | null;
+  brier: number | null;
+  brier_se: number | null;
+  /** 2 SE. A gap smaller than this is a tie, not drift. */
+  verdict_band: number | null;
+  /** live − baseline on RAW Brier. Kept for reference; not the verdict. */
+  brier_delta: number | null;
+  /** Mean p(1-p) — the Brier a perfectly calibrated model would post here. */
+  brier_floor: number | null;
+  /** brier − floor. THIS is what the verdict rides on. */
+  excess: number | null;
+  baseline_excess: number | null;
+  excess_delta: number | null;
+  verdict: string;
+  mean_predicted_over: number | null;
+  actual_over_rate: number | null;
+  bias: number | null;
+  calibration_bins: LiveCalibrationBin[];
+  workload: LiveWorkload | null;
+  strikeouts: LiveStrikeoutAccuracy | null;
+  by_date: LiveModelDate[];
+  dates: string[];
+}
+
 export interface GauntletFeature {
   feature: string;
   gates: Record<string, boolean | null>;
@@ -181,4 +269,6 @@ export interface DashboardData {
       noise_floor_pct: number;
     } | null;
   };
+  /** null until tools/model_log.py has written data/model_log.csv */
+  live_model: LiveModel | null;
 }

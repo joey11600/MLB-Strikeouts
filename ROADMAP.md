@@ -128,3 +128,24 @@
 - [x] Deploy to existing Vercel project
 - Deferred: PWA/service worker, browser notifications, per-pick brief
   narratives, Supabase realtime
+
+## Phase 9 — Cloud automation and honest self-measurement ✅ (2026-08-06)
+- [x] Railway resident worker: ET-aware scheduler (DST-agnostic by
+  construction), persistent volume for ledger/slates/odds, `/data.json`
+  + `/health` HTTP endpoints
+- [x] Role gate: never price a pitcher whose starter workload can't be
+  established from ≥3 recent appearances (A-007)
+- [x] Default audit: 7 silent fallbacks now raise instead of
+  substituting a league average that manufactures edge
+- [x] Lineup-uncertainty penalty + real-EV gate (A-008, A-009)
+- [x] Model log: every evaluated pitcher scored against the outcome,
+  not just the ~3 we bet
+- [x] Live calibration on `/model`, compared on calibration error
+  rather than raw Brier (A-010)
+- [x] Snapshot odds provenance and staleness hardening (A-011)
+- [x] `sync_repo()` pulls without a token — the repo is public, and the
+  token gate meant the container silently never pulled
+- [ ] Decide the odds path for the blocked container: residential
+  relay, paid proxy, or paid odds API (A-012) — operator call
+- [ ] Retire the local Windows scheduled tasks once the cloud path has
+  run clean for a week (deliberately still enabled as backup)

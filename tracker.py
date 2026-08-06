@@ -65,6 +65,14 @@ FIELDS = [
     "created_at",
     "updated_at",
     "lineup_source",
+    # Where the priced odds came from: "live" (fetched from the book at
+    # pricing time) or "snapshot" (a previously captured board replayed
+    # because the live fetch failed). Appended late, so historical rows
+    # carry "" -- read that as "predates provenance tracking", not as
+    # live. Without this column a snapshot-priced bet is indistinguishable
+    # from a live-priced one after the fact, and any post-mortem asking
+    # "were the bad bets the ones priced off stale prices?" is unanswerable.
+    "odds_source",
     "notes",
 ]
 

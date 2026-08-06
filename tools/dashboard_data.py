@@ -15,6 +15,9 @@ v2 payload (consumed by the Next.js dashboard):
   model                   — honest backtest analytics (per-line Brier,
                             calibration bins raw vs calibrated),
                             gauntlet summary
+  live_model              — LIVE calibration from data/model_log.csv
+                            (every evaluated pitcher, not just the bets)
+                            measured against the backtest baseline
 
 Usage:
     python tools/dashboard_data.py              # writes dashboard/public/data.json
@@ -40,10 +43,21 @@ OUTPUT_PATH = ROOT / "dashboard" / "public" / "data.json"
 from tracker import DATA_STATE_DIR
 
 SLATES_DIR = DATA_STATE_DIR / "slates"
+MODEL_LOG_PATH = DATA_STATE_DIR / "model_log.csv"
 PREDICTIONS_PATH = ROOT / "data" / "backtest_predictions.csv"
 GAUNTLET_PATH = ROOT / "data" / "gauntlet_results.json"
 
 BASIS_LABEL = "flat_100u"
+
+# Validated out-of-sample Brier from data/backtest_predictions.csv. This
+# is the FLAT average across the whole backtest line grid and is NOT a
+# valid yardstick for the live log on its own — see _line_matched_baseline.
+# Kept only as a last-resort fallback when per-line figures are missing.
+BACKTEST_BRIER_BASELINE = 0.1491
+
+# Below this many genuinely prospective (reconstructed==0) rows the live
+# numbers are published with a sample_warning instead of standing alone.
+MIN_LIVE_ROWS = 20
 
 
 def _safe_float(val):
@@ -374,10 +388,19 @@ def _build_model_analytics() -> dict:
             sub = [p for p in preds if p["line"] == line]
             n_brier = sum((p["naive_p_over"] - p["actual_over"]) ** 2 for p in sub) / len(sub)
             m_brier = sum((p["model_p_over"] - p["actual_over"]) ** 2 for p in sub) / len(sub)
+            # Irreducible Brier floor: what a PERFECTLY calibrated model
+            # would score given exactly this confidence profile. Brier
+            # alone is not comparable across samples — a board of
+            # coin-flips has a far higher floor than a board of
+            # near-certainties. Brier minus floor is, which is what the
+            # live block compares against.
+            m_floor = sum(p["model_p_over"] * (1 - p["model_p_over"]) for p in sub) / len(sub)
             per_line.append({
                 "line": line,
                 "naive_brier": round(n_brier, 4),
                 "model_brier": round(m_brier, 4),
+                "model_floor": round(m_floor, 4),
+                "model_excess": round(m_brier - m_floor, 4),
                 "improvement_pct": round((n_brier - m_brier) / n_brier * 100, 1) if n_brier else 0,
                 "n": len(sub),
             })
@@ -518,6 +541,386 @@ def _build_model_analytics() -> dict:
     return out
 
 
+def _equal_chunks(ordered: list, n_bins: int) -> list[list]:
+    """Split an already-sorted list into n_bins near-equal contiguous chunks."""
+    n = len(ordered)
+    chunks = []
+    start = 0
+    for i in range(n_bins):
+        end = round((i + 1) * n / n_bins)
+        if end > start:
+            chunks.append(ordered[start:end])
+        start = end
+    return chunks
+
+
+def _mean(vals: list[float]) -> float | None:
+    return sum(vals) / len(vals) if vals else None
+
+
+# Values a CSV may carry for reconstructed==true. Anything NOT in this set
+# and not a clean falsy value is treated as reconstructed: for a
+# contamination guard the safe default is to assume contamination.
+_TRUTHY = {"1", "1.0", "true", "t", "yes", "y"}
+_FALSY = {"0", "0.0", "false", "f", "no", "n", ""}
+
+
+def _parse_reconstructed(val) -> bool:
+    """Fail CLOSED: an unrecognised value counts as reconstructed.
+
+    A reconstructed row was priced retroactively against outcomes that may
+    sit inside the training window, so counting one as live silently
+    inflates the validation sample. Counting a live row as reconstructed
+    only costs us sample size, which is the cheaper mistake.
+    """
+    s = str(val).strip().lower() if val is not None else ""
+    if s in _FALSY:
+        return False
+    return True
+
+
+def _line_matched_baseline(backtest: dict | None, lines: list[float]) -> dict:
+    """Backtest Brier re-weighted onto the live sample's line mix.
+
+    Brier is not scale-free: a 8.5 line is near-certain (backtest Brier
+    0.065) while a 4.5 line is a coin flip (0.209). The flat backtest
+    average spans a fixed six-line grid; the live log scores one row per
+    pitcher at whatever number the book actually hung, which clusters on
+    coin-flips. Comparing the two directly makes a perfectly healthy model
+    read "worse than backtest" 100% of the time — the yardstick, not the
+    model. So we re-weight the backtest's per-line Brier by the live line
+    mix and compare like for like.
+
+    Returns the baseline plus the provenance needed to say so on the page.
+    """
+    per_line = (backtest or {}).get("per_line") or []
+    grid = {round(float(p["line"]), 1): p for p in per_line if p.get("line") is not None}
+
+    matched = [ln for ln in lines if round(ln, 1) in grid]
+    unmatched = sorted({ln for ln in lines if round(ln, 1) not in grid})
+
+    if not matched:
+        flat = (backtest or {}).get("model_brier")
+        return {
+            "baseline": round(flat, 4) if flat is not None else BACKTEST_BRIER_BASELINE,
+            "baseline_excess": None,
+            "basis": "flat",
+            "n_matched": 0,
+            "n_unmatched": len(lines),
+            "unmatched_lines": unmatched,
+        }
+
+    model_b = _mean([grid[round(ln, 1)]["model_brier"] for ln in matched])
+    naive_b = _mean([grid[round(ln, 1)]["naive_brier"] for ln in matched])
+    excesses = [grid[round(ln, 1)].get("model_excess") for ln in matched]
+    excesses = [e for e in excesses if e is not None]
+    return {
+        "baseline": round(model_b, 4),
+        "naive_baseline": round(naive_b, 4),
+        "baseline_excess": round(_mean(excesses), 4) if excesses else None,
+        "basis": "line_matched",
+        "n_matched": len(matched),
+        "n_unmatched": len(lines) - len(matched),
+        "unmatched_lines": unmatched,
+    }
+
+
+def _build_live_model(backtest: dict | None = None) -> dict | None:
+    """LIVE model calibration from data/model_log.csv.
+
+    The backtest tells us the model WAS good out-of-sample. This block
+    answers the different, more dangerous question: is it still behaving
+    that way tonight? One row per evaluated pitcher per slate, unfiltered
+    by the bet thresholds — so it measures the model, not the bet
+    selection, and accumulates far faster than the picks ledger.
+
+    Two honesty constraints shape the arithmetic here:
+
+    1. The baseline is re-weighted onto the live sample's line mix
+       (_line_matched_baseline). A flat backtest average is a rigged
+       comparison — see that docstring.
+    2. "Scored" rows (those with BOTH a calibrated probability and a
+       settled outcome) are counted separately from rows merely present.
+       The sample gate and the displayed count both use the scored
+       figure, so the page can never advertise 22 observations next to a
+       4-row Brier.
+
+    Rows with reconstructed==1 were priced retroactively and their dates
+    may sit inside the training window, so they are NOT validation. Live
+    rows are preferred; when there are too few, the block still ships but
+    carries a sample_warning naming the limitation.
+
+    Contains no P&L values by design (see tools/pnl_guard.py).
+    Returns None when the log is missing or empty.
+    """
+    if not MODEL_LOG_PATH.exists():
+        return None
+
+    with open(MODEL_LOG_PATH, encoding="utf-8", newline="") as f:
+        raw = list(csv.DictReader(f))
+    if not raw:
+        return None
+
+    rows = []
+    for r in raw:
+        rows.append({
+            "date": (r.get("date") or "").strip(),
+            "pitcher_name": r.get("pitcher_name") or "",
+            "reconstructed": _parse_reconstructed(r.get("reconstructed")),
+            "line": _safe_float(r.get("line")),
+            "p_cal": _safe_float(r.get("p_over_calibrated")),
+            "over_hit": _safe_int(r.get("over_hit")),
+            "expected_bf": _safe_float(r.get("expected_bf")),
+            "actual_bf": _safe_float(r.get("actual_bf")),
+            "expected_k": _safe_float(r.get("expected_k")),
+            "actual_k": _safe_float(r.get("actual_k")),
+        })
+
+    def _is_scored(r: dict) -> bool:
+        return r["p_cal"] is not None and r["over_hit"] is not None
+
+    n_total = len(rows)
+    live = [r for r in rows if not r["reconstructed"]]
+    n_live = len(live)
+    n_reconstructed = n_total - n_live
+    # The gate that matters is how many rows can actually be SCORED, not
+    # how many exist. A row logged without a calibrated probability or
+    # without a settled outcome contributes nothing to the Brier.
+    n_live_scored = sum(1 for r in live if _is_scored(r))
+
+    if n_live_scored >= MIN_LIVE_ROWS:
+        use, row_basis, sample_warning = live, "live", None
+    elif n_reconstructed:
+        use, row_basis = rows, "live_plus_reconstructed"
+        sample_warning = (
+            f"Only {n_live_scored} scored live row(s) — under the "
+            f"{MIN_LIVE_ROWS} needed to stand alone, so these figures also "
+            f"include {n_reconstructed} reconstructed row(s). Reconstructed "
+            "slates were priced retroactively and their dates may sit inside "
+            "the training window. Read this as a diagnostic, NOT as "
+            "validation."
+        )
+    else:
+        use, row_basis = live, "live"
+        sample_warning = (
+            f"Only {n_live_scored} scored live row(s) — under the "
+            f"{MIN_LIVE_ROWS} needed before this comparison means anything. "
+            "Read it as a diagnostic, NOT as validation."
+        )
+
+    scored = [r for r in use if _is_scored(r)]
+    base = _line_matched_baseline(backtest, [r["line"] for r in scored
+                                             if r["line"] is not None])
+    baseline = base["baseline"]
+
+    if not scored:
+        return {
+            "n_total": n_total,
+            "n_live": n_live,
+            "n_live_scored": n_live_scored,
+            "n_reconstructed": n_reconstructed,
+            "n_used": len(use),
+            "n_scored": 0,
+            "row_basis": row_basis,
+            "sample_warning": sample_warning,
+            "backtest_brier_baseline": baseline,
+            "baseline_basis": base["basis"],
+            "baseline_naive": base.get("naive_baseline"),
+            "baseline_lines_matched": base["n_matched"],
+            "baseline_lines_unmatched": base["n_unmatched"],
+            "backtest_brier_flat": (backtest or {}).get("model_brier"),
+            "brier": None,
+            "brier_se": None,
+            "verdict_band": None,
+            "brier_delta": None,
+            "brier_floor": None,
+            "excess": None,
+            "baseline_excess": base.get("baseline_excess"),
+            "excess_delta": None,
+            "verdict": "unknown",
+            "mean_predicted_over": None,
+            "actual_over_rate": None,
+            "bias": None,
+            "calibration_bins": [],
+            "workload": None,
+            "strikeouts": None,
+            "by_date": [],
+            "dates": [],
+        }
+
+    def _brier(subset: list[dict]) -> float | None:
+        scored = [r for r in subset
+                  if r["p_cal"] is not None and r["over_hit"] is not None]
+        if not scored:
+            return None
+        return round(
+            sum((r["p_cal"] - r["over_hit"]) ** 2 for r in scored) / len(scored), 4)
+
+    brier = _brier(use)
+    mean_pred = _mean([r["p_cal"] for r in scored])
+    actual_rate = _mean([float(r["over_hit"]) for r in scored])
+
+    # How much would this Brier bounce around on sample size alone? At
+    # n=26 the standard error swamps any plausible real drift, so calling
+    # a winner off one slate is noise-reading. The band makes the verdict
+    # honest about that instead of flipping red on the first bad night.
+    #
+    # Two standard errors, not one: a 1-SE trigger fires on roughly a
+    # third of healthy slates, and an alarm that cries wolf that often is
+    # an alarm the operator learns to ignore. 2 SE fires ~5% of the time.
+    # As the log grows the SE shrinks, so the band tightens on its own
+    # and real drift becomes detectable without touching this constant.
+    sq = [(r["p_cal"] - r["over_hit"]) ** 2 for r in scored]
+    if len(sq) > 1:
+        m = sum(sq) / len(sq)
+        var = sum((x - m) ** 2 for x in sq) / (len(sq) - 1)
+        se = (var / len(sq)) ** 0.5
+    else:
+        se = None
+    band = round(max(0.005, 2 * se), 4) if se is not None else 0.005
+
+    # The honest scoreboard. Raw Brier is not comparable across samples:
+    # the book sets its line where the market is closest to a coin flip,
+    # so a live board's irreducible floor sits far above the backtest's
+    # fixed six-line grid. Comparing the two directly renders a perfectly
+    # healthy model "worse than backtest" 100% of the time.
+    #
+    # Excess over floor IS comparable. Floor = mean p(1-p), i.e. the Brier
+    # a perfectly calibrated model would post at exactly this confidence.
+    # Brier minus floor isolates the part that is genuinely model error.
+    floor = _mean([r["p_cal"] * (1 - r["p_cal"]) for r in scored])
+    excess = round(brier - floor, 4) if brier is not None else None
+    baseline_excess = base.get("baseline_excess")
+
+    # Words, not just colour: hue never carries meaning alone.
+    if excess is None or baseline_excess is None:
+        verdict = "unknown"
+    elif excess <= baseline_excess - band:
+        verdict = "better than backtest"
+    elif excess >= baseline_excess + band:
+        verdict = "worse than backtest"
+    else:
+        verdict = "in line with backtest"
+
+    # Calibration bins — quantile chunks of calibrated P(over), aiming for
+    # ~5 rows a bin so a 26-row log does not fake a 10-point curve.
+    bins = []
+    if scored:
+        n_bins = max(1, min(8, len(scored) // 5))
+        ordered = sorted(scored, key=lambda r: r["p_cal"])
+        for chunk in _equal_chunks(ordered, n_bins):
+            bins.append({
+                "pred_mean": round(_mean([r["p_cal"] for r in chunk]), 4),
+                "actual_rate": round(_mean([float(r["over_hit"]) for r in chunk]), 4),
+                "n": len(chunk),
+            })
+
+    # The leash: expected vs actual batters faced. This is the failure
+    # mode that has actually cost money (AUDIT A-007).
+    bf_rows = [r for r in use
+               if r["expected_bf"] is not None and r["actual_bf"] is not None]
+    workload = None
+    if bf_rows:
+        errs = [r["actual_bf"] - r["expected_bf"] for r in bf_rows]
+        worst = sorted(
+            bf_rows, key=lambda r: r["actual_bf"] - r["expected_bf"])[:3]
+        workload = {
+            "n": len(bf_rows),
+            "mean_bf_error": round(_mean(errs), 2),
+            "mean_abs_bf_error": round(_mean([abs(e) for e in errs]), 2),
+            "pct_within_3": round(
+                sum(1 for e in errs if abs(e) <= 3) / len(errs), 4),
+            "pct_badly_short": round(
+                sum(1 for e in errs if e <= -6) / len(errs), 4),
+            "worst_misses": [{
+                "date": r["date"],
+                "pitcher_name": r["pitcher_name"],
+                "expected_bf": round(r["expected_bf"], 1),
+                "actual_bf": round(r["actual_bf"], 1),
+                "bf_error": round(r["actual_bf"] - r["expected_bf"], 1),
+            } for r in worst],
+        }
+
+    k_rows = [r for r in use
+              if r["expected_k"] is not None and r["actual_k"] is not None]
+    strikeouts = None
+    if k_rows:
+        kerrs = [r["actual_k"] - r["expected_k"] for r in k_rows]
+        strikeouts = {
+            "n": len(k_rows),
+            "mean_k_error": round(_mean(kerrs), 2),
+            "mean_abs_k_error": round(_mean([abs(e) for e in kerrs]), 2),
+        }
+
+    by_date = []
+    for d in sorted({r["date"] for r in use if r["date"]}):
+        sub = [r for r in use if r["date"] == d]
+        d_bf = [r["actual_bf"] - r["expected_bf"] for r in sub
+                if r["expected_bf"] is not None and r["actual_bf"] is not None]
+        # ANY reconstructed row taints the date. all() would render a
+        # 24%-reconstructed date as LIVE — hiding exactly the
+        # contamination this flag exists to disclose.
+        n_recon_d = sum(1 for r in sub if r["reconstructed"])
+        d_scored = [r for r in sub if _is_scored(r)]
+        d_brier = _brier(sub)
+        # Per-date excess uses that date's OWN line mix, so a night of
+        # coin-flip lines is not penalised against a night of blowouts.
+        d_excess = d_base = None
+        if d_scored and d_brier is not None:
+            d_floor = _mean([r["p_cal"] * (1 - r["p_cal"]) for r in d_scored])
+            d_excess = round(d_brier - d_floor, 4)
+            d_base = _line_matched_baseline(
+                backtest, [r["line"] for r in d_scored if r["line"] is not None]
+            ).get("baseline_excess")
+        by_date.append({
+            "date": d,
+            "n": len(sub),
+            "n_scored": len(d_scored),
+            "brier": d_brier,
+            "excess": d_excess,
+            "baseline_excess": d_base,
+            "mean_abs_bf_error": round(_mean([abs(e) for e in d_bf]), 2) if d_bf else None,
+            "reconstructed": n_recon_d > 0,
+            "n_reconstructed": n_recon_d,
+        })
+
+    return {
+        "n_total": n_total,
+        "n_live": n_live,
+        "n_live_scored": n_live_scored,
+        "n_reconstructed": n_reconstructed,
+        "n_used": len(use),
+        "n_scored": len(scored),
+        "row_basis": row_basis,
+        "sample_warning": sample_warning,
+        "backtest_brier_baseline": baseline,
+        "baseline_basis": base["basis"],
+        "baseline_naive": base.get("naive_baseline"),
+        "baseline_lines_matched": base["n_matched"],
+        "baseline_lines_unmatched": base["n_unmatched"],
+        "backtest_brier_flat": (backtest or {}).get("model_brier"),
+        "brier": brier,
+        "brier_se": round(se, 4) if se is not None else None,
+        "verdict_band": band,
+        "brier_delta": round(brier - baseline, 4) if brier is not None else None,
+        "brier_floor": round(floor, 4) if floor is not None else None,
+        "excess": excess,
+        "baseline_excess": baseline_excess,
+        "excess_delta": (round(excess - baseline_excess, 4)
+                         if excess is not None and baseline_excess is not None
+                         else None),
+        "verdict": verdict,
+        "mean_predicted_over": round(mean_pred, 4) if mean_pred is not None else None,
+        "actual_over_rate": round(actual_rate, 4) if actual_rate is not None else None,
+        "bias": round(mean_pred - actual_rate, 4) if mean_pred is not None else None,
+        "calibration_bins": bins,
+        "workload": workload,
+        "strikeouts": strikeouts,
+        "by_date": by_date,
+        "dates": sorted({r["date"] for r in use if r["date"]}),
+    }
+
+
 def build_dashboard_data() -> dict:
     picks = _load_picks()
 
@@ -546,6 +949,7 @@ def build_dashboard_data() -> dict:
 
     graded_total = wins + losses
     slates, available_dates = _build_slates(picks)
+    model = _build_model_analytics()
 
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -569,7 +973,8 @@ def build_dashboard_data() -> dict:
         "available_dates": available_dates,
         "slates": slates,
         "performance": _build_performance(picks),
-        "model": _build_model_analytics(),
+        "model": model,
+        "live_model": _build_live_model(model.get("backtest")),
     }
 
 
@@ -592,6 +997,16 @@ def write_dashboard_json(output_path: Path | None = None):
         bt = data["model"]["backtest"]
         print(f"  Model: Brier {bt['model_brier']} vs naive {bt['naive_brier']} "
               f"({bt['improvement_pct']:+.1f}%)")
+    lm = data.get("live_model")
+    if lm:
+        print(f"  Live model: {lm['n_scored']} scored of {lm['n_used']} rows "
+              f"({lm['n_live']} live / {lm['n_reconstructed']} reconstructed)")
+        print(f"    Brier {lm['brier']} vs floor {lm['brier_floor']} "
+              f"-> excess {lm['excess']:+} vs backtest excess "
+              f"{lm['baseline_excess']:+} (band +/-{lm['verdict_band']}) "
+              f"— {lm['verdict']}")
+        if lm.get("sample_warning"):
+            print(f"    WARNING: {lm['sample_warning']}")
 
 
 def main():

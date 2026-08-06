@@ -446,13 +446,19 @@ def run_daily(
     # 2. Fetch DK odds — primary O/U + milestone alt lines
     print("\n[2/8] Fetching DraftKings strikeout props...")
     try:
-        dk_props = fetch_dk_strikeout_props()
+        dk_props = fetch_dk_strikeout_props(iso_date=game_date)
     except Exception as exc:
         print(f"  DK fetch failed: {exc}")
         return []
 
     today_props = [p for p in dk_props if p.get("date") == game_date]
     print(f"  {len(today_props)} pitcher O/U props for {game_date}")
+
+    snap = [p for p in today_props if p.get("odds_source") == "snapshot"]
+    if snap:
+        ages = [p.get("snapshot_age_hours") or 0 for p in snap]
+        print(f"  !! {len(snap)} of {len(today_props)} priced from a SNAPSHOT "
+              f"({min(ages):.1f}-{max(ages):.1f}h old), not live prices.")
 
     if not today_props:
         print("  No props available (slate may not be posted yet).")
@@ -462,7 +468,7 @@ def run_daily(
     if enable_ladder:
         print("  Fetching milestone/alt lines...")
         try:
-            dk_alts = fetch_dk_strikeout_alts()
+            dk_alts = fetch_dk_strikeout_alts(iso_date=game_date)
             today_alts = [a for a in dk_alts if a.get("date") == game_date]
             alt_lines_by_pitcher = _group_alt_lines_by_pitcher(today_alts)
             total_milestones = sum(len(v) for v in alt_lines_by_pitcher.values())
@@ -610,6 +616,10 @@ def run_daily(
             "expected_bf": result["expected_bf"],
             "pitcher_k_pct": stats["season_k_pct"],
             "lineup_source": lineup_source,
+            # Provenance rides with the prediction all the way to the
+            # ledger, so a snapshot-priced bet stays identifiable after
+            # the fact.
+            "odds_source": entry.get("odds_source", ""),
             "k_dist": result["k_dist"],
             **edge_info,
         }
@@ -851,6 +861,7 @@ def run_daily(
             "created_at": now_utc,
             "updated_at": now_utc,
             "lineup_source": play.get("lineup_source", ""),
+            "odds_source": play.get("odds_source", ""),
             "notes": "ladder" if play.get("pick_type") == "ladder" else "",
         }
 

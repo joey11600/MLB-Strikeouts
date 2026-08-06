@@ -27,10 +27,30 @@ DraftKings API notes (undocumented, public, no auth):
   The O/U selections have `outcomeType` ("Over"/"Under") and `points`
   (the line, e.g. 5.5).
 
-  TLS fingerprinting: DK's CDN rejects Python's default TLS handshake.
-  Using curl_cffi with impersonate="chrome120" makes the handshake look
-  like a real Chrome browser.  Falls back to standard requests if
-  curl_cffi is not installed (may 403 from some IPs).
+  Bot gating -- measured 2026-08-06 from a residential IP:
+    * curl_cffi impersonate=chrome120 ......... HTTP 200
+    * curl_cffi chrome131/136/145/safari184/ff  HTTP 200
+    * plain `requests` + browser headers ...... HTTP 200  <-- no TLS
+                                                             impersonation
+    * plain `requests` with the default
+      python-requests User-Agent .............. HTTP 403
+  So the gate this endpoint applies is (a) a browser-like User-Agent and
+  (b) egress IP reputation -- NOT the TLS/JA3 fingerprint.  curl_cffi is
+  kept because it costs nothing and hardens us against DK turning JA3
+  checks back on, but it does NOT defeat a datacenter-IP block.  The
+  same code returning 200 here returns 403 from the Railway container;
+  that is an IP-reputation block and no client-side knob fixes it.
+
+Snapshot fallback (see OddsSnapshotUnavailable below):
+  When the live fetch RAISES, the public fetch_* helpers can fall back
+  to the most recent pre-fetched CSV in the odds directory -- written
+  either by this script's CLI or by tools/odds_relay.py running on the
+  operator's residential machine.  It is OFF by default and must be
+  enabled with DK_ODDS_SNAPSHOT_FALLBACK=1 (or allow_snapshot=True).
+  It never fabricates odds: with no snapshot, or one older than
+  DK_ODDS_SNAPSHOT_MAX_AGE_H (default 6h), it raises.  Every returned
+  row carries `odds_source` ("live" / "snapshot") and, for snapshots,
+  `snapshot_captured_at`, so stale prices can never masquerade as live.
 
 This script handles:
   - DK's en-dash minus sign (U+2212) in odds (replaces with ASCII '-')
@@ -41,11 +61,15 @@ This script handles:
 """
 
 import csv
+import gzip
 import json
+import os
+import re
 import sys
 import time
 import urllib.request
-from datetime import datetime
+import zlib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -220,6 +244,27 @@ def fetch_dk_strikeout_data(
     raise last_exc if last_exc else RuntimeError("DK fetch failed")
 
 
+def _decode_body(raw: bytes, content_encoding: str) -> bytes:
+    """Decompress a response body urllib handed us verbatim.
+
+    HEADERS advertises `Accept-Encoding: gzip, deflate` and DK honours
+    it, but urllib -- unlike requests/curl_cffi -- does NOT decode the
+    body.  Feeding those bytes to json.loads raised UnicodeDecodeError
+    ('invalid start byte 0x8b' -- the gzip magic number), which made
+    this whole third-tier fallback dead code.  Verified 2026-08-06.
+    """
+    enc = (content_encoding or "").lower().strip()
+    if "gzip" in enc:
+        return gzip.decompress(raw)
+    if "deflate" in enc:
+        try:
+            return zlib.decompress(raw)
+        except zlib.error:
+            # Raw deflate stream with no zlib header.
+            return zlib.decompress(raw, -zlib.MAX_WBITS)
+    return raw
+
+
 def _fetch_via_urllib(url: str, retries: int = 3, backoff: float = 2.0) -> dict:
     """Last-resort urllib fetch path.  No TLS impersonation, so this may
     get 403'd by DK's CDN depending on the egress IP."""
@@ -228,7 +273,10 @@ def _fetch_via_urllib(url: str, retries: int = 3, backoff: float = 2.0) -> dict:
         try:
             req = urllib.request.Request(url, headers=HEADERS)
             with urllib.request.urlopen(req, timeout=45) as resp:
-                return json.loads(resp.read())
+                body = _decode_body(
+                    resp.read(), resp.headers.get("Content-Encoding", "")
+                )
+                return json.loads(body)
         except Exception as exc:
             last_exc = exc
             if attempt < retries - 1:
@@ -474,54 +522,501 @@ def extract_alt_lines(data: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Snapshot fallback -- serve pre-fetched odds when the live fetch is blocked
+# ---------------------------------------------------------------------------
+#
+# Why this exists: DraftKings 403s our Railway container because it is a
+# datacenter IP.  The same request from the operator's residential
+# connection returns 200.  So the cloud worker reads a CSV snapshot that
+# a residential machine already wrote (see tools/odds_relay.py) instead
+# of hitting DK itself.
+#
+# The danger this code exists to prevent is a stale snapshot being
+# priced as if it were live.  Three guards:
+#   1. OFF by default -- must be enabled explicitly.
+#   2. Hard staleness ceiling -- too old means raise, never serve.
+#   3. Provenance stamped on every row and logged loudly at fetch time.
+
+SNAPSHOT_FALLBACK_ENV = "DK_ODDS_SNAPSHOT_FALLBACK"
+SNAPSHOT_MAX_AGE_ENV = "DK_ODDS_SNAPSHOT_MAX_AGE_H"
+SNAPSHOT_DIR_ENV = "DK_ODDS_DIR"
+
+# A prop board moves all day.  Six hours is generous enough to cover a
+# morning-slate run reading a snapshot taken at wake-up, and tight
+# enough that yesterday's board can never be served as today's.
+DEFAULT_SNAPSHOT_MAX_AGE_H = 6.0
+
+_DATE_RE = r"(\d{4}-\d{2}-\d{2})"
+
+
+class OddsSnapshotUnavailable(RuntimeError):
+    """No usable pre-fetched odds snapshot.
+
+    Deliberately an exception rather than an empty list.  A caller that
+    silently received [] would report "no props today" on a full slate;
+    a caller that received stale rows labelled as live would price a
+    dead board.  Both are worse failures than a loud crash, and the
+    repo's rule is that we never invent odds.
+    """
+
+
+def _log(msg: str) -> None:
+    """Odds-provenance log line.  stderr so it survives stdout capture."""
+    print(f"[odds] {msg}", file=sys.stderr, flush=True)
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_allow_snapshot(allow_snapshot: bool | None) -> bool:
+    """Explicit kwarg wins; otherwise consult the environment."""
+    if allow_snapshot is not None:
+        return bool(allow_snapshot)
+    return _env_flag(SNAPSHOT_FALLBACK_ENV)
+
+
+def _resolve_max_age_hours(max_age_hours: float | None) -> float:
+    if max_age_hours is not None:
+        return float(max_age_hours)
+    raw = os.environ.get(SNAPSHOT_MAX_AGE_ENV, "").strip()
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            _log(f"WARNING: {SNAPSHOT_MAX_AGE_ENV}={raw!r} is not a number; "
+                 f"using default {DEFAULT_SNAPSHOT_MAX_AGE_H}h")
+    return DEFAULT_SNAPSHOT_MAX_AGE_H
+
+
+def odds_dirs() -> list[Path]:
+    """Candidate snapshot directories, most authoritative first.
+
+    On Railway the live odds live on the persistent volume that
+    tracker.DATA_STATE_DIR points at, NOT in the image's data/ dir, so
+    the volume has to be searched first.
+
+    DK_ODDS_DIR is EXCLUSIVE, not additive: if the operator names a
+    directory, that is the only place we look.  Additive would mean a
+    caller trying to pin the source could still silently pick up an old
+    file from the repo checkout.
+    """
+    cands: list[Path] = []
+    env_dir = os.environ.get(SNAPSHOT_DIR_ENV, "").strip()
+    if env_dir:
+        return [Path(p) for p in env_dir.split(os.pathsep) if p.strip()]
+    try:
+        from tracker import DATA_STATE_DIR
+        cands.append(Path(DATA_STATE_DIR) / "odds")
+    except Exception:
+        pass
+    cands.append(Path(__file__).resolve().parent / "data" / "odds")
+    cands.append(Path("data") / "odds")
+
+    seen: set[str] = set()
+    out: list[Path] = []
+    for c in cands:
+        try:
+            key = str(c.resolve())
+        except OSError:
+            key = str(c)
+        if key not in seen:
+            seen.add(key)
+            out.append(c)
+    return out
+
+
+def _parse_captured_at(raw: str) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _read_snapshot(path: Path) -> tuple[list[dict], datetime | None]:
+    """Read a snapshot CSV, attaching each row's own capture time.
+
+    Every row must carry an explicit captured_at. There is deliberately
+    NO file-mtime fallback: the documented transport for snapshots is git
+    (and Docker COPY on the container), and both rewrite mtime to
+    checkout/build time. A mtime clock would report a week-old board as
+    freshly captured, which is precisely the failure the ceiling exists
+    to prevent. A file without stamps is refused, not guessed at.
+
+    The returned datetime is the OLDEST row stamp, used only for
+    reporting; per-row ages are what actually gate. A single refreshed
+    pitcher must not re-validate a whole stale board.
+    """
+    with open(path, encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    stamped: list[dict] = []
+    for r in rows:
+        dt = _parse_captured_at(r.get("captured_at", ""))
+        if dt is not None:
+            r["_captured_at"] = dt
+            stamped.append(r)
+
+    if not stamped:
+        return [], None
+    return stamped, min(r["_captured_at"] for r in stamped)
+
+
+def _candidate_snapshots(prefixes: list[str], iso_date: str | None) -> list[Path]:
+    """Every snapshot file matching the prefixes, newest-dated first.
+
+    Prefix order is a preference order: dk_k_* (a clean full-board
+    scrape) is preferred over closing_* (append-log of intraday
+    snapshots) for the same date.
+    """
+    found: list[tuple[str, float, int, Path]] = []
+    for rank, prefix in enumerate(prefixes):
+        pattern = re.compile(rf"^{re.escape(prefix)}_{_DATE_RE}\.csv$")
+        for d in odds_dirs():
+            if not d.is_dir():
+                continue
+            for p in d.iterdir():
+                if not p.is_file():
+                    continue
+                m = pattern.match(p.name)
+                if not m:
+                    continue
+                if iso_date and m.group(1) != iso_date:
+                    continue
+                found.append((m.group(1), _newest_stamp(p), rank, p))
+
+    # Newest slate date wins, then the freshest CAPTURE, then the
+    # preferred prefix as a last tiebreak. Freshness must outrank prefix:
+    # a closing_* file written two minutes ago carries better prices than
+    # a dk_k_* board from this morning, and the old ordering always
+    # picked the morning board. Capture time comes from inside the file,
+    # never mtime -- see _read_snapshot.
+    found.sort(key=lambda t: (t[0], t[1], -t[2]), reverse=True)
+    return [p for _, _, _, p in found]
+
+
+def _newest_stamp(path: Path) -> float:
+    """Newest in-file captured_at as a POSIX timestamp; 0.0 if unstamped.
+
+    Used only for ORDERING candidates. Unstamped files sort last and are
+    refused outright by _read_snapshot, so they can never be served.
+    """
+    try:
+        with open(path, encoding="utf-8", newline="") as f:
+            stamps = [
+                dt for dt in (
+                    _parse_captured_at(r.get("captured_at", ""))
+                    for r in csv.DictReader(f)
+                ) if dt is not None
+            ]
+        return max(stamps).timestamp() if stamps else 0.0
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return 0.0
+
+
+def _dedupe_latest(rows: list[dict], key_fields: tuple[str, ...]) -> list[dict]:
+    """Collapse an append-log to one row per key, keeping the newest.
+
+    closing_*.csv holds several snapshots of the same pitcher stamped
+    with different captured_at values.  Rows are appended in
+    chronological order, so last-wins is the newest price.
+    """
+    out: dict[tuple, dict] = {}
+    for r in rows:
+        out[tuple((r.get(k) or "") for k in key_fields)] = r
+    return list(out.values())
+
+
+def _load_snapshot(
+    prefixes: list[str],
+    key_fields: tuple[str, ...],
+    required: tuple[str, ...],
+    fields: list[str],
+    kind: str,
+    iso_date: str | None,
+    max_age_hours: float | None,
+) -> list[dict]:
+    """Shared snapshot loader for both the O/U and alt boards."""
+    max_age = _resolve_max_age_hours(max_age_hours)
+    searched = ", ".join(str(d) for d in odds_dirs())
+
+    paths = _candidate_snapshots(prefixes, iso_date)
+    if not paths:
+        raise OddsSnapshotUnavailable(
+            f"no {kind} odds snapshot found"
+            + (f" for {iso_date}" if iso_date else "")
+            + f" (looked for {'/'.join(p + '_<date>.csv' for p in prefixes)} "
+            f"in: {searched})"
+        )
+
+    path = paths[0]
+    rows, oldest = _read_snapshot(path)
+
+    if not rows:
+        raise OddsSnapshotUnavailable(
+            f"{kind} snapshot {path} carries no rows with a captured_at "
+            f"stamp -- refusing to date it from the file mtime, which git "
+            f"checkout and Docker COPY both reset. Re-capture it with "
+            f"'python tools/odds_relay.py snapshot'."
+        )
+
+    # The slate date is checked here, not left to a downstream filter.
+    # daily_pipeline's date== filter used to be the only guard, and it
+    # can be defeated by anything that re-dates rows on the way through.
+    if iso_date:
+        wrong = {(r.get("date") or "").strip() for r in rows} - {iso_date, ""}
+        if wrong:
+            raise OddsSnapshotUnavailable(
+                f"{kind} snapshot {path} holds rows for {sorted(wrong)} but "
+                f"{iso_date} was requested -- refusing to price another "
+                f"slate's board."
+            )
+
+    now = datetime.now(timezone.utc)
+    shaped: list[dict] = []
+    dropped_stale = 0
+    for r in _dedupe_latest(rows, key_fields):
+        if any(not (r.get(k) or "").strip() for k in required):
+            continue
+        # Per-row ceiling. A file-level MAX age would let one late
+        # refresh re-validate every stale row beside it in the same
+        # append-log; a MIN would throw away good rows. Each row is
+        # judged on its own capture time.
+        row_age = (now - r["_captured_at"]).total_seconds() / 3600.0
+        if row_age > max_age:
+            dropped_stale += 1
+            continue
+        row = {f: (r.get(f) or "") for f in fields}
+        row["odds_source"] = "snapshot"
+        row["snapshot_captured_at"] = r["_captured_at"].isoformat()
+        row["snapshot_age_hours"] = round(row_age, 3)
+        row["snapshot_path"] = str(path)
+        shaped.append(row)
+
+    if not shaped:
+        oldest_h = (now - oldest).total_seconds() / 3600.0 if oldest else float("nan")
+        raise OddsSnapshotUnavailable(
+            f"{kind} snapshot {path} had {len(rows)} row(s) but none were "
+            f"usable: {dropped_stale} past the {max_age:.1f}h ceiling "
+            f"(oldest {oldest_h:.1f}h), the rest missing required columns "
+            f"({', '.join(required)}). Refresh it "
+            f"(python tools/odds_relay.py snapshot) or raise "
+            f"{SNAPSHOT_MAX_AGE_ENV} deliberately."
+        )
+
+    ages = [r["snapshot_age_hours"] for r in shaped]
+    _log(
+        f"SOURCE=SNAPSHOT  {kind}: {len(shaped)} rows from {path.name} "
+        f"({min(ages):.2f}-{max(ages):.2f}h old, ceiling {max_age:.1f}h"
+        + (f", {dropped_stale} row(s) dropped as stale" if dropped_stale else "")
+        + ") -- these are NOT live prices"
+    )
+    return shaped
+
+
+def load_snapshot_props(
+    iso_date: str | None = None,
+    max_age_hours: float | None = None,
+) -> list[dict]:
+    """Load the newest pre-fetched O/U board.
+
+    Same dict shape as fetch_dk_strikeout_props(), plus odds_source /
+    snapshot_captured_at / snapshot_path.  Raises
+    OddsSnapshotUnavailable rather than returning [] when there is
+    nothing fresh enough to serve.
+    """
+    return _load_snapshot(
+        prefixes=["dk_k", "closing"],
+        key_fields=("pitcher_name", "event_id"),
+        required=("pitcher_name", "line"),
+        fields=OU_FIELDS,
+        kind="O/U",
+        iso_date=iso_date,
+        max_age_hours=max_age_hours,
+    )
+
+
+def load_snapshot_alts(
+    iso_date: str | None = None,
+    max_age_hours: float | None = None,
+) -> list[dict]:
+    """Load the newest pre-fetched milestone/alt board.
+
+    Same dict shape as fetch_dk_strikeout_alts().  Raises
+    OddsSnapshotUnavailable when nothing fresh enough exists.
+    """
+    return _load_snapshot(
+        prefixes=["dk_k_alts", "closing_alts"],
+        key_fields=("pitcher_name", "event_id", "milestone"),
+        required=("pitcher_name", "milestone", "odds"),
+        fields=ALT_FIELDS,
+        kind="alt",
+        iso_date=iso_date,
+        max_age_hours=max_age_hours,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
 
-def fetch_dk_strikeout_props(retries: int = 3, backoff: float = 2.0) -> list[dict]:
+def _fetch_board(
+    subcategory_id: int,
+    extractor,
+    loader,
+    kind: str,
+    retries: int,
+    backoff: float,
+    allow_snapshot: bool | None,
+    iso_date: str | None,
+    max_age_hours: float | None,
+) -> list[dict]:
+    """Live fetch first; fall back to a snapshot only if enabled.
+
+    Note that the fallback triggers on an EXCEPTION, never on an empty
+    result.  An empty live board is a legitimate state (slate not
+    posted, everything locked); falling back there would resurrect an
+    older board and price a slate that DK is not currently offering.
+    """
+    try:
+        rows = extractor(
+            fetch_dk_strikeout_data(
+                subcategory_id=subcategory_id, retries=retries, backoff=backoff
+            )
+        )
+    except Exception as live_exc:
+        if not _resolve_allow_snapshot(allow_snapshot):
+            _log(
+                f"SOURCE=LIVE FAILED  {kind}: {type(live_exc).__name__}: "
+                f"{live_exc} -- snapshot fallback is OFF "
+                f"(set {SNAPSHOT_FALLBACK_ENV}=1 to enable)"
+            )
+            raise
+        _log(
+            f"live {kind} fetch failed ({type(live_exc).__name__}: "
+            f"{live_exc}) -- trying snapshot fallback"
+        )
+        try:
+            return loader(iso_date=iso_date, max_age_hours=max_age_hours)
+        except OddsSnapshotUnavailable as snap_exc:
+            raise OddsSnapshotUnavailable(
+                f"{kind} odds unavailable: live fetch failed "
+                f"({type(live_exc).__name__}: {live_exc}) AND {snap_exc}"
+            ) from live_exc
+
+    # Live rows carry the same keys as snapshot rows so that every
+    # downstream consumer sees one shape and provenance is never absent
+    # by accident -- an empty odds_source would read as "unknown", and
+    # unknown provenance on a price is what we are guarding against.
+    now = datetime.now(timezone.utc).isoformat()
+    for r in rows:
+        r["odds_source"] = "live"
+        r["captured_at"] = now
+        r["snapshot_captured_at"] = ""
+        r["snapshot_age_hours"] = 0.0
+        r["snapshot_path"] = ""
+    _log(f"SOURCE=LIVE  {kind}: {len(rows)} rows from DraftKings")
+    return rows
+
+
+def fetch_dk_strikeout_props(
+    retries: int = 3,
+    backoff: float = 2.0,
+    allow_snapshot: bool | None = None,
+    iso_date: str | None = None,
+    max_age_hours: float | None = None,
+) -> list[dict]:
     """Fetch current DraftKings pitcher strikeout prop odds.
 
     Returns a list of dicts, each containing:
-      pitcher_name, team, line, over_odds, under_odds, event_id
+      pitcher_name, team, line, over_odds, under_odds, event_id,
+      event_name, start_time_utc, date, odds_source
+
+    allow_snapshot:
+      None  -- consult DK_ODDS_SNAPSHOT_FALLBACK (default: disabled)
+      True  -- on a live failure, serve the newest fresh snapshot
+      False -- live only; a failure propagates
     """
-    data = fetch_dk_strikeout_data(
+    return _fetch_board(
         subcategory_id=STRIKEOUTS_OU_SUB,
+        extractor=extract_ou_odds,
+        loader=load_snapshot_props,
+        kind="O/U",
         retries=retries,
         backoff=backoff,
+        allow_snapshot=allow_snapshot,
+        iso_date=iso_date,
+        max_age_hours=max_age_hours,
     )
-    return extract_ou_odds(data)
 
 
-def fetch_dk_strikeout_alts(retries: int = 3, backoff: float = 2.0) -> list[dict]:
+def fetch_dk_strikeout_alts(
+    retries: int = 3,
+    backoff: float = 2.0,
+    allow_snapshot: bool | None = None,
+    iso_date: str | None = None,
+    max_age_hours: float | None = None,
+) -> list[dict]:
     """Fetch DraftKings milestone/alt strikeout lines (3+, 4+, ...).
 
     Returns a list of dicts, each containing:
-      pitcher_name, team, milestone, odds, event_id
+      pitcher_name, team, milestone, odds, event_id, event_name,
+      start_time_utc, date, odds_source
+
+    See fetch_dk_strikeout_props for allow_snapshot semantics.
     """
-    data = fetch_dk_strikeout_data(
+    return _fetch_board(
         subcategory_id=STRIKEOUTS_ALT_SUB,
+        extractor=extract_alt_lines,
+        loader=load_snapshot_alts,
+        kind="alt",
         retries=retries,
         backoff=backoff,
+        allow_snapshot=allow_snapshot,
+        iso_date=iso_date,
+        max_age_hours=max_age_hours,
     )
-    return extract_alt_lines(data)
 
 
 # ---------------------------------------------------------------------------
 # CSV output
 # ---------------------------------------------------------------------------
 
+# captured_at leads both field lists and is written on every row. It is
+# NOT decoration: it is the only trustworthy record of when a board was
+# real. File mtime cannot serve that purpose -- git checkout and Docker
+# COPY both reset mtime to build time, so a week-old board arrives on the
+# container looking freshly captured. The staleness ceiling is only
+# meaningful if the clock travels inside the file.
 OU_FIELDS = [
+    "captured_at",
     "date", "pitcher_name", "team", "line", "over_odds", "under_odds",
     "event_id", "event_name", "start_time_utc",
 ]
 
 ALT_FIELDS = [
+    "captured_at",
     "date", "pitcher_name", "team", "milestone", "odds",
     "event_id", "event_name", "start_time_utc",
 ]
 
 
+def stamp_captured_at(rows: list[dict]) -> list[dict]:
+    """Stamp every row with the capture time, unless it already has one."""
+    now = datetime.now(timezone.utc).isoformat()
+    for r in rows:
+        if not (r.get("captured_at") or "").strip():
+            r["captured_at"] = now
+    return rows
+
+
 def write_csv(rows: list[dict], path: Path, fields: list[str]) -> None:
     """Write rows to CSV with atomic write (tempfile + replace)."""
+    if "captured_at" in fields:
+        stamp_captured_at(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
     import tempfile, os
     tmp_fd, tmp_path = tempfile.mkstemp(
@@ -574,6 +1069,345 @@ def probe_alt_under_markets() -> None:
             print(f"  probe sub {sub}: failed ({exc})")
 
 
+# ---------------------------------------------------------------------------
+# Self-test
+# ---------------------------------------------------------------------------
+
+def _seed_test_odds_dir(
+    tmp: Path, iso_date: str, age_hours: float = 0.0, mtime_hours: float | None = None
+) -> None:
+    """Populate a THROWAWAY directory with snapshot files for the tests.
+
+    Prefers copying a real snapshot out of the repo so the test
+    exercises the real column layout.  If the repo has none, it writes
+    an obviously-synthetic fixture instead.  Neither is ever written
+    into data/odds and the fixture's pitcher name could not be mistaken
+    for a real market -- this is test scaffolding, not invented odds.
+
+    age_hours backdates the in-file captured_at stamps; mtime_hours
+    backdates the filesystem mtime independently. Keeping the two
+    separate is the point: the production failure is fresh-mtime with
+    old-content (git checkout / Docker COPY reset mtime), which an
+    mtime-only test can never reach.
+    """
+    repo_odds = Path(__file__).resolve().parent / "data" / "odds"
+    stamp = (datetime.now(timezone.utc) - timedelta(hours=age_hours)).isoformat()
+
+    def newest(pattern: re.Pattern) -> Path | None:
+        if not repo_odds.is_dir():
+            return None
+        hits = sorted(
+            (p for p in repo_odds.iterdir() if p.is_file() and pattern.match(p.name)),
+            key=lambda p: p.name,
+        )
+        return hits[-1] if hits else None
+
+    def copy_restamped(src: Path, dst: Path, fields: list[str]) -> None:
+        with open(src, encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+        for r in rows:
+            r["captured_at"] = stamp
+            r["date"] = iso_date
+        write_csv(rows, dst, fields)
+
+    ou_src = newest(re.compile(rf"^dk_k_{_DATE_RE}\.csv$"))
+    alt_src = newest(re.compile(rf"^dk_k_alts_{_DATE_RE}\.csv$"))
+
+    if ou_src:
+        copy_restamped(ou_src, tmp / f"dk_k_{iso_date}.csv", OU_FIELDS)
+    else:
+        write_csv([{
+            "captured_at": stamp,
+            "date": iso_date, "pitcher_name": "Fixture Testpitcher",
+            "team": "TST", "line": "5.5", "over_odds": "-110",
+            "under_odds": "-110", "event_id": "0",
+            "event_name": "TST @ TST", "start_time_utc": "",
+        }], tmp / f"dk_k_{iso_date}.csv", OU_FIELDS)
+
+    if alt_src:
+        copy_restamped(alt_src, tmp / f"dk_k_alts_{iso_date}.csv", ALT_FIELDS)
+    else:
+        write_csv([{
+            "captured_at": stamp,
+            "date": iso_date, "pitcher_name": "Fixture Testpitcher",
+            "team": "TST", "milestone": "5", "odds": "-150",
+            "event_id": "0", "event_name": "TST @ TST", "start_time_utc": "",
+        }], tmp / f"dk_k_alts_{iso_date}.csv", ALT_FIELDS)
+
+    t = time.time() - (mtime_hours or 0.0) * 3600
+    for p in tmp.iterdir():
+        os.utime(p, (t, t))
+
+
+def self_test() -> int:
+    """Prove the live path, the snapshot fallback, and the refusals.
+
+    Exit codes: 0 all good; 1 a logic test failed (a real bug);
+    2 only the live fetch failed (expected inside a blocked container).
+    """
+    import tempfile
+
+    results: list[tuple[str, bool, str]] = []
+
+    def check(label: str, ok: bool, detail: str = "") -> None:
+        results.append((label, ok, detail))
+        print(f"  [{'PASS' if ok else 'FAIL'}] {label}"
+              + (f"\n         {detail}" if detail else ""))
+
+    def boom(*_a, **_k):
+        raise RuntimeError("HTTP Error 403: Forbidden (simulated Railway block)")
+
+    iso_date = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    print("=" * 70)
+    print("scrape_dk_odds self-test")
+    print("=" * 70)
+
+    # -- A. live path still works (environment-dependent) --
+    print("\nA. live fetch (no fallback)")
+    live_ok = False
+    try:
+        rows = fetch_dk_strikeout_props(allow_snapshot=False, retries=1)
+        shape_ok = all(
+            {"pitcher_name", "line", "over_odds", "under_odds"} <= set(r)
+            and r.get("odds_source") == "live"
+            for r in rows
+        )
+        live_ok = shape_ok
+        check("live fetch returns live-stamped rows", shape_ok,
+              f"{len(rows)} O/U rows"
+              + (f", e.g. {rows[0]['pitcher_name']} {rows[0]['line']}"
+                 if rows else " (empty board -- legitimate off-hours)"))
+    except Exception as exc:
+        check("live fetch returns live-stamped rows", False,
+              f"{type(exc).__name__}: {exc}")
+
+    # -- B. snapshot fallback returns correctly-shaped data --
+    print("\nB. snapshot fallback when live fetch fails")
+    orig = globals()["fetch_dk_strikeout_data"]
+    globals()["fetch_dk_strikeout_data"] = boom
+    prev_dir = os.environ.get(SNAPSHOT_DIR_ENV)
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            _seed_test_odds_dir(tmp, iso_date)
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+
+            props = fetch_dk_strikeout_props(allow_snapshot=True, retries=1)
+            ok = (
+                len(props) > 0
+                and all(set(OU_FIELDS) <= set(r) for r in props)
+                and all(r["odds_source"] == "snapshot" for r in props)
+                and all(r["snapshot_captured_at"] for r in props)
+            )
+            check("O/U fallback returns snapshot-shaped rows", ok,
+                  f"{len(props)} rows, keys match OU_FIELDS, "
+                  f"captured_at={props[0]['snapshot_captured_at'] if props else 'n/a'}")
+
+            alts = fetch_dk_strikeout_alts(allow_snapshot=True, retries=1)
+            ok = (
+                len(alts) > 0
+                and all(set(ALT_FIELDS) <= set(r) for r in alts)
+                and all(r["odds_source"] == "snapshot" for r in alts)
+            )
+            check("alt fallback returns snapshot-shaped rows", ok,
+                  f"{len(alts)} rows, keys match ALT_FIELDS")
+
+        # -- C. missing snapshot raises, never returns empty/fabricated --
+        print("\nC. missing snapshot must raise, not return []")
+        with tempfile.TemporaryDirectory() as td:
+            os.environ[SNAPSHOT_DIR_ENV] = td  # empty dir
+            try:
+                got = fetch_dk_strikeout_props(allow_snapshot=True, retries=1)
+                check("missing snapshot raises", False,
+                      f"returned {len(got)} rows instead of raising -- "
+                      f"THIS WOULD PRICE A SLATE WITH NO ODDS")
+            except OddsSnapshotUnavailable as exc:
+                check("missing snapshot raises OddsSnapshotUnavailable", True,
+                      str(exc)[:150])
+            except Exception as exc:
+                check("missing snapshot raises OddsSnapshotUnavailable", False,
+                      f"raised {type(exc).__name__} instead: {exc}")
+
+        # -- D. stale snapshot refused --
+        print("\nD. stale snapshot must be refused")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            _seed_test_odds_dir(tmp, iso_date, age_hours=48)
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+            try:
+                got = fetch_dk_strikeout_props(allow_snapshot=True, retries=1)
+                check("48h-old snapshot refused", False,
+                      f"served {len(got)} stale rows as if usable")
+            except OddsSnapshotUnavailable as exc:
+                check("48h-old snapshot refused", True, str(exc)[:150])
+            except Exception as exc:
+                check("48h-old snapshot refused", False,
+                      f"raised {type(exc).__name__}: {exc}")
+
+        # -- D2. THE production case: old content, fresh mtime --
+        # git clone and Docker COPY both stamp mtime = now. A loader that
+        # dates a board by mtime reports a week-old board as brand new,
+        # and the staleness ceiling never fires again.
+        print("\nD2. old board with mtime reset to now must still be refused")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            _seed_test_odds_dir(tmp, iso_date, age_hours=168, mtime_hours=0)
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+            try:
+                got = fetch_dk_strikeout_props(allow_snapshot=True, retries=1)
+                check("7-day-old board with fresh mtime refused", False,
+                      f"served {len(got)} rows -- MTIME CLOCK IS BACK, a "
+                      f"git-pulled stale board would be priced as live")
+            except OddsSnapshotUnavailable as exc:
+                check("7-day-old board with fresh mtime refused", True,
+                      str(exc)[:150])
+            except Exception as exc:
+                check("7-day-old board with fresh mtime refused", False,
+                      f"raised {type(exc).__name__}: {exc}")
+
+        # -- D3. an unstamped board is refused rather than mtime-dated --
+        print("\nD3. board with no captured_at column must be refused")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            legacy = [f for f in OU_FIELDS if f != "captured_at"]
+            write_csv([{
+                "date": iso_date, "pitcher_name": "Fixture Testpitcher",
+                "team": "TST", "line": "5.5", "over_odds": "-110",
+                "under_odds": "-110", "event_id": "0",
+                "event_name": "TST @ TST", "start_time_utc": "",
+            }], tmp / f"dk_k_{iso_date}.csv", legacy)
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+            try:
+                got = fetch_dk_strikeout_props(allow_snapshot=True, retries=1)
+                check("unstamped board refused", False,
+                      f"served {len(got)} rows of unknown age")
+            except OddsSnapshotUnavailable as exc:
+                check("unstamped board refused", True, str(exc)[:130])
+            except Exception as exc:
+                check("unstamped board refused", False,
+                      f"raised {type(exc).__name__}: {exc}")
+
+        # -- D4. one fresh row must not re-validate stale neighbours --
+        print("\nD4. per-row staleness, not file-level max")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            now_dt = datetime.now(timezone.utc)
+            write_csv([
+                {"captured_at": (now_dt - timedelta(hours=30)).isoformat(),
+                 "date": iso_date, "pitcher_name": "Stale Fixture",
+                 "team": "TST", "line": "5.5", "over_odds": "+999",
+                 "under_odds": "-999", "event_id": "1",
+                 "event_name": "TST @ TST", "start_time_utc": ""},
+                {"captured_at": now_dt.isoformat(),
+                 "date": iso_date, "pitcher_name": "Fresh Fixture",
+                 "team": "TST", "line": "5.5", "over_odds": "-110",
+                 "under_odds": "-110", "event_id": "2",
+                 "event_name": "TST @ TST", "start_time_utc": ""},
+            ], tmp / f"dk_k_{iso_date}.csv", OU_FIELDS)
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+            try:
+                got = fetch_dk_strikeout_props(allow_snapshot=True, retries=1)
+                names = {r["pitcher_name"] for r in got}
+                ok = names == {"Fresh Fixture"}
+                check("stale row dropped, fresh row kept", ok,
+                      f"served {sorted(names)} (want just Fresh Fixture)")
+            except Exception as exc:
+                check("stale row dropped, fresh row kept", False,
+                      f"raised {type(exc).__name__}: {exc}")
+
+        # -- D5. another slate's board must never be served --
+        print("\nD5. wrong-date board must be refused")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            other = (datetime.now(ZoneInfo("America/New_York"))
+                     - timedelta(days=1)).strftime("%Y-%m-%d")
+            _seed_test_odds_dir(tmp, other, age_hours=0.1)
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+            try:
+                got = fetch_dk_strikeout_props(
+                    allow_snapshot=True, retries=1, iso_date=iso_date)
+                check("yesterday's board refused for today", False,
+                      f"served {len(got)} rows dated {other}")
+            except OddsSnapshotUnavailable as exc:
+                check("yesterday's board refused for today", True,
+                      str(exc)[:130])
+            except Exception as exc:
+                check("yesterday's board refused for today", False,
+                      f"raised {type(exc).__name__}: {exc}")
+
+        # -- D6. closing_odds.py must never accept a snapshot --
+        print("\nD6. closing capture must refuse snapshots outright")
+        import inspect as _inspect
+        from tools import closing_odds as _co
+        src = _inspect.getsource(_co.capture_closing)
+        ok = (src.count("allow_snapshot=False") >= 2
+              and "fetch_dk_strikeout_props()" not in src
+              and "fetch_dk_strikeout_alts()" not in src)
+        check("capture_closing pins allow_snapshot=False", ok,
+              "a snapshot here would be re-dated to today and re-stamped "
+              "to now, laundering a stale board into the closing line"
+              if not ok else "both fetchers pinned")
+
+        # -- E. fallback is OFF unless asked for --
+        print("\nE. fallback stays off by default")
+        prev_flag = os.environ.pop(SNAPSHOT_FALLBACK_ENV, None)
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            _seed_test_odds_dir(tmp, iso_date)
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+            try:
+                got = fetch_dk_strikeout_props(retries=1)  # allow_snapshot=None
+                check("default config does not silently use snapshot", False,
+                      f"returned {len(got)} rows with the flag unset")
+            except OddsSnapshotUnavailable as exc:
+                check("default config does not silently use snapshot", False,
+                      f"fell back anyway: {exc}")
+            except Exception as exc:
+                check("default config propagates the live error", True,
+                      f"{type(exc).__name__}: {str(exc)[:90]}")
+        if prev_flag is not None:
+            os.environ[SNAPSHOT_FALLBACK_ENV] = prev_flag
+    finally:
+        globals()["fetch_dk_strikeout_data"] = orig
+        if prev_dir is None:
+            os.environ.pop(SNAPSHOT_DIR_ENV, None)
+        else:
+            os.environ[SNAPSHOT_DIR_ENV] = prev_dir
+
+    logic = [r for r in results[1:]]
+    n_fail_logic = sum(1 for _, ok, _ in logic if not ok)
+    print("\n" + "=" * 70)
+    print(f"  {sum(1 for _, ok, _ in results if ok)}/{len(results)} passed")
+    if n_fail_logic:
+        print("  FAILED -- snapshot-fallback logic is broken")
+        return 1
+    if not live_ok:
+        print("  Logic OK; live DK fetch failed (expected from a blocked IP).")
+        return 2
+    print("  All good: live path works AND the fallback behaves.")
+    return 0
+
+
+def check_snapshot(iso_date: str | None) -> int:
+    """Report what the fallback would serve right now, without fetching."""
+    print("Snapshot directories searched (in order):")
+    for d in odds_dirs():
+        print(f"  {'OK ' if d.is_dir() else '-- '} {d}")
+    print(f"\nStaleness ceiling: {_resolve_max_age_hours(None):.1f}h  "
+          f"(fallback enabled: {_env_flag(SNAPSHOT_FALLBACK_ENV)})")
+    rc = 0
+    for label, loader in (("O/U", load_snapshot_props), ("alt", load_snapshot_alts)):
+        print(f"\n{label} board:")
+        try:
+            rows = loader(iso_date=iso_date)
+            print(f"  {len(rows)} usable rows from {rows[0]['snapshot_path']}")
+            print(f"  captured {rows[0]['snapshot_captured_at']}")
+        except OddsSnapshotUnavailable as exc:
+            print(f"  UNAVAILABLE: {exc}")
+            rc = 1
+    return rc
+
+
 def main() -> None:
     import argparse
 
@@ -584,6 +1418,18 @@ def main() -> None:
     parser.add_argument(
         "--probe-unders", action="store_true",
         help="Probe candidate subcategories for an under-side alt K market",
+    )
+    parser.add_argument(
+        "--self-test", action="store_true",
+        help="Verify the live path and the snapshot-fallback guarantees",
+    )
+    parser.add_argument(
+        "--check-snapshot", action="store_true",
+        help="Report which snapshot the fallback would serve (no fetch)",
+    )
+    parser.add_argument(
+        "--date", metavar="YYYY-MM-DD",
+        help="Slate date for --check-snapshot (default: newest available)",
     )
     parser.add_argument(
         "--output", metavar="FILE",
@@ -599,6 +1445,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.self_test:
+        sys.exit(self_test())
+
+    if args.check_snapshot:
+        sys.exit(check_snapshot(args.date))
+
     if args.probe_unders:
         print("Probing candidate under-side alt K subcategories...")
         probe_alt_under_markets()
@@ -607,9 +1459,14 @@ def main() -> None:
     et_today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
 
     # -- Over/Under lines (primary) --
+    # allow_snapshot=False is load-bearing: this path WRITES the
+    # snapshot files.  Letting it read a snapshot and rewrite it would
+    # refresh the file's mtime, resetting the staleness clock on odds
+    # that never got any newer -- laundering a stale board into a
+    # "fresh" one.  The CLI is a producer; it must always go to DK.
     print("Fetching DraftKings pitcher strikeout O/U lines...", flush=True)
     try:
-        ou_rows = fetch_dk_strikeout_props()
+        ou_rows = fetch_dk_strikeout_props(allow_snapshot=False)
     except Exception as exc:
         sys.exit(f"  Fetch failed: {exc}")
 
@@ -650,7 +1507,7 @@ def main() -> None:
         print()
         print("Fetching DraftKings pitcher strikeout alt lines...", flush=True)
         try:
-            alt_rows = fetch_dk_strikeout_alts()
+            alt_rows = fetch_dk_strikeout_alts(allow_snapshot=False)
         except Exception as exc:
             print(f"  Alt-line fetch failed: {exc}", file=sys.stderr)
             alt_rows = []

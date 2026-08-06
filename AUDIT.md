@@ -115,6 +115,77 @@ Tracks open items, resolved items, and known risks.
   de-vig assumptions, and re-measure the overround as slates
   accumulate (n=190 over 2 days is thin).
 
+### A-010: Live-vs-backtest Brier comparison is not scale-free
+- **Filed/Resolved:** 2026-08-06
+- **Status:** Resolved in the same commit that filed it — recording the
+  finding because the failure mode generalises.
+- **Description:** the first live-calibration build compared raw live
+  Brier to the flat backtest Brier. Brier is not scale-free: it depends
+  on how separable the sample is. The backtest averages a fixed
+  six-line grid including near-certainties (8.5 → 0.0654); the live log
+  scores one row per pitcher at the book's actual line, and the book
+  hangs its line where the game is closest to a coin flip. On the 8/4
+  sample the irreducible floor was 0.2385 against a 0.1491 baseline —
+  the yardstick sat below what a flawless model could score. 4,000
+  Monte-Carlo trials of a perfectly calibrated model returned "worse
+  than backtest" **100%** of the time at n=20/25/40.
+- **Resolution:** compare `excess = Brier − floor` where
+  `floor = mean p(1−p)`, computed against a backtest reference weighted
+  onto the live sample's own line mix. Post-fix Monte-Carlo: 2.0% false
+  "worse". Verdict band is 2 SE of the live Brier, so it tightens as
+  the log grows rather than needing a retune.
+- **Generalises to:** any future "live vs backtest" metric. Ask whether
+  the two samples are comparable before differencing them. Detection
+  power at n≈26 is low regardless; the leash error and the calibration
+  curve move first.
+
+### A-011: Snapshot odds could be laundered into the ledger as live
+- **Filed/Resolved:** 2026-08-06
+- **Status:** Resolved. Fallback remains off by default and is not
+  enabled on Railway.
+- **Description:** the DK snapshot fallback (added so the blocked
+  container could price a slate) had three paths by which a stale board
+  could be priced as a current one. (1) `tools/closing_odds.py` re-dates
+  rows to today, re-stamps `captured_at` to now, and drops
+  `odds_source` — so a snapshot became a fresh-looking closing price
+  that the CLV grader wrote to the ledger and that defeated
+  `daily_pipeline`'s `date ==` filter, the only guard against pricing
+  an old board. (2) `dk_k_*.csv` had no `captured_at` column, so the
+  loader dated it from file mtime — which git checkout and Docker
+  `COPY` both reset, meaning the age ceiling could never fire on the
+  container. Verified against a real git clone. (3) Staleness used the
+  file's newest stamp, so one refreshed pitcher re-validated every
+  stale row beside it.
+- **Resolution:** `closing_odds.py` pins `allow_snapshot=False`;
+  `captured_at` is a real column and an unstamped board is refused
+  rather than mtime-dated; staleness is per-row; candidate ordering
+  prefers freshness over filename prefix; the slate date is checked in
+  the loader; `odds_source` is a ledger column so snapshot-priced bets
+  stay identifiable. Self-test covers all of it (11 cases).
+- **Related:** the same selection principle as A-007 — an input error
+  that inflates a price gets selected INTO the bet list by the edge
+  filter, so odds provenance is a money-safety property, not hygiene.
+
+### A-012: DK blocks the container on IP reputation — no code fix exists
+- **Filed:** 2026-08-06
+- **Status:** Open — awaiting an operator decision on cost/ToS
+- **Description:** DraftKings returns 403 to Railway's datacenter IP and
+  200 to a residential IP for byte-identical requests. Measured, not
+  assumed: the gate is **User-Agent**, not TLS/JA3 (plain `requests`
+  with a browser UA → 200; default `python-requests` UA → 403; seven
+  curl_cffi impersonation profiles → all 200). No client-side change
+  affects an IP-reputation verdict, so "try another impersonation
+  profile" is ruled out rather than untried.
+- **Options:** (1) residential relay — operator's PC captures and
+  commits a snapshot, container pulls it (built, no cost, no
+  credentials, only as fresh as the last run); (2) paid residential
+  proxy (~$3–15/GB, automated, but a third party sees the traffic and
+  it is deliberate circumvention of an access control DK applied on
+  purpose); (3) paid odds API (~$30–200/mo, contractual right to the
+  data, cleanest long-term, needs a new adapter and coverage
+  verification for pitcher-K props). Options 2 and 3 cost money and
+  need credentials — operator's call.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)
