@@ -95,12 +95,23 @@ jobs:
       # board, but the real fix is having the cache here at all.
       #
       # restore-keys lets today's run start from yesterday's cache and
-      # top it up, instead of re-downloading three seasons every day.
+      # top it up, instead of re-downloading the season every day.
+      - name: Cache key (ET date)
+        id: cachekey
+        run: echo "d=$(TZ=America/New_York date +%F)" >> "$GITHUB_OUTPUT"
+
+      # Keyed on the ET DATE, not github.run_id. A run_id is unique per
+      # run, so every one of the ~48 daily runs would have saved a fresh
+      # ~88 MB entry: ~4 GB/day against GitHub's 10 GB repo limit, which
+      # thrashes the cache in about two days and then makes every run do
+      # a cold 134-day backfill. With a date key the first run of the day
+      # misses, restores yesterday's via restore-keys, tops up and saves
+      # once; the rest of the day hits exactly and saves nothing.
       - name: Restore Statcast cache
         uses: actions/cache@v4
         with:
           path: data/statcast_cache
-          key: statcast-${{ runner.os }}-${{ github.run_id }}
+          key: statcast-${{ runner.os }}-${{ steps.cachekey.outputs.d }}
           restore-keys: |
             statcast-${{ runner.os }}-
 
