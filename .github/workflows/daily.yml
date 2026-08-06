@@ -1,0 +1,121 @@
+name: Daily strikeouts predict + grade
+
+# WHY THIS EXISTS
+#
+# DraftKings returns 403 to datacenter IPs. Measured, not assumed: the
+# gate is User-Agent plus egress IP reputation, never TLS fingerprint.
+# That blocks Railway, and it blocks GitHub's shared runners too (their
+# Azure ranges are on the same lists) -- the sibling NRFI repo burned
+# weeks on a cron that failed every tick before working this out.
+#
+# So the odds fetch has to run somewhere with a residential-grade or
+# otherwise unlisted IP. `runs-on` reads a repo variable so this file
+# does not have to change when that happens:
+#
+#   RUNNER_LABEL unset  -> ubuntu-latest. Everything that does not need
+#                          DraftKings still works (grading, model log,
+#                          dashboard data). The odds fetch will 403 and
+#                          the pipeline refuses rather than inventing
+#                          prices, which is the designed behaviour.
+#   RUNNER_LABEL set    -> a self-hosted runner on a small VPS, which is
+#                          what actually makes the odds fetch work.
+#
+# Set it at:
+#   https://github.com/joey11600/MLB-Strikeouts/settings/variables/actions
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Force one task (night|morning|close|lineups). Blank = whatever is due."
+        required: false
+        default: ""
+
+  schedule:
+    # Hourly, not one cron per task. GitHub cron is UTC-only, so
+    # ET-anchored cron lines silently shift an hour at every DST
+    # boundary. Instead every tick calls `railway_worker.py --due`,
+    # which reuses the SAME ET schedule table, grace windows, and
+    # once-per-day state as the resident Railway worker. DST is then
+    # handled by construction and the two schedulers cannot drift apart.
+    #
+    # 06:00-23:00 UTC covers 02:00-19:00 ET in EDT and 01:00-18:00 ET in
+    # EST, which brackets every entry in SCHEDULE under both offsets.
+    - cron: "0 6-23 * * *"
+    - cron: "0 0-2 * * *"
+
+# One at a time. Two concurrent runs would both write the ledger, and
+# the second push would fail on a non-fast-forward anyway.
+concurrency:
+  group: strikeouts-daily
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run whatever is due (ET-aware, DST-correct)
+        env:
+          # Keep scheduler state and the ledger inside the repo so the
+          # once-per-day guard survives this runner being ephemeral.
+          # Committed below.
+          WORKER_STATE_DIR: data
+          DATA_STATE_DIR: data
+          STATCAST_CACHE_DIR: data/statcast_cache
+          FORCE_TASK: ${{ github.event.inputs.task }}
+        run: |
+          if [ -n "$FORCE_TASK" ]; then
+            python tools/railway_worker.py --task "$FORCE_TASK"
+          else
+            python tools/railway_worker.py --due
+          fi
+
+      - name: Show the ledger this run produced
+        if: always()
+        run: |
+          python tools/pl_calc.py || true
+
+      - name: Commit and push any ledger changes
+        if: always()
+        run: |
+          git config user.name  "strikeouts-bot"
+          git config user.email "noreply@github.com"
+
+          # Stage the LEDGER first and decide on that alone. data.json
+          # embeds a generated_at stamp, so staging it up front would
+          # make every idle hourly tick look like a change and produce
+          # ~18 empty commits a day. It rides along only when something
+          # real moved.
+          git add -A data/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "no ledger changes — not committing (data.json timestamp alone is not a change)"
+            exit 0
+          fi
+          git add dashboard/public/data.json 2>/dev/null || true
+          git commit -m "chore(ci): $(TZ=America/New_York date '+%Y-%m-%d %H:%M ET') automated run"
+          # Another runner (or the Railway worker) may have pushed while
+          # this job ran. Rebase rather than force: the ledger is
+          # append-mostly and losing the other side's rows is never OK.
+          git pull --rebase --autostash origin master || true
+          git push origin HEAD:master

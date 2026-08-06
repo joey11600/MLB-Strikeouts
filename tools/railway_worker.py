@@ -688,5 +688,69 @@ def main() -> None:
         time.sleep(POLL_SECONDS)
 
 
+def run_due_once() -> int:
+    """Run whatever task is due right now, then exit. For CI schedulers.
+
+    GitHub Actions cron is UTC-only, so a workflow with ET-anchored cron
+    lines silently shifts by an hour at every DST boundary. Instead the
+    workflow fires hourly and calls this, which reuses the SAME schedule
+    table, grace windows, and once-per-day state as the resident loop —
+    so the two schedulers cannot drift apart, and DST is handled by
+    construction rather than by remembering to edit cron lines twice a
+    year.
+
+    Exits 0 when nothing is due: an idle tick is a success, not a
+    failure, and a red X on an empty run trains the operator to ignore
+    the whole workflow.
+    """
+    sync_repo()
+    now = datetime.now(ET)
+    today = now.date().isoformat()
+    state = _load_state()
+    ran = []
+
+    for name, at, grace in SCHEDULE:
+        key = f"{name}@{at.strftime('%H%M')}"
+        if state.get(key) == today:
+            continue
+        due = datetime.combine(now.date(), at, tzinfo=ET)
+        if now < due:
+            continue
+        late = (now - due).total_seconds() / 60
+        if late > grace:
+            state[key] = today
+            _save_state(state)
+            log(f"SKIP {key}: {late:.0f} min late (grace {grace})")
+            continue
+
+        log(f"--- running {key} ({late:.0f} min after due) ---")
+        try:
+            TASKS[name]()
+            ran.append(key)
+        except Exception as exc:
+            log(f"TASK ERROR {key}: {exc}")
+        state[key] = today
+        _save_state(state)
+        log(f"--- finished {key} ---")
+
+    log(f"due-run complete: {ran or 'nothing was due'}")
+    return 0
+
+
+def run_named_task(name: str) -> int:
+    """Run one task by name and exit. For manual CI dispatch."""
+    if name not in TASKS:
+        log(f"unknown task {name!r}; known: {list(TASKS)}")
+        return 2
+    log(f"--- forced run: {name} ---")
+    TASKS[name]()
+    log(f"--- finished {name} ---")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--due" in sys.argv:
+        sys.exit(run_due_once())
+    if "--task" in sys.argv:
+        sys.exit(run_named_task(sys.argv[sys.argv.index("--task") + 1]))
     main()
