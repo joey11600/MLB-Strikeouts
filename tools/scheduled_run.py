@@ -115,6 +115,9 @@ def task_close():
 
 
 def task_night():
+    # Refresh the Statcast cache FIRST: bullpen fatigue reads yesterday's
+    # relief usage, so a stale cache silently degrades the leash inputs.
+    _run("statcast-backfill", [PYTHON, "run.py", "backfill"], 1800)
     _run("grade", [PYTHON, "run.py", "grade"], 900)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 600)
     _commit_and_push("overnight grading")

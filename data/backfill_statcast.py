@@ -22,7 +22,12 @@ from pathlib import Path
 
 import pandas as pd
 
-CACHE_DIR = Path(__file__).parent / "statcast_cache"
+# Overridable so the Railway worker can point at its persistent volume
+# (STATCAST_CACHE_DIR=/data/statcast_cache). Defaults to the repo path.
+CACHE_DIR = Path(
+    os.environ.get("STATCAST_CACHE_DIR")
+    or (Path(__file__).parent / "statcast_cache")
+)
 
 
 def backfill(start_date: date, end_date: date, sleep_sec: float = 1.0) -> None:

@@ -69,12 +69,12 @@ def cmd_status():
 def cmd_backfill():
     """Refresh Statcast cache for recent days."""
     from datetime import date
-    from data.backfill_statcast import backfill_range
+    from data.backfill_statcast import backfill
 
     today = date.fromisoformat(_today_et())
     start = today - timedelta(days=7)
     print(f"\n--- BACKFILLING STATCAST {start} to {today} ---\n")
-    backfill_range(start, today)
+    backfill(start, today)
     print("Backfill complete.")
 
 

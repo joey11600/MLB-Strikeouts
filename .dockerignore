@@ -1,0 +1,19 @@
+# The Statcast cache is ~355MB and lives on the Railway volume, not in
+# the image. Never ship it in the build context.
+data/statcast_cache/
+data/backfill/
+data/chadwick_cache/
+data/game_context_cache/
+
+# Dashboard is built and served by Vercel, not the worker.
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+
+.git/
+logs/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vercel/

@@ -19,7 +19,9 @@ data/backfill/
 data/chadwick_cache/
 data/game_context_cache/
 data/odds/
-models/*.pkl
+# Fitted model coefficients are tiny (~2KB total) and the Railway
+# worker needs them in the image — tracked deliberately.
+!models/*.pkl
 *.db
 *.sqlite3
 
