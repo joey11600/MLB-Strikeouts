@@ -363,9 +363,10 @@ def main() -> None:
     if not any(CACHE_DIR.glob("*/*")):
         refresh_cache()
 
-    # Make sure the served payload exists even before the first job.
-    if not DASHBOARD_JSON.exists():
-        _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+    # data.json is a DERIVED artifact and ships inside the image, so a
+    # fresh deploy would otherwise serve a snapshot older than the
+    # volume's ledger. Always rebuild it from volume state on boot.
+    _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
 
     # Operational escape hatch: set RUN_TASK_ON_BOOT=<task> and redeploy
     # to force one run immediately (no waiting for the window, no public
