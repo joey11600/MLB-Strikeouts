@@ -26,10 +26,13 @@ Environment:
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
+import threading
 import time
 from datetime import date, datetime, time as dtime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -42,6 +45,20 @@ PYTHON = sys.executable
 CACHE_DIR = Path(os.environ.get("STATCAST_CACHE_DIR", REPO / "data" / "statcast_cache"))
 STATE_DIR = Path(os.environ.get("WORKER_STATE_DIR", CACHE_DIR.parent))
 STATE_PATH = STATE_DIR / "worker_state.json"
+
+# Mutable state that MUST survive redeploys (the image is rebuilt from
+# git, so anything written into /app is lost). Each entry is symlinked
+# out to the volume on boot, seeded from the image the first time.
+PERSISTED = [
+    "picks_2026.csv",
+    "pick_changes.csv",
+    "slates",
+    "odds",
+]
+VOLUME_STATE = STATE_DIR / "state"
+
+PORT = int(os.environ.get("PORT", "8080"))
+DASHBOARD_JSON = REPO / "dashboard" / "public" / "data.json"
 
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "joey11600/MLB-Strikeouts")
 SEASON_START = date(2026, 3, 26)
@@ -102,6 +119,88 @@ def _run(label: str, cmd: list[str], timeout: int) -> bool:
         return False
     log(f"OK {label}")
     return True
+
+
+def bind_state_to_volume() -> None:
+    """Point the ledger and slate/odds archives at the volume.
+
+    The container is rebuilt from git on every deploy, so anything the
+    pipeline writes under /app/data would be lost. Each mutable path is
+    replaced with a symlink into the volume, seeded once from the image
+    so the first boot inherits the committed ledger. Code files under
+    data/ stay in the image and keep updating normally.
+    """
+    VOLUME_STATE.mkdir(parents=True, exist_ok=True)
+    for name in PERSISTED:
+        repo_path = REPO / "data" / name
+        vol_path = VOLUME_STATE / name
+
+        if repo_path.is_symlink():
+            continue
+
+        if not vol_path.exists() and repo_path.exists():
+            if repo_path.is_dir():
+                shutil.copytree(repo_path, vol_path)
+            else:
+                shutil.copy2(repo_path, vol_path)
+            log(f"seeded volume state: {name}")
+
+        if not vol_path.exists():
+            vol_path.mkdir(parents=True) if not name.endswith(".csv") else vol_path.touch()
+
+        if repo_path.exists():
+            shutil.rmtree(repo_path) if repo_path.is_dir() else repo_path.unlink()
+        repo_path.symlink_to(vol_path, target_is_directory=vol_path.is_dir())
+    log(f"state bound to volume: {', '.join(PERSISTED)}")
+
+
+class DataHandler(BaseHTTPRequestHandler):
+    """Serves the dashboard payload straight off the volume.
+
+    This is what removes the need for any push credential: the site
+    fetches live data from here instead of waiting for a rebuild, so
+    picks appear the moment the pipeline writes them.
+    """
+
+    def _send(self, code: int, body: bytes, ctype: str) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        # The dashboard is a public page on another origin.
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):  # noqa: N802
+        if self.path.startswith("/data.json"):
+            try:
+                self._send(200, DASHBOARD_JSON.read_bytes(), "application/json")
+            except Exception as exc:
+                self._send(503, json.dumps({"error": str(exc)}).encode(),
+                           "application/json")
+            return
+        if self.path.startswith("/health"):
+            payload = {
+                "ok": True,
+                "now_et": datetime.now(ET).isoformat(),
+                "jobs_run_today": _load_state(),
+                "cache_months": sorted(p.name for p in CACHE_DIR.glob("*")) if CACHE_DIR.exists() else [],
+                "data_json_present": DASHBOARD_JSON.exists(),
+            }
+            self._send(200, json.dumps(payload, indent=1).encode(), "application/json")
+            return
+        self._send(404, b'{"error":"not found"}', "application/json")
+
+    def log_message(self, *args):  # keep request noise out of the job log
+        return
+
+
+def start_http_server() -> None:
+    def serve():
+        HTTPServer(("0.0.0.0", PORT), DataHandler).serve_forever()
+    threading.Thread(target=serve, daemon=True).start()
+    log(f"serving /data.json and /health on :{PORT}")
 
 
 def configure_git() -> None:
@@ -165,6 +264,15 @@ def deploy_dashboard() -> None:
 
 
 def commit_and_push(context: str) -> None:
+    """Optional git mirror of the ledger.
+
+    The volume is the live source of truth and the dashboard reads the
+    HTTP endpoint, so this is pure backup — it no-ops without a token.
+    """
+    if not os.environ.get("GITHUB_TOKEN"):
+        log("git mirror skipped (no GITHUB_TOKEN) — volume holds the ledger, "
+            "dashboard reads it live over HTTP")
+        return
     subprocess.run(
         ["git", "add", "data/picks_2026.csv", "data/slates",
          "data/pick_changes.csv", "data/odds", "dashboard/public/data.json"],
@@ -223,10 +331,16 @@ TASKS = {
 def main() -> None:
     log("=== Strikeouts Railway worker starting ===")
     log(f"cache: {CACHE_DIR}  state: {STATE_PATH}")
+    bind_state_to_volume()
+    start_http_server()
     configure_git()
 
     if not any(CACHE_DIR.glob("*/*")):
         refresh_cache()
+
+    # Make sure the served payload exists even before the first job.
+    if not DASHBOARD_JSON.exists():
+        _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
 
     log("schedule (ET): " + ", ".join(
         f"{t.strftime('%H:%M')} {name}" for name, t, _ in SCHEDULE))
