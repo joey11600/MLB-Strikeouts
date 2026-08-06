@@ -44,8 +44,10 @@ def american_to_implied(odds: int | str) -> float:
         return 100.0 / (100.0 + odds)
     elif odds < 0:
         return abs(odds) / (abs(odds) + 100.0)
-    else:
-        return 0.5
+    # Odds of 0 aren't a price. Returning 0.5 turned unparseable input
+    # into a coin flip, which the edge filter reads as a huge mispricing
+    # against any confident model view (AUDIT A-007).
+    raise ValueError("american_to_implied: 0 is not a valid American price")
 
 
 def american_to_decimal(odds: int | str) -> float:
@@ -59,8 +61,7 @@ def american_to_decimal(odds: int | str) -> float:
         return 1.0 + odds / 100.0
     elif odds < 0:
         return 1.0 + 100.0 / abs(odds)
-    else:
-        return 2.0
+    raise ValueError("american_to_decimal: 0 is not a valid American price")
 
 
 def no_vig_fair_prob(over_odds: int | str, under_odds: int | str) -> dict:

@@ -163,10 +163,17 @@ class StageB:
             + [extra_values[name] for name in self.extra_features]
         )
 
-        if self.coefficients is not None:
-            return float(_sigmoid(x @ self.coefficients))
-        else:
-            return matchup_k_rate(batter_k_pct, pitcher_k_pct) * TTO_RATIOS.get(tto, 1.0)
+        if self.coefficients is None:
+            # Silently falling back to the matchup formula would mean a
+            # failed model load produces different numbers instead of an
+            # error — the pipeline would price a whole slate off the
+            # wrong model and never say so (AUDIT A-007).
+            raise RuntimeError(
+                "Stage B has no fitted coefficients — load() was not called "
+                "or the pickle is missing. Refusing to silently fall back to "
+                "the matchup formula."
+            )
+        return float(_sigmoid(x @ self.coefficients))
 
     def predict_per_batter_k_prob(
         self,

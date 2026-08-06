@@ -122,15 +122,26 @@ class StageA:
 
     def predict_bf_distribution(self, features: dict) -> np.ndarray:
         """Return P(BF = n) for n = 0..40 as a 41-element array."""
-        prior_bf = features.get("c1_bf_mean", LEAGUE_BF_MEAN)
+        # AUDIT A-007: never substitute a league default for a missing
+        # input. A fabricated workload/rate inflates the projection, and
+        # the edge filter then selects that error into the bet list at
+        # max stake. Missing input = caller bug = fail loudly.
+        prior_bf = features.get("c1_bf_mean")
         if prior_bf is None:
-            prior_bf = LEAGUE_BF_MEAN
+            raise ValueError(
+                "Stage A: c1_bf_mean is missing. Refusing to substitute the "
+                f"league average ({LEAGUE_BF_MEAN} BF) — that manufactures edge. "
+                "Establish the pitcher's real workload or skip him."
+            )
 
         k_pct = features.get("a3_season_k_pct_shrunk")
         if k_pct is None:
-            k_pct = features.get("a3_season_k_pct_raw", 0.225)
+            k_pct = features.get("a3_season_k_pct_raw")
         if k_pct is None:
-            k_pct = 0.225
+            raise ValueError(
+                "Stage A: season K% is missing. Refusing to substitute the "
+                "league average — that manufactures edge."
+            )
 
         il_return = float(features.get("c10_il_return", False))
         pitch_limit = features.get("c11_pitch_limit")

@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-08-06 — Default audit: 7 landmines now fail loudly (A-007/8/9)
+
+Swept every default in the live pricing path under one test: *if this
+fires, does it invent an input?* Seven did. All now raise instead of
+substituting a league average — a fabricated input inflates a
+projection, and the edge filter selects that error into the bet list
+at max stake (the Anderson mechanism).
+
+Fixed: Stage A's `c1_bf_mean` → 21.1 BF and `k_pct` → 0.225;
+`predict()`'s `lineup_k_pcts` → league lineup and `pitcher_k` → 0.225;
+Stage B silently falling back to the matchup formula when unfitted
+(a failed model load would have priced a whole slate off the wrong
+model); `american_to_implied/decimal` treating odds of 0 as a coin
+flip; and `_calc_pnl` booking a WIN at an invented −110. That last one
+mattered doubly — `pl_calc` validates the ledger through the same
+function, so the fabrication would have been confirmed by our own
+drift check.
+
+Verified: all 7 raise, the normal prediction path is unchanged
+(E[K] 5.71 on a reference pitcher), and `pl_calc` still reads
+2W-4L / −4.01u with no drift.
+
+Two measured findings filed for decision rather than silently patched:
+
+- **A-008** — symmetric error manufactures edge too. Replacing real
+  lineups with league averages (what the 10:30am run does, since
+  lineups aren't posted) moves P(over 5.5) by 5.1pp on average and up
+  to 10.9pp, with 12 of 25 starters over 5pp. Our edge bar is ~7-8pp.
+- **A-009** — the alt board's measured overround is ~24% (implied
+  47.1% vs realized 37.9%, n=190), not the assumed 4%. Retuning the
+  constant would make the system *more* aggressive, not less, because
+  of how the market blend enters the edge formula. A real-EV gate on
+  the vigged price is the right fix.
+
 ## 2026-08-06 — Role gate: no league defaults, no pricing non-starters
 
 Anderson's 0-K line (3.2 IP, 13 BF, all 3.5u lost) was not variance and

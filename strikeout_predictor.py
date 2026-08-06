@@ -80,14 +80,24 @@ class StrikeoutPredictor:
         """
         if lines is None:
             lines = [3.5, 4.5, 5.5, 6.5, 7.5, 8.5]
+        # AUDIT A-007: a missing input must never become a league default.
+        # Callers that genuinely want league-average assumptions have to
+        # say so explicitly by passing the values.
         if lineup_k_pcts is None:
-            lineup_k_pcts = [0.225] * 9
+            raise ValueError(
+                "predict(): lineup_k_pcts is required. Pass the real lineup, "
+                "or pass league rates explicitly and mark the pick's "
+                "lineup_source as projected — silent defaults manufacture edge."
+            )
 
         pitcher_k = pitcher_features.get("a3_season_k_pct_shrunk")
         if pitcher_k is None:
-            pitcher_k = pitcher_features.get("a3_season_k_pct_raw", 0.225)
+            pitcher_k = pitcher_features.get("a3_season_k_pct_raw")
         if pitcher_k is None:
-            pitcher_k = 0.225
+            raise ValueError(
+                "predict(): pitcher season K% is missing. Refusing to "
+                "substitute the league average — that manufactures edge."
+            )
 
         zone_pct = pitcher_features.get("a9_zone_pct")
         eastward_tz = pitcher_features.get("f1_eastward_tz", 0.0)

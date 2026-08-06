@@ -191,7 +191,14 @@ def _calc_pnl(row: dict) -> float:
         try:
             odds = int(odds_str)
         except (ValueError, TypeError):
-            odds = -110
+            # Money rule: never fabricate odds. Booking a win at an
+            # invented -110 silently misstates the ledger, and pl_calc
+            # would agree with itself because it uses this same function.
+            raise ValueError(
+                f"_calc_pnl: cannot price a WIN — odds for the "
+                f"{pick_side or '?'} side are missing/unparseable "
+                f"({odds_str!r}). Fix the row; refusing to assume -110."
+            )
 
         if odds > 0:
             return units * (odds / 100)
