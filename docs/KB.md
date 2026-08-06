@@ -351,7 +351,30 @@ Graded picks are locked and cannot be overwritten.
 
 ### Production operator workflow
 
-Automated (Windows Task Scheduler, `tools/scheduled_run.py`, ET):
+**Cloud (Railway — target state).** Project `mlb-strikeouts`, service
+`worker`, persistent volume at `/data` (Statcast cache +
+`worker_state.json`). `tools/railway_worker.py` is a resident
+scheduler: times are declared in America/New_York and compared to
+`datetime.now(ET)`, so DST is handled by construction — no UTC cron
+shuffling and no hourly-shotgun workaround (contrast NRFI's
+`daily.yml`, which needs both because GitHub's `schedule` trigger
+fires 1–3 hours late). Each job has a lateness grace: a missed closing
+snapshot is skipped and logged rather than fired uselessly after first
+pitch; grading and slates still run late.
+
+The worker pulls the repo before each job and pushes the ledger back
+after, so GitHub stays the durable source of truth and the Vercel
+build picks up `dashboard/public/data.json`. Because every task shells
+out to a fresh `python run.py`, a `git pull` means code changes take
+effect without redeploying the container.
+
+Required Railway variables: `GITHUB_TOKEN` (contents:write on the
+repo — without it the worker computes picks but they never leave the
+volume), `GITHUB_REPO`, optional `VERCEL_DEPLOY_HOOK`.
+
+**Local (Windows Task Scheduler, `tools/scheduled_run.py`, ET)** —
+the pre-migration path; keep it enabled until the cloud worker is
+verified pushing, then disable to avoid double-runs:
 10:30 AM morning picks + deploy · 4:45 PM lineup-lock re-run
 (re-predict with confirmed lineups; placed bets stay frozen, changes
 journaled) · 12:15/3:00/6:15 PM closing snapshots · 3:00 AM grade +

@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-08-06 — Railway worker (cloud migration) + two defect fixes
+
+The pipeline moves off the operator's PC to Railway project
+`mlb-strikeouts`, service `worker`, with a persistent volume at
+`/data` holding the Statcast cache and the scheduler's job state.
+
+Why Railway rather than GitHub Actions (which NRFI uses): closing-odds
+snapshots are unrecoverable once a game starts, and GitHub's
+`schedule` trigger is best-effort — NRFI's own workflow documents it
+firing 1–3 hours late and compensates with hourly runs plus a Vercel
+`workflow_dispatch` poke. A resident worker fires on the minute, keeps
+a warm ~350MB cache on disk instead of re-downloading, and can host
+the heavy jobs (backtest, retrain, gauntlet) later. Declaring times in
+America/New_York also makes the schedule DST-agnostic by construction.
+
+- `tools/railway_worker.py`: ET-aware scheduler, per-task lateness
+  grace (close 45m, lineups 2h, morning/night 6h), job state persisted
+  to the volume so restarts resume mid-day, git pull before / push
+  after each job, optional Vercel deploy hook.
+- `Dockerfile`, `requirements.txt`, `.dockerignore` (cache excluded
+  from the build context), `STATCAST_CACHE_DIR` override, and
+  `models/*.pkl` now tracked (157KB) so the image carries the model.
+
+**Two real defects found while wiring this up:**
+
+1. `run.py backfill` has been broken since it was written — it
+   imported `backfill_range`, but the function is `backfill`. Every
+   cache-refresh invocation would have died on ImportError.
+2. Neither the local nor the planned cloud automation ever refreshed
+   the Statcast cache. Bullpen fatigue reads YESTERDAY's relief usage,
+   so the Phase 12 leash inputs were silently degrading as the cache
+   aged. Both night tasks now backfill before grading.
+
+Cutover is deliberately staged: the local Windows tasks stay enabled
+until the worker is verified pushing to GitHub, then get disabled.
+
 ## 2026-08-05 — Daily cap 6u → 10u; full pre-game restake to clean denoms
 
 - DAILY_MAX_UNITS raised 6.0 → 10.0 (operator direction): the 3.5u
