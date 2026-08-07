@@ -1,6 +1,42 @@
 
 # Changelog
 
+## 2026-08-07 — Data commits stop rebuilding the site (A-023)
+
+The two MLB projects had eaten 92% of the Vercel build allowance in one
+cycle: 78 CPU-hours here, 99 in NRFI. Cause is structural, not a
+runaway job — Vercel builds on every push, and CI pushes a `chore(ci)`
+commit every time the ledger moves, up to 48 runs a day.
+
+The waste is that the rebuild accomplished nothing. `data-context.tsx`
+fetches live from the Railway worker; the bundled `public/data.json` is
+only a fallback for when that fetch fails. So the site was being rebuilt
+from scratch to refresh a file the browser then overrides.
+
+Confirmed rather than assumed, because the whole fix rests on it: the
+worker sends `Access-Control-Allow-Origin: *`, and fetching both
+endpoints live returned Railway at `13:51:44Z` against Vercel's bundled
+`13:51:36Z`. The runtime path works.
+
+`scripts/vercel-ignore-build.sh` is now the `ignoreCommand`. Diff
+touches only `data/` and `dashboard/public/data.json` -> exit 0, build
+skipped. Anything else -> exit 1, builds as before. When the diff can't
+be computed (shallow clone, no parent) it BUILDS: a needless build costs
+minutes, a wrongly skipped one ships stale code and nobody notices.
+
+Replayed over the last 25 commits: 7 `chore(ci)` -> SKIP, 18 code ->
+BUILD, no misses.
+
+Sizing this honestly — the 8/5 and 8/6 spikes were 36 and 26 *code*
+commits from the dashboard/watchdog build-out. Those were legitimate
+rebuilds and this change would not have stopped them. What it stops is
+the floor underneath: a normal slate day is ~10–18 automated commits,
+and those now cost zero build minutes.
+
+NRFI is the bigger consumer (99h, same pattern, `auto: predict` /
+`auto: grade` / `auto: daily backup snapshot`) and is deliberately left
+alone — different repo, different production system, operator's call.
+
 ## 2026-08-07 — Morning board moves to 09:00; evidence decoupled from it
 
 Operator asked for the board at 09:00 instead of 10:30. Straightforward

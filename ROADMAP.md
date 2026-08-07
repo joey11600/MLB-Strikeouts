@@ -153,3 +153,10 @@
       (A-013 write path) — operator credential
 - [ ] Retire the local Windows scheduled tasks once the cloud path has
   run clean for a week (deliberately still enabled as backup)
+- [x] Data-only commits no longer trigger a Vercel rebuild (A-023) —
+  `ignoreCommand` skips when the diff touches only `data/` and
+  `dashboard/public/data.json`, since the site reads live from the
+  worker anyway
+- [ ] Apply the same build-skip to the NRFI project (99 CPU-hours,
+  51.6% of the allowance, same `auto:` commit pattern) — separate
+  repo, operator call

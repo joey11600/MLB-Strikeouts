@@ -484,6 +484,43 @@ Tracks open items, resolved items, and known risks.
 - **Generalises to:** any job that reads a third-party feed on a
   schedule. Ask when the data actually lands, not when the games end.
 
+### A-023: Every automated data commit rebuilt the whole site
+- **Filed/Resolved:** 2026-08-07 (found from the operator's Vercel bill)
+- **Description:** Vercel builds on every push to master. The CI job
+  pushes a `chore(ci)` commit whenever the ledger moved — up to 48 runs
+  a day — so the entire Next.js app was rebuilt to ship a changed
+  `data/` directory. The strikeouts project reached 78 CPU-hours
+  (40.5% of the plan's build allowance) and the sibling NRFI project
+  99 CPU-hours (51.6%) in one cycle. Between them they consumed 92% of
+  the allowance.
+- **Why it was pure waste:** `dashboard/lib/data-context.tsx` fetches
+  live from the Railway worker and only falls back to the bundled
+  `public/data.json` if that fetch fails. In normal operation the
+  committed copy is never read — so the rebuild refreshed a file the
+  browser overrides at runtime.
+- **Verified before shipping, not assumed:** the worker sends
+  `Access-Control-Allow-Origin: *` (`railway_worker.py:197`), and both
+  endpoints were fetched live — Railway `generated_at`
+  13:51:44Z vs Vercel's bundled 13:51:36Z. The runtime path genuinely
+  works, so a stale bundled copy is a fallback-only concern.
+- **Resolution:** `scripts/vercel-ignore-build.sh`, wired as
+  `ignoreCommand` in `vercel.json`. A commit touching only `data/` and
+  `dashboard/public/data.json` exits 0 and Vercel skips the build.
+  Anything else exits 1 and builds. Fails toward BUILDING when the diff
+  cannot be computed — a needless build costs minutes, a wrongly
+  skipped one ships stale code silently.
+- **Classifier checked against the last 25 real commits:** all 7
+  `chore(ci)` commits classified SKIP, all 18 code commits BUILD, zero
+  misclassifications.
+- **Honest sizing of the win:** the 8/5–8/6 spike (36 and 26 builds)
+  was development churn — real code, real rebuilds, one-off. This fixes
+  the permanent leak underneath it: at steady state a slate day is
+  ~10–18 automated commits and now zero builds.
+- **NRFI is the larger consumer and is NOT fixed** — separate repo
+  (`MLB-first-inning`, 49 commits on 8/6 via `auto: predict` /
+  `auto: grade` / `auto: daily backup snapshot`), awaiting operator
+  go-ahead before touching a sibling production system.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

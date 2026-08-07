@@ -1,5 +1,6 @@
 {
   "buildCommand": "cd dashboard && npm install && npm run build",
   "outputDirectory": "dashboard/out",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "ignoreCommand": "bash scripts/vercel-ignore-build.sh"
 }

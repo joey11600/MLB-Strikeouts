@@ -1,0 +1,5 @@
+# Shell scripts must be LF. The operator works on Windows; a script
+# committed with CRLF runs fine locally and then dies on Vercel's and
+# GitHub's Linux runners with `\r: command not found`, which reads like
+# a mystery rather than a line-ending problem.
+*.sh text eol=lf
