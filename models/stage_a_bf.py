@@ -27,6 +27,32 @@ MODEL_PATH = Path(__file__).parent / "stage_a_fitted.pkl"
 LEAGUE_BF_MEAN = 21.1
 LEAGUE_BF_STD = 5.06
 
+# Pitches per batter faced, used ONLY to convert an announced pitch limit
+# into a cap on batters faced.
+#
+# This was 4.0, picked by eye. Measured on 3,283 real 2026 starts by
+# replaying pitches in order and counting how many batters a starter had
+# actually faced at the moment he threw his Nth pitch -- which is the
+# question a pitch limit actually asks, rather than the whole-start
+# average (3.87, and the wrong statistic here because efficiency drifts
+# as the game goes on):
+#
+#     limit  n starts  mean BF  implied divisor
+#       60     3140     15.83       3.791
+#       75     2821     19.68       3.812
+#       90     1611     23.16       3.885
+#      100      379     25.04       3.993
+#
+# 4.0 is right for a ~100-pitch outing, which is not a limit. Across the
+# 60-90 range where limits actually land it understated batters faced by
+# 0.7-0.9, which at ~2.45 pp of P(over) per batter is roughly 2 points of
+# probability -- always in the direction of suppressing OVER.
+#
+# A single constant covers 60-90 to within 0.09 BF, which is far inside
+# the 2.71 BF noise floor, so a limit-dependent curve would be false
+# precision.
+PITCHES_PER_BF_UNDER_LIMIT = 3.8
+
 
 def _negbin_log_pmf(k, mu, alpha):
     """Log PMF of negative binomial parameterized by mean mu and dispersion alpha.
@@ -158,7 +184,7 @@ class StageA:
             alpha = 0.1
 
         if pitch_limit is not None:
-            estimated_bf_from_limit = pitch_limit / 4.0
+            estimated_bf_from_limit = pitch_limit / PITCHES_PER_BF_UNDER_LIMIT
             mu = min(mu, estimated_bf_from_limit)
 
         dist = np.array([_negbin_pmf(n, mu, alpha) for n in range(41)])

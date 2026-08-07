@@ -1,6 +1,65 @@
 
 # Changelog
 
+## 2026-08-07 — Stage A is finished; the "leash bias" was never real (A-024)
+
+Went looking for a 1.32-batter bias in the leash and found that it does
+not exist. Reporting it in the first place was an error: the dashboard's
+live-model panel scores only the 48 non-reconstructed rows, and those
+happened to be the two days that ran over. `model_log.csv` holds 74
+graded starts; the 26 left out ran +1.69 the other way. All 74 pooled:
+**-0.27 BF, SE 0.48**.
+
+Measured properly across **11,042 out-of-sample starts** in all three
+temporal directions, the bias is **-0.008 BF**, CI [-0.11, +0.09]. Zero
+sits inside every interval. A 48-start window landing at |1.32| happens
+3.3% of the time by chance, and 5.3% of real consecutive two-day pairs
+across three seasons hit it.
+
+Accuracy is at **94% of the pre-game ceiling** — 2.82 BF against a
+perfect model's 2.66, leaving 0.16. Four candidates went through the full
+three-way gauntlet and **none survived**. The most promising one —
+aligning the training feature onto the serving definition — won on the
+wide backtest in all three directions and then reversed on the population
+that actually becomes bets, because the pipeline already refuses
+relief-worked pitchers and that is precisely where the two definitions
+disagree.
+
+Worth recording because it is counter-intuitive: the BF distribution
+family IS wrong. Real batters-faced is left-skewed and under-dispersed,
+the negative binomial is always right-skewed and over-dispersed, and
+`alpha` sits pinned at the optimizer's floor in both shipped pickles with
+the likelihood still pushing. Tails run 2-4x too fat. **It does not
+matter** — P(K >= line) is near-linear in BF, so only the mean survives
+the compound integral and the shape cancels out.
+
+The real error is downstream: across 18,798 backtest rows the model says
+OVER hits 29.69% and it hits 30.88%, under-calling OVER by 1.19pp, and
+the gap persists when BF is exactly right. That points at Stage B, the
+TTO decay, or the calibrator — and explains why every leash-shortening
+idea lost, since cutting BF pushes OVER down and OVER was already low.
+
+Stop working on batters faced. Re-open only if 150 graded starts come in
+near +1.3.
+
+### Also: the pitch-limit cap, which has never once executed (A-024a)
+
+`predict_bf_distribution()` capped a limited starter at `pitch_limit /
+4.0`, a number chosen by eye. That path has never run —
+`manual_pitch_limits.csv` is a header row, `backtest.py` hardcodes None,
+and 0 of 98 priced pitchers carry a limit. Which is exactly how a wrong
+constant survives.
+
+Replayed pitches in order on 3,283 real starts, counting batters actually
+faced at the Nth pitch: 60 -> 15.83, 75 -> 19.68, 90 -> 23.16, 100 ->
+25.04. So 4.0 is right for a ~100-pitch outing, which is not a limit; over
+the 60-90 band where limits land it understated batters faced by 0.7-0.9,
+worth ~2 points of P(over), always suppressing OVER.
+
+Now `PITCHES_PER_BF_UNDER_LIMIT = 3.8`, with the table in the source.
+Provably a no-op today since the path cannot fire — this removes a
+landmine rather than changing live pricing. Four tests pin it.
+
 ## 2026-08-07 — The build-skip compares against the last BUILD (A-023a)
 
 Red-teamed this morning's build-skip before trusting it, and found the

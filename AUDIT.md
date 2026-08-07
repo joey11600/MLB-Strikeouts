@@ -564,6 +564,83 @@ Tracks open items, resolved items, and known risks.
   Machine size is a second, independent lever if ever needed; it matters
   much less now that builds are rare.
 
+### A-024: Stage A is finished — and the "leash bias" was a selected subset
+- **Filed/Resolved:** 2026-08-07
+- **How it started:** the dashboard's live-model panel showed
+  `mean_bf_error = -1.32` and this was reported to the operator as a real
+  defect. **It was not.** That panel scores only the 48 non-reconstructed
+  rows. `model_log.csv` holds 74 graded starts, and the 26 excluded ones
+  ran +1.69 the other way. All 74 pooled: **-0.27 BF, SE 0.48**.
+  A subset was compared against nothing and called a bias.
+- **Measured properly** — 11,042 out-of-sample starts, all three temporal
+  directions: bias **-0.008 BF**, 95% CI [-0.11, +0.09]. Per split
+  +0.005 / +0.031 / -0.085. Zero is inside every interval. On the
+  narrower population the pipeline actually prices: -0.10 to +0.19.
+- **How unusual was the 48?** Block bootstrap over whole slates:
+  P(|bias| >= 1.32) at n=48 is 3.3%; empirically 5.3% of real consecutive
+  two-day pairs across three seasons hit it. A 1-in-19 stretch found by
+  looking at the two most recent days.
+- **Accuracy is at ceiling:** MAE 2.82 BF against a perfect-model floor of
+  2.66 = **94%**, 0.16 BF of headroom. There is nothing left to win.
+- **Four candidates, zero survivors** (full three-way gauntlet):
+  1. Aligning `prior_bf_mean` onto the serving definition won on the wide
+     backtest in all three directions — then REVERSED on the population
+     that becomes bets (the pipeline already refuses relief-worked
+     pitchers, which is exactly the group the two definitions disagree
+     about). Worse BF accuracy in all three directions there; 97.3%
+     likely worse on the money metric. The salvage failed Gate 2.
+  2. Pitch-limit divisor — real, but see A-024a below.
+  3. Alpha-at-bound warning — no effect on any number a bettor sees.
+  4. Replacing the BF distribution family (Poisson / binomial /
+     hook-mixture / empirical) — neutral or worse in all three directions.
+- **Why the distribution family does not matter, despite being wrong.**
+  Real BF is left-skewed and UNDER-dispersed (Var/mu ~ 0.44-0.61); the
+  negative binomial is always right-skewed and over-dispersed, so `alpha`
+  sits pinned at the optimizer's floor (exp(-5)) in both shipped pickles
+  and the likelihood wants to keep going. The model's tails are 2-4x too
+  fat (P(BF>=29) 10.5% modelled vs 2.5% actual). **But P(K >= line) is
+  near-linear in BF**, so only E[BF] survives the compound integral and
+  the shape cancels. Sweeping dispersion across a 4x range moves the 4.5
+  and 5.5 lines by under half a batter's worth.
+- **Where the real error actually is:** across 18,798 backtest rows the
+  model says OVER hits 29.69% and it hits 30.88% — **under-calling OVER
+  by 1.19pp** (1.9pp on the 2025 test), and the gap persists when BF is
+  exactly right. So it lives in Stage B, the TTO decay, or the
+  calibrator. This is also why every leash-shortening idea lost: cutting
+  BF pushes OVER down, and OVER was already too low.
+- **Do not chase BF error.** Re-open only if 150 graded starts come in
+  near +1.3 (a 1-in-1000 event; noise at n=150 spans only -0.66 to +0.74).
+
+### A-024a: the pitch-limit cap has never once executed, and was wrong
+- **Filed/Resolved:** 2026-08-07
+- **Description:** `predict_bf_distribution()` capped a limited starter at
+  `pitch_limit / 4.0`. The 4.0 was chosen by eye. The path has **never
+  run in production** — `data/manual_pitch_limits.csv` contains only a
+  header row, `backtest.py:182` hardcodes `c11_pitch_limit=None`, and 0
+  of 98 priced pitchers across every slate carry a limit. An unexecuted
+  path is exactly where a wrong constant survives.
+- **Measured, not estimated:** replayed pitches in order on 3,283 real
+  2026 starts and counted batters actually faced at the Nth pitch — the
+  question a limit really asks. 60 -> 15.83 BF (3.791), 75 -> 19.68
+  (3.812), 90 -> 23.16 (3.885), 100 -> 25.04 (3.993). 4.0 is right for a
+  ~100-pitch outing, which is not a limit. Across the 60-90 band where
+  real limits land it understated BF by 0.7-0.9, worth ~2 points of
+  P(over) — always suppressing OVER, on exactly the pitchers an operator
+  flags as shortened.
+- **Note on provenance:** a subagent proposed 3.58-3.83 and separately
+  3.88; both disagreed with direct measurement, so neither was taken. The
+  constant comes from the replay above, run here.
+- **Resolution:** named constant `PITCHES_PER_BF_UNDER_LIMIT = 3.8` with
+  the measurement table in the source. One constant covers 60-90 to
+  within 0.09 BF, far inside the 2.71 BF noise floor, so a
+  limit-dependent curve would be false precision.
+- **Provably a no-op today** — the path cannot fire until someone enters
+  a limit. This removes a landmine rather than changing live behaviour.
+- **Locked with tests:** `tests/test_stage_a_pitch_limit.py` — 4 cases
+  pinning the divisor inside the measured band, asserting it is not 4.0,
+  that the cap binds where the data says, that no limit means no cap, and
+  that a limit can only ever shorten a start.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)
