@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { Slate, SlatePitcher } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { PitcherAvatar } from "./pitcher-avatar";
 
 /* Daily scoreboard — the whole board in one glance.
  *
@@ -89,19 +90,27 @@ function Stub({ p, onClick }: StubProps) {
           : "border-line bg-surface hover:border-line-strong hover:bg-surface-2",
       )}
     >
-      <div className="flex items-center gap-1">
-        {isPlay && (
-          <span aria-hidden className="text-[10px] leading-none text-accent">
-            ★
-          </span>
-        )}
-        <span
-          className={cn(
-            "truncate text-[11.5px] font-semibold tracking-tight",
-            isPlay ? "text-accent" : "text-ink-secondary",
+      <div className="flex items-center gap-1.5">
+        <PitcherAvatar
+          pitcherId={p.pitcher_id}
+          name={p.pitcher_name}
+          side={side}
+          className="h-[22px] w-[22px]"
+        />
+        <span className="flex min-w-0 items-center gap-1">
+          {isPlay && (
+            <span aria-hidden className="text-[10px] leading-none text-accent">
+              ★
+            </span>
           )}
-        >
-          {lastName(p.pitcher_name)}
+          <span
+            className={cn(
+              "truncate text-[11.5px] font-semibold tracking-tight",
+              isPlay ? "text-accent" : "text-ink-secondary",
+            )}
+          >
+            {lastName(p.pitcher_name)}
+          </span>
         </span>
       </div>
 
@@ -236,16 +245,41 @@ export function Scoreboard({
   }, [all]);
 
   const leanTotal = stats.leanRight + stats.leanWrong;
+  const [open, setOpen] = React.useState(false);
 
   return (
     <section
       aria-label="Daily scoreboard"
-      className="rounded-card border border-line bg-surface p-3.5"
+      className={cn(
+        "rounded-card border bg-surface transition-colors",
+        // A closed board with plays still needs to announce them, so the
+        // whole section picks up the gold when something is takeable.
+        stats.plays > 0 && !open
+          ? "border-accent/45 shadow-[0_0_0_1px_rgba(245,158,11,0.2),0_0_22px_-8px_rgba(245,158,11,0.45)]"
+          : "border-line",
+      )}
     >
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+      {/* The header is the toggle AND the summary. Collapsing the grid
+          is fine; collapsing the "3 to take" line would hide the one
+          thing the operator opens this for, so it stays visible shut. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5 rounded-card px-3.5 py-3 text-left hover:bg-white/[0.02]"
+      >
+        <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+          <span
+            aria-hidden
+            className={cn(
+              "inline-block text-[9px] text-ink-muted transition-transform duration-200",
+              open && "rotate-90",
+            )}
+          >
+            ▶
+          </span>
           Scoreboard
-          <span className="ml-2 font-normal text-ink-muted">{slate.date}</span>
+          <span className="font-normal text-ink-muted">{slate.date}</span>
         </h2>
         <div className="figure flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
           <span className="text-ink-secondary">{all.length} priced</span>
@@ -273,9 +307,14 @@ export function Scoreboard({
               model {stats.leanRight}/{leanTotal}
             </span>
           )}
+          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
+            {open ? "hide" : "show board"}
+          </span>
         </div>
-      </div>
+      </button>
 
+      {open && (
+      <div className="px-3.5 pb-3.5">
       <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
         {ordered.map((p) => (
           <Stub
@@ -293,6 +332,8 @@ export function Scoreboard({
           was still priced and is still scored, which is what the model is
           judged on.
         </p>
+      )}
+      </div>
       )}
     </section>
   );
