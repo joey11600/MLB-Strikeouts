@@ -406,11 +406,17 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-card border border-line bg-surface transition-colors",
-        "before:absolute before:left-0 before:top-0 before:h-full before:w-[3px]",
+        "relative overflow-hidden rounded-card border bg-surface transition-all",
+        "before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:z-10",
         spine,
-        hasBet ? "" : "opacity-80",
-        expanded && "border-line-strong",
+        hasBet
+          ? // Same gold treatment as the scoreboard stub, so a play reads
+            // as a play in both places and the eye learns one signal
+            // rather than two. The side rail survives on top of it (z-10)
+            // — gold says TAKE THIS, the rail still says which way.
+            "border-accent/60 shadow-[0_0_0_1px_rgba(245,158,11,0.28),0_0_24px_-6px_rgba(245,158,11,0.55)]"
+          : "border-line opacity-80",
+        expanded && !hasBet && "border-line-strong",
       )}
     >
       <button
