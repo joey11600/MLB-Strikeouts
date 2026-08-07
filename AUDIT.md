@@ -401,6 +401,39 @@ Tracks open items, resolved items, and known risks.
   CLAUDE.md grades VOID and which previously could only be noticed
   after the fact.
 
+### A-021: Ledger grades as soon as the starter is pulled, Statcast confirms
+- **Filed/Resolved:** 2026-08-06
+- **Description:** grading waited for the whole GAME to finish, so a
+  pick settled at 7:20pm booked at 03:00 the next morning. The gate was
+  the only thing forcing the wait -- the grader already read the same
+  MLB boxscore the live watcher does.
+- **Change:** grade when the game is final OR when this pitcher has
+  been relieved. `starter_is_relieved()` lives in
+  `workers/live_strikeouts.py` and is imported by `tools/grader.py`, so
+  early grading and live display share ONE definition of "finished" and
+  cannot drift apart. The live watcher triggers the grader the moment a
+  starter newly finishes.
+- **Why it is safe to settle early:** being relieved is an
+  already-happened fact from the boxscore's appearance order, not an
+  inference from innings or pitch count. Three guards:
+  1. A pitcher who has NOT appeared is never "settled" — otherwise an
+     opener or a delayed first pitch would settle a bet that has not
+     begun. Verified: unknown pitcher id and currently-pitching reliever
+     both return False.
+  2. A no-show only becomes VOID once the GAME is final. Voiding a live
+     bet is unrecoverable.
+  3. The existing postponed/suspended check still runs first.
+- **Confirmation:** `graded_source` records which condition settled each
+  row (`starter_relieved` / `game_final`, blank for pre-existing rows),
+  and `tools/watchdog.py::check_statcast_confirms_grades` re-derives
+  every graded K count from Statcast — a separate pipeline from a
+  separate source. Agreement is evidence; disagreement FAILS loudly.
+  Rows Statcast has not published yet are reported as unconfirmed, never
+  as agreed. First run: 9/9 agree exactly.
+- **Verified end-to-end** on a ledger copy during live games: Mikolas
+  graded WIN (1 K vs UNDER 3.5), P&L +0.56u, CLV +8.6%,
+  `graded_source=starter_relieved`, while his game was still in play.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

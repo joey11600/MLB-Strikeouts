@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.game_context import fetch_boxscore, fetch_schedule
+from workers.live_strikeouts import starter_is_relieved
 from models.edge import no_vig_fair_prob, american_to_implied, ALT_SIDE_MARGIN
 from tracker import (
     FIELDS, PICKS_PATH, DATA_STATE_DIR, _write_rows, _calc_pnl, grade_pick,
@@ -152,6 +153,25 @@ def _fetch_actual_strikeouts(game_pk: int, pitcher_id: int) -> int | None:
     return None
 
 
+def _starter_line_is_settled(game_pk: int, pitcher_id: int) -> bool:
+    """True once THIS pitcher's strikeout total can no longer change.
+
+    A starter pulled in the 5th is settled hours before his game ends.
+    Waiting for the whole game meant a pick decided at 7:20pm graded at
+    03:00 the next morning.
+
+    Note this is strictly narrower than the game being over: it requires
+    the pitcher to have ACTUALLY pitched and then been relieved. A
+    pitcher who has not appeared is not settled -- that stays a
+    game-final question, so an opener or a delayed first pitch can never
+    settle a bet that has not begun.
+    """
+    try:
+        return starter_is_relieved(fetch_boxscore(game_pk), pitcher_id)
+    except Exception:
+        return False
+
+
 def _game_is_final(game_pk: int, game_date: str) -> bool:
     """Check if a game has reached Final status."""
     try:
@@ -252,7 +272,12 @@ def run_grader(
             print(f"  POSTPONED: {pitcher_name} ({line})")
             continue
 
-        if not _game_is_final(gpk, pick_date):
+        # Grade as soon as THIS pitcher's line is settled, not when the
+        # whole game ends. _game_is_postponed above still runs first, so
+        # a suspended game never grades early.
+        game_final = _game_is_final(gpk, pick_date)
+        settled_early = (not game_final) and _starter_line_is_settled(gpk, pid)
+        if not (game_final or settled_early):
             skipped_count += 1
             continue
 
@@ -274,8 +299,20 @@ def run_grader(
         else:
             result = grade_pick(row, actual_k)
 
+        # A pitcher who never appeared is only a VOID once the GAME is
+        # over. Before that he may simply not have entered yet, and
+        # voiding a live bet would be unrecoverable.
+        if actual_k is None and not game_final:
+            skipped_count += 1
+            continue
+
         row["graded_result"] = result
         row["actual_strikeouts"] = str(actual_k) if actual_k is not None else ""
+        # Provenance: which condition settled this row. Statcast
+        # reconciles both overnight (tools/watchdog.py), so a live grade
+        # that turns out wrong is a loud finding rather than a silent
+        # error in the money ledger.
+        row["graded_source"] = "starter_relieved" if settled_early else "game_final"
         row["profit_loss_units"] = str(round(_calc_pnl({**row, 'graded_result': result}), 4))
         row["updated_at"] = datetime.now(UTC).isoformat()
 

@@ -336,6 +336,82 @@ def check_scheduler_ran(r: Report) -> None:
         r.ok("scheduler ran today", f"{len(ran)} job(s): {', '.join(sorted(ran))}")
 
 
+def check_statcast_confirms_grades(r: Report) -> None:
+    """Independently re-derive every graded K count from Statcast.
+
+    Grading now settles as soon as the starter is pulled, off the MLB
+    boxscore. That is fast, but it is a live feed and live feeds revise
+    themselves — a scoring change can turn a strikeout into something
+    else after the fact.
+
+    Statcast is a separate pipeline from a separate source, so agreement
+    between them is real evidence and disagreement is a real problem.
+    This is what makes early grading safe rather than merely quick: a
+    wrong grade becomes a loud finding instead of a number sitting in
+    the money ledger forever.
+
+    Only checks rows Statcast can actually speak to. Silence about a
+    date it has not published is not agreement.
+    """
+    rows = [x for x in _rows(PICKS)
+            if (x.get("actual_strikeouts") or "").strip()]
+    if not rows:
+        r.ok("Statcast confirms grades", "no graded rows to confirm")
+        return
+
+    dates = {x.get("date") for x in rows if x.get("date")}
+    try:
+        from datetime import date as _date
+
+        from data.backfill_statcast import load_cached
+        lo = min(_date.fromisoformat(d) for d in dates)
+        hi = max(_date.fromisoformat(d) for d in dates)
+        df = load_cached(lo, hi)
+    except Exception as exc:
+        r.warn("Statcast confirms grades", f"cache unreadable: {exc}",
+               "early grades are unconfirmed until this can run")
+        return
+
+    if df.empty:
+        r.warn("Statcast confirms grades", "no Statcast rows for those dates",
+               "early grades are unconfirmed, not agreed with")
+        return
+
+    done = df[df["events"].notna()]
+    ks = done[done["events"].isin(["strikeout", "strikeout_double_play"])]
+    counts = ks.groupby(["game_pk", "pitcher"]).size().to_dict()
+    covered = set(done.groupby(["game_pk", "pitcher"]).size().to_dict())
+
+    disagree, confirmed, unknown = [], 0, 0
+    for x in rows:
+        try:
+            key = (int(x.get("game_pk")), int(x.get("pitcher_id")))
+            ledger_k = int(x["actual_strikeouts"])
+        except (TypeError, ValueError):
+            continue
+        if key not in covered:
+            unknown += 1
+            continue
+        sc_k = int(counts.get(key, 0))
+        if sc_k != ledger_k:
+            disagree.append(
+                f"{x.get('date')} {x.get('pitcher_name')} "
+                f"ledger={ledger_k} statcast={sc_k} "
+                f"[{x.get('graded_source') or 'pre-provenance'}]")
+        else:
+            confirmed += 1
+
+    if disagree:
+        r.fail("Statcast confirms grades",
+               f"{len(disagree)} disagreement(s): {disagree[:3]}",
+               "a graded row does not match the independent source — "
+               "re-grade from Statcast and check the early-grade path")
+    else:
+        r.ok("Statcast confirms grades",
+             f"{confirmed} row(s) agree exactly"
+             + (f", {unknown} not yet published" if unknown else ""))
+
+
 def check_dashboard_matches_ledger(r: Report) -> None:
     """The published record must equal the ledger it claims to show."""
     path = ROOT / "dashboard" / "public" / "data.json"
@@ -374,6 +450,7 @@ CHECKS = [
     check_model_log_growing,
     check_statcast_fresh,
     check_odds_provenance,
+    check_statcast_confirms_grades,
     check_scheduler_ran,
     check_dashboard_matches_ledger,
 ]

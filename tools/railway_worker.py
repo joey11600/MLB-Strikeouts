@@ -774,7 +774,13 @@ def start_live_watcher() -> None:
                     names = [r["pitcher_name"] for r in state["pitchers"]
                              if r["pitcher_id"] in fresh]
                     log(f"live: {len(fresh)} starter(s) finished "
-                        f"({', '.join(n for n in names if n)}) — refreshing board")
+                        f"({', '.join(n for n in names if n)}) — grading")
+                    # Their totals can no longer change, so grade now
+                    # rather than at 03:00. run.py grade is idempotent
+                    # and honours the locked-pick rules; Statcast
+                    # reconciles overnight via tools/watchdog.py.
+                    _run("grade-live", [PYTHON, "run.py", "grade",
+                                        state["date"]], 900)
                     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
                 time.sleep(30 if state.get("any_live") else 600)
             except Exception as exc:

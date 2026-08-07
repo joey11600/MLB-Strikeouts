@@ -106,6 +106,27 @@ def tracked_pitchers(iso_date: str) -> dict:
     return out
 
 
+def starter_is_relieved(box: dict, pid: int) -> bool:
+    """True when someone has pitched AFTER this pitcher for his team.
+
+    THE single definition of "this starter's line is final", shared with
+    tools/grader.py so early grading and live display can never disagree
+    about what finished means.
+
+    It is an already-happened fact, not an inference: the boxscore lists
+    pitchers in appearance order, so anyone after him means he is out of
+    the game and cannot return. Deriving it from innings or pitch count
+    would be a guess, and a guess that settles a bet is the failure mode
+    this repo keeps paying for.
+
+    False when he has not appeared at all -- "hasn't pitched yet" and
+    "pitched and left" must never collapse into one answer, or an opener
+    or a late first pitch would settle a bet that has not started.
+    """
+    line = _starter_line(box, pid)
+    return bool(line and line["relieved"])
+
+
 def _starter_line(box: dict, pid: int) -> dict | None:
     """Live pitching line for one pitcher, plus whether he is finished."""
     for side in ("away", "home"):

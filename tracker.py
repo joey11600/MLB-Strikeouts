@@ -73,6 +73,12 @@ FIELDS = [
     # from a live-priced one after the fact, and any post-mortem asking
     # "were the bad bets the ones priced off stale prices?" is unanswerable.
     "odds_source",
+    # How this row's grade was settled: "starter_relieved" (the pitcher
+    # was pulled, so his total can no longer change) or "game_final".
+    # Early grades are reconciled against Statcast overnight by
+    # tools/watchdog.py, so a wrong one surfaces loudly instead of
+    # sitting in the ledger. Blank on rows graded before this existed.
+    "graded_source",
     "notes",
 ]
 
