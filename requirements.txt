@@ -6,3 +6,6 @@ pybaseball==2.2.7
 requests==2.32.4
 curl_cffi==0.15.0
 python-dateutil==2.9.0.post0
+
+# Regression tests for the evidence pipeline (tests/, CI step).
+pytest>=8.0

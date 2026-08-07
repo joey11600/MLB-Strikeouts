@@ -186,6 +186,17 @@ jobs:
       # losing data to a health check would be its own bug. Runs even
       # when an earlier step failed, because that is exactly when the
       # state most needs inspecting.
+      # Cheap (<1s) and guards the exact regressions that cost two
+      # slates of evidence: model_log self-healing, its idempotence, and
+      # the watchdog's publish-lag window. Runs before the watchdog so a
+      # broken guarantee is distinguishable from a broken day.
+      - name: Regression tests
+        if: always()
+        env:
+          DATA_STATE_DIR: data
+        run: |
+          python -m pytest tests/ -q
+
       - name: Watchdog — assert the invariants
         if: always()
         env:
