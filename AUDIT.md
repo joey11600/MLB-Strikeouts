@@ -5,11 +5,21 @@ Tracks open items, resolved items, and known risks.
 ## Open
 
 ### A-001: Licensing decision pending
-- **Filed:** 2026-08-04
+- **Filed:** 2026-08-04 (amended 2026-08-06)
 - **Status:** Awaiting operator decision
 - **Description:** MLB Stats API, Open-Meteo free tier, and RotoWire
   all carry non-commercial terms. The operator sells picks. Decision
   needed before Phase 1. See `docs/LICENSING.md`.
+- **Amended 2026-08-06 — now also covers imagery.** Pick cards render
+  MLB player headshots from `midfield.mlbstatic.com`, keyed on the
+  MLBAM id already in each slate row. These are MLB-copyrighted
+  photographs served from MLB's public CDN, hot-linked rather than
+  copied. That is ordinary practice for fan tools, but this product is
+  sold, which puts the images under the same commercial-terms question
+  as the data itself rather than a separate one.
+- **If the answer comes back no:** deleting `PitcherAvatar` from
+  `pick-card.tsx` removes every image; nothing else depends on it, and
+  the component already degrades to initials.
 
 ### A-002: Historical strikeout prop lines not yet sourced
 - **Filed:** 2026-08-04

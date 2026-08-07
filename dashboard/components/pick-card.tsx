@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import type { SlatePitcher, LadderRung } from "@/lib/types";
 import { cn, gameTimeET, oddsStr, pctStr, pnlStr } from "@/lib/utils";
 import { KDistChart } from "./kdist-chart";
+import { PitcherAvatar } from "./pitcher-avatar";
 
 const STATUS_LABEL: Record<string, string> = {
   passed_no_edge: "PASS · no edge",
@@ -425,6 +426,12 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
         aria-expanded={expanded}
         className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-white/[0.02]"
       >
+        <PitcherAvatar
+          pitcherId={p.pitcher_id}
+          name={p.pitcher_name}
+          side={side}
+          className="h-10 w-10"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {isTop && (
