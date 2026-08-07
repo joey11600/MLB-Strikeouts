@@ -375,6 +375,32 @@ Tracks open items, resolved items, and known risks.
   it runs inside the workflow, so a workflow that never starts produces
   no alarm.
 
+### A-020: Results sat unknown for hours after they were already decided
+- **Filed/Resolved:** 2026-08-06
+- **Description:** a starter's strikeout total is settled the instant he
+  is pulled, but grading ran off Statcast at 03:00. A pick decided at
+  7:20pm sat unresolved overnight, and the board showed blanks for
+  results that were already final. On 2026-08-06 at 20:12 ET, 13 of 18
+  tracked starters were finished and the system knew none of them.
+- **Resolution:** `workers/live_strikeouts.py` polls the MLB Stats API
+  (free, and unlike DraftKings it does not block datacenter IPs -- the
+  one job this container is better placed for than GitHub Actions). It
+  reads `battersFaced` / `strikeOuts` straight from the boxscore and
+  treats a starter as finished when a later pitcher appears for his
+  team -- an already-happened fact from the appearance order, not an
+  inference from innings or pitch count. Runs as a thread in the Railway
+  worker, served at `/live.json`, and rebuilds the board only when a
+  starter newly finishes.
+- **Deliberately read-only against the ledger.** Statcast stays the
+  graded source of truth; live figures fill a gap in the display and
+  never overwrite a Statcast or ledger value, and carry
+  `result_source: "live"` when they do. A feed that can revise itself
+  mid-inning must not book money -- same provenance discipline as
+  A-011's odds snapshots.
+- **Also enables:** immediate detection of a scratched starter, which
+  CLAUDE.md grades VOID and which previously could only be noticed
+  after the fact.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

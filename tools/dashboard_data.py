@@ -138,8 +138,24 @@ def _actual_k_lookup(dates: set[str]) -> dict:
     return lookup
 
 
+def _load_live_state() -> dict:
+    """{pitcher_id: live line} from the MLB-API watcher, today only."""
+    path = DATA_STATE_DIR / "live_state.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if payload.get("date") != datetime.now(ET).strftime("%Y-%m-%d"):
+        return {}
+    return {int(r["pitcher_id"]): r for r in payload.get("pitchers", [])
+            if r.get("pitcher_id") is not None}
+
+
 def _build_slates(picks: list[dict]) -> tuple[dict, list[str]]:
     """Merge slate sidecars with the picks ledger, keyed by date."""
+    live_rows = _load_live_state()
     slates = {}
     pick_index = {}
     for row in picks:
@@ -185,6 +201,27 @@ def _build_slates(picks: list[dict]) -> tuple[dict, list[str]]:
                 if entry["actual_strikeouts"] is None and pick_row is not None:
                     entry["actual_strikeouts"] = _safe_int(
                         pick_row.get("actual_strikeouts"))
+
+                # Live fallback. A starter's K total is settled the
+                # moment he is pulled, but Statcast will not publish it
+                # for hours, so the board sat blank all evening on
+                # results that were already decided. Only fills a gap --
+                # never overwrites a Statcast or ledger figure, which
+                # stay the graded truth.
+                lv = live_rows.get(int(p.get("pitcher_id") or 0))
+                if lv:
+                    if entry["actual_strikeouts"] is None:
+                        entry["actual_strikeouts"] = lv.get("strikeouts")
+                        entry["result_source"] = "live"
+                    entry["live"] = {
+                        "strikeouts": lv.get("strikeouts"),
+                        "batters_faced": lv.get("batters_faced"),
+                        "pitches": lv.get("pitches"),
+                        "innings": lv.get("innings"),
+                        "final": bool(lv.get("final")),
+                        "game_state": lv.get("game_state"),
+                        "status": lv.get("status"),
+                    }
                 pitchers.append(entry)
 
             def _sort_key(e):

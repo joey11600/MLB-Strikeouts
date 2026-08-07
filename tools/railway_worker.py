@@ -202,6 +202,13 @@ class DataHandler(BaseHTTPRequestHandler):
                 self._send(503, json.dumps({"error": str(exc)}).encode(),
                            "application/json")
             return
+        if self.path.startswith("/live.json"):
+            try:
+                self._send(200, LIVE_STATE.read_bytes(), "application/json")
+            except Exception as exc:
+                self._send(503, json.dumps({"error": str(exc)}).encode(),
+                           "application/json")
+            return
         if self.path.startswith("/health"):
             payload = {
                 "ok": True,
@@ -649,6 +656,7 @@ def main() -> None:
     reconcile_ledger()
     verify_dispatch_credentials()
     start_http_server()
+    start_live_watcher()
     configure_git()
 
     if not any(CACHE_DIR.glob("*/*")):
@@ -730,6 +738,51 @@ def main() -> None:
 
 DISPATCH_CREDS: dict = {"checked": None, "ok": None, "detail": None,
                         "token_days_left": None}
+
+
+LIVE_STATE = VOLUME_STATE / "live_state.json"
+
+
+def start_live_watcher() -> None:
+    """Poll MLB for starter lines and rebuild the board when one ends.
+
+    A starter's K total is settled the moment he is pulled -- often
+    hours before the game ends and many hours before Statcast
+    publishes. The 03:00 grading pass meant a pick decided at 7:20pm sat
+    unresolved overnight. MLB's API knows immediately and does not block
+    datacenter IPs, so this is the one job this container is better
+    placed to do than GitHub Actions.
+
+    Rebuilds data.json only when a starter newly finishes, so the served
+    board reflects results within a poll interval without spinning on
+    every tick. Read-only with respect to the ledger: Statcast stays the
+    graded source of truth and tools/watchdog.py compares the two.
+    """
+    def loop():
+        from workers import live_strikeouts as lw
+        lw.STATE_PATH = LIVE_STATE
+        lw.SLATES_DIR = VOLUME_STATE / "slates"
+        seen: set[int] = set()
+        while True:
+            try:
+                state = lw.poll_once()
+                lw.write_state(state)
+                fresh = {r["pitcher_id"] for r in state["pitchers"]
+                         if r.get("final")} - seen
+                if fresh:
+                    seen |= fresh
+                    names = [r["pitcher_name"] for r in state["pitchers"]
+                             if r["pitcher_id"] in fresh]
+                    log(f"live: {len(fresh)} starter(s) finished "
+                        f"({', '.join(n for n in names if n)}) — refreshing board")
+                    _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+                time.sleep(30 if state.get("any_live") else 600)
+            except Exception as exc:
+                log(f"live watcher error ({type(exc).__name__}: {exc})")
+                time.sleep(600)
+
+    threading.Thread(target=loop, daemon=True, name="live-watcher").start()
+    log("live starter watcher started")
 
 
 def verify_dispatch_credentials() -> None:
