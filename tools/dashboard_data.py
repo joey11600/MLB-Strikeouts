@@ -1066,10 +1066,18 @@ def write_dashboard_json(output_path: Path | None = None):
     if lm:
         print(f"  Live model: scoring {lm['n_scored']} {lm['row_basis']} row(s) "
               f"— log holds {lm['n_live']} live + {lm['n_reconstructed']} reconstructed")
-        print(f"    Brier {lm['brier']} vs floor {lm['brier_floor']} "
-              f"-> excess {lm['excess']:+} vs backtest excess "
-              f"{lm['baseline_excess']:+} (band +/-{lm['verdict_band']}) "
-              f"— {lm['verdict']}")
+        # Every one of these can legitimately be None (no scored rows,
+        # or no line-matched backtest baseline). Formatting None with
+        # :+ raises, which crashed the whole dashboard build rather than
+        # printing one less pretty summary line.
+        def _n(v, plus=False):
+            if v is None:
+                return "n/a"
+            return f"{v:+}" if plus else f"{v}"
+        print(f"    Brier {_n(lm['brier'])} vs floor {_n(lm['brier_floor'])} "
+              f"-> excess {_n(lm['excess'], True)} vs backtest excess "
+              f"{_n(lm['baseline_excess'], True)} "
+              f"(band +/-{_n(lm['verdict_band'])}) — {lm['verdict']}")
         if lm.get("sample_warning"):
             print(f"    WARNING: {lm['sample_warning']}")
 

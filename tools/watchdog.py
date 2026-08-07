@@ -266,9 +266,22 @@ def check_model_log_growing(r: Report) -> None:
     missing = sorted(d for d in slate_dates
                      if d < _today().isoformat() and d not in logged)
     if yesterday in slate_dates and yesterday not in logged:
-        r.fail("model log growing",
-               f"{yesterday} has a board but no model-log rows",
-               "last night's ~20 observations were lost")
+        # Baseball Savant publishes hours after the games end — measured
+        # 0 pitches for 8/6 at 03:21 ET, 3,530 by 08:59 ET. So a gap
+        # before late morning means "not published yet", not "lost", and
+        # failing on it would paint every run red between 03:00 and the
+        # morning job. After noon it is a genuine loss.
+        if datetime.now(ET).hour < 12:
+            r.warn("model log growing",
+                   f"{yesterday} not logged yet "
+                   f"({datetime.now(ET):%H:%M} ET) — Statcast usually "
+                   f"publishes mid-morning; the 10:30 job retries",
+                   "only a failure if it is still missing this afternoon")
+        else:
+            r.fail("model log growing",
+                   f"{yesterday} has a board but no model-log rows, and "
+                   f"it is past noon ET",
+                   "last night's ~20 observations were lost")
     elif missing:
         r.warn("model log growing", f"no rows for {missing[:3]}")
     else:

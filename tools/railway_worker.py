@@ -590,6 +590,14 @@ def commit_and_push(context: str) -> None:
 def task_morning() -> None:
     sync_repo()
     _run("daily-cycle", [PYTHON, "run.py"], 2400)
+    # Second pass at yesterday's model log. The 03:00 job runs BEFORE
+    # Baseball Savant publishes: on 2026-08-07 at 03:21 ET Statcast had
+    # 0 pitches for 8/6, and 3,530 by 08:59 ET. So the night job cannot
+    # be the only attempt, or every slate silently loses its ~20
+    # observations -- which is exactly what happened to 8/5 and 8/6.
+    # Both steps are idempotent per date, so a repeat costs nothing.
+    _run("model-log", [PYTHON, "tools/model_log.py"], 900)
+    _run("shadow", [PYTHON, "tools/shadow.py"], 300)
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("morning slate")
 

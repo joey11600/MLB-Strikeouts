@@ -458,6 +458,32 @@ Tracks open items, resolved items, and known risks.
   graded WIN (1 K vs UNDER 3.5), P&L +0.56u, CLV +8.6%,
   `graded_source=starter_relieved`, while his game was still in play.
 
+### A-022: The 03:00 job runs before Statcast publishes — evidence lost nightly
+- **Filed/Resolved:** 2026-08-07 (found by the watchdog failing CI 7 times)
+- **Description:** every CI run from 04:35 UTC onward went red on
+  `model log growing: 2026-08-06 has a board but no model-log rows`. The
+  night job HAD run and correctly re-fetched 8/6 (the A-016 fix worked
+  — the log shows `re-fetching (only 636 bytes, looks empty)`), but the
+  fetch returned nothing: **Baseball Savant had not published 8/6 yet**.
+  Measured directly — 0 pitches for 8/6 at 03:21 ET, 3,530 by 08:59 ET.
+  So `model_log.py` logged 0 pitchers and the slate's 20 observations
+  were lost, exactly as 8/5 had been.
+- **Root cause is scheduling, not caching.** A-016 fixed the frozen
+  empty file; this is the separate problem that the only attempt to log
+  a slate happens hours before its data exists.
+- **Resolution:** the 10:30 morning job now re-runs `model_log.py` and
+  `shadow.py` as well. Both are idempotent per date, so a second pass
+  costs nothing and Statcast has published by then. The night job keeps
+  its attempt, which now serves as the catch-up for the day before.
+- **Watchdog tuned, not silenced:** a missing yesterday before noon ET
+  is a WARN naming the publish lag; after noon it is still a FAIL. The
+  old rule painted every run red between 03:00 and 10:30 for a condition
+  that resolves itself.
+- **Recovered:** 8/6 backfilled and logged (20 rows). Model log 54 -> 74,
+  shadow evidence 28 -> 48 observations over 2 slates.
+- **Generalises to:** any job that reads a third-party feed on a
+  schedule. Ask when the data actually lands, not when the games end.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)
