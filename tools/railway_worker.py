@@ -222,6 +222,11 @@ class DataHandler(BaseHTTPRequestHandler):
                 "cache_months": sorted(p.name for p in CACHE_DIR.glob("*")) if CACHE_DIR.exists() else [],
                 "data_json_present": DASHBOARD_JSON.exists(),
                 "last_reconcile": LAST_RECONCILE,
+                # The board this container SERVES, and when it last pulled
+                # CI's work. These froze at 09:51 for a whole afternoon and
+                # nothing anywhere said so, because /health only reported
+                # that data.json EXISTED -- never how old it was.
+                "last_publish": LAST_PUBLISH,
                 "can_push_to_git": bool(os.environ.get("GITHUB_TOKEN")),
                 "dispatch_credentials": DISPATCH_CREDS,
             }
@@ -277,6 +282,60 @@ def sync_repo() -> None:
     _run("git-pull", ["git", "pull", "--rebase", "--autostash",
                       "origin", "master"], 180)
     reconcile_ledger()
+
+
+# How often the resident loop pulls back whatever CI published and
+# re-serves it. Cheap enough to be generous: the pull is a no-op when
+# nothing changed and a data.json rebuild measures 0.73s.
+PUBLISH_EVERY_SECONDS = 300
+
+LAST_PUBLISH: dict = {"at": None, "ok": None, "error": None,
+                      "served_generated_at": None}
+
+
+def publish_pass() -> None:
+    """Pull whatever GitHub Actions published, and re-serve it.
+
+    Railway is the clock and Actions are the hands -- but only half of
+    that was wired. The loop dispatched the real work to GitHub (which
+    can reach DraftKings; this container cannot), marked the task done,
+    and moved on. It never pulled the RESULT back. So the container kept
+    serving the board from its own last LOCAL run, and since
+    dashboard/lib/data-context.tsx PREFERS this container's /data.json
+    over the bundled copy -- unconditionally, whenever it answers -- the
+    whole site froze there.
+
+    Measured 2026-08-07: the site served the 09:51 morning board all
+    afternoon while the repo held the 16:47 lineup-locked one, hiding a
+    LEAN on Payton Tolle with two hours to first pitch. It stayed
+    invisible until now because the FALLBACK path (dispatch failed ->
+    run locally) does rebuild data.json. The bug only became reachable
+    once the GitHub token was added and dispatch began succeeding every
+    time -- i.e. the day the system started working as designed.
+
+    The checkout is deliberate. data.json is DERIVED and never a source
+    of truth, so the local copy is dropped before pulling. Without that,
+    `git pull --rebase --autostash` stashes the locally-generated file,
+    pulls the fresh one, then re-applies the stash straight back on top
+    -- and the stale copy wins every single time.
+    """
+    try:
+        _run("drop-derived",
+             ["git", "checkout", "--", "dashboard/public/data.json"], 60)
+        sync_repo()
+        _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+        served = None
+        try:
+            served = json.loads(
+                DASHBOARD_JSON.read_text(encoding="utf-8")).get("generated_at")
+        except Exception:
+            pass
+        LAST_PUBLISH.update(at=datetime.now(ET).isoformat(timespec="seconds"),
+                            ok=True, error=None, served_generated_at=served)
+    except Exception as exc:
+        LAST_PUBLISH.update(at=datetime.now(ET).isoformat(timespec="seconds"),
+                            ok=False, error=f"{type(exc).__name__}: {exc}")
+        log(f"publish pass FAILED: {type(exc).__name__}: {exc}")
 
 
 TERMINAL_GRADES = {"WIN", "LOSS", "VOID", "PUSH", "POSTPONED"}
@@ -728,8 +787,16 @@ def main() -> None:
     log("schedule (ET): " + ", ".join(
         f"{t.strftime('%H:%M')} {name}" for name, t, _ in SCHEDULE))
 
+    next_publish = 0.0
     while True:
         try:
+            # BEFORE looking at the schedule. Dispatched work lands in git,
+            # not in this container, so without this pass the board we
+            # serve only ever reflects work this container did itself.
+            if time.monotonic() >= next_publish:
+                publish_pass()
+                next_publish = time.monotonic() + PUBLISH_EVERY_SECONDS
+
             now = datetime.now(ET)
             today = now.date().isoformat()
             state = _load_state()

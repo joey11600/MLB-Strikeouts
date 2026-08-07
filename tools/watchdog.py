@@ -55,6 +55,13 @@ SLATES = DATA_STATE_DIR / "slates"
 ODDS = DATA_STATE_DIR / "odds"
 CACHE = Path(__file__).parent.parent / "data" / "statcast_cache"
 
+# The worker whose /data.json the dashboard actually renders. Same default
+# as dashboard/lib/data-context.tsx; keep the two in step.
+import os  # noqa: E402
+
+WORKER_URL = os.environ.get(
+    "WORKER_URL", "https://worker-production-036c.up.railway.app").rstrip("/")
+
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 
 
@@ -510,6 +517,63 @@ def check_dashboard_matches_ledger(r: Report) -> None:
         r.ok("dashboard matches ledger", f"both {truth:+.2f}u")
 
 
+def check_served_board_is_current(r: Report) -> None:
+    """What the SITE shows must match what the repo published.
+
+    dashboard/lib/data-context.tsx prefers the Railway worker's
+    /data.json unconditionally whenever it answers, falling back to the
+    bundled copy only if the worker is unreachable. So the worker's copy
+    IS the site. Every other check in this file inspects the repo, which
+    means all twelve could pass green while the operator stares at a
+    board hours old.
+
+    That is not hypothetical. On 2026-08-07 the worker dispatched every
+    task to GitHub Actions, marked them done and never pulled the result
+    back, so it served the 09:51 morning board until at least 17:00 while
+    the repo held the 16:47 lineup-locked one -- hiding a LEAN with two
+    hours to first pitch. Nothing anywhere reported it.
+
+    Tolerance is generous on purpose: the worker's publish pass runs
+    every 5 minutes, so a just-committed board legitimately lags briefly.
+    """
+    import urllib.request
+
+    local = ROOT / "dashboard" / "public" / "data.json"
+    if not local.exists():
+        r.warn("served board is current", "no local data.json to compare")
+        return
+    try:
+        want = json.loads(local.read_text(encoding="utf-8")).get("generated_at")
+        got = json.loads(urllib.request.urlopen(
+            f"{WORKER_URL}/data.json", timeout=25).read()).get("generated_at")
+    except Exception as exc:
+        # The worker being unreachable is its own condition, and the
+        # dashboard handles it by falling back to the bundled copy.
+        r.warn("served board is current",
+               f"worker unreachable ({type(exc).__name__}) — site is on the "
+               f"bundled fallback")
+        return
+    if not want or not got:
+        r.warn("served board is current", "missing generated_at on one side")
+        return
+    try:
+        lag = (datetime.fromisoformat(want) - datetime.fromisoformat(got)).total_seconds() / 60
+    except ValueError as exc:
+        r.warn("served board is current", f"unparseable timestamps: {exc}")
+        return
+    if lag > 45:
+        r.fail("served board is current",
+               f"worker serving a board {lag:.0f} min older than the repo's "
+               f"({got} vs {want})",
+               "the operator is looking at a stale board; picks made after "
+               "that time are invisible on the site")
+    elif lag > 10:
+        r.warn("served board is current",
+               f"worker {lag:.0f} min behind the repo — publish pass may be slow")
+    else:
+        r.ok("served board is current", f"worker within {max(lag, 0):.0f} min of the repo")
+
+
 CHECKS = [
     check_calibrator_actually_applied,
     check_models_fitted,
@@ -523,6 +587,7 @@ CHECKS = [
     check_statcast_confirms_grades,
     check_scheduler_ran,
     check_dashboard_matches_ledger,
+    check_served_board_is_current,
 ]
 
 

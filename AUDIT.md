@@ -641,6 +641,58 @@ Tracks open items, resolved items, and known risks.
   that the cap binds where the data says, that no limit means no cap, and
   that a limit can only ever shorten a start.
 
+### A-025: Railway became the clock and stopped being the publisher
+- **Filed/Resolved:** 2026-08-07 (found while verifying an unrelated change)
+- **Severity: the site hid a live pick.** At 16:47 ET the lineup lock
+  produced a LEAN — Payton Tolle UNDER 6.5 at +110, 2.0u, confirmed
+  lineup, two hours to first pitch. The dashboard showed the 09:51
+  morning board instead, with 24 projected-lineup pitchers and no play.
+- **Root cause** — `tools/railway_worker.py` resident loop:
+  ```python
+  if not dispatch_github(name):
+      TASKS[name]()      # only the FALLBACK rebuilds data.json
+  state[key] = today     # dispatch succeeded -> done, result never pulled
+  ```
+  Railway dispatches the real work to GitHub Actions (it can reach
+  DraftKings; the container cannot), marks the task done, and moves on.
+  It never pulls the result back, so it kept serving the board from its
+  own last LOCAL run. `data-context.tsx` prefers the worker's
+  `/data.json` **unconditionally whenever it answers** — no freshness
+  comparison — so the worker's stale copy IS the site.
+- **Why it appeared only now:** the fallback path (dispatch fails -> run
+  locally) does rebuild data.json. The bug became reachable the day the
+  GITHUB_TOKEN was added and dispatch began succeeding every time —
+  i.e. the day the architecture started working as designed.
+- **Same class as this morning's "yesterday's results are missing."**
+  That was diagnosed as a stale Statcast cache and fixed there; the
+  publisher half of the split was never addressed.
+- **Second, compounding mechanism:** `sync_repo()` pulls with
+  `--rebase --autostash`. A local `dashboard_data.py` run leaves the
+  tracked `dashboard/public/data.json` modified, so autostash stashes
+  the stale copy, pulls the fresh one, then re-applies the stash **on
+  top** — the stale file wins every pull. Reproduced locally: running
+  the rebuild leaves `M dashboard/public/data.json`.
+- **Resolution:** `publish_pass()` — drop the derived file, `sync_repo()`,
+  rebuild data.json — runs every `PUBLISH_EVERY_SECONDS = 300` at the top
+  of the resident loop, before the schedule is even consulted. A rebuild
+  measures 0.73s, so the pass is effectively free.
+- **Now observable:** `/health` reports `last_publish` (time, ok, error,
+  and the `generated_at` actually being served). Previously it reported
+  only that data.json *existed* — never how old it was, which is why
+  seven hours of staleness passed silently.
+- **Invariant added:** `check_served_board_is_current()` in
+  `tools/watchdog.py` compares the worker's served `generated_at` against
+  the repo's. FAIL above 45 min, WARN above 10, and an unreachable worker
+  is a WARN because the dashboard legitimately falls back. Verified
+  against the live condition: **FAIL, "worker serving a board 416 min
+  older than the repo's."** Every other check in the file inspects the
+  repo, so all thirteen were green while the operator looked at a
+  seven-hour-old board.
+- **The build-skip (A-023) was NOT the cause** and was checked before
+  being blamed: `loadData()` only reads the bundled copy when the worker
+  is unreachable, so the bundle's freshness never mattered here. The site
+  would have shown the same stale board with or without it.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

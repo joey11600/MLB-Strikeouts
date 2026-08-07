@@ -1,6 +1,51 @@
 
 # Changelog
 
+## 2026-08-07 — The worker served a seven-hour-old board (A-025)
+
+Found while verifying something else, which is the only reason it was
+found at all. At 16:47 ET the lineup lock produced a LEAN — Payton Tolle
+UNDER 6.5 at +110, 2.0u, confirmed lineup, two hours to first pitch. The
+dashboard was showing the 09:51 morning board: 24 pitchers, projected
+lineups, no play. The operator could not see their own pick.
+
+Railway dispatches the real work to GitHub Actions, because it can reach
+DraftKings and the container cannot. The loop marks the task done and
+moves on — and never pulls the result back. So it kept serving the board
+from its own last LOCAL run, and since `data-context.tsx` prefers the
+worker's /data.json unconditionally whenever it answers, the worker's
+stale copy IS the site.
+
+It only became reachable the day the GITHUB_TOKEN was added. Before that,
+dispatch failed, the fallback ran the task locally, and the local run
+rebuilt data.json. The bug arrived the day the architecture started
+working as designed.
+
+A second mechanism compounded it: `sync_repo()` pulls with
+`--rebase --autostash`, and a local rebuild leaves the tracked data.json
+modified — so autostash stashes the stale file, pulls the fresh one, then
+re-applies the stash on top. The stale copy wins every pull. Reproduced
+locally in one command.
+
+`publish_pass()` now drops the derived file, pulls, and rebuilds, every
+five minutes at the top of the loop before the schedule is consulted. A
+rebuild takes 0.73s.
+
+/health now reports `last_publish` including the generated_at actually
+being served. It previously reported only that data.json existed, which
+is how seven hours of staleness went unannounced.
+
+And the invariant that should have existed: `check_served_board_is_current()`
+compares what the worker serves against what the repo published. Verified
+against the live fault — FAIL, "worker serving a board 416 min older than
+the repo's." Every other watchdog check reads the repo, so all thirteen
+were green while the site showed a seven-hour-old board.
+
+Checked before blaming: this morning's Vercel build-skip did NOT cause it.
+`loadData()` reads the bundled copy only when the worker is unreachable,
+so the bundle's freshness was never in the path.
+
+
 ## 2026-08-07 — Stage A is finished; the "leash bias" was never real (A-024)
 
 Went looking for a 1.32-batter bias in the leash and found that it does
