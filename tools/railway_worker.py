@@ -211,6 +211,7 @@ class DataHandler(BaseHTTPRequestHandler):
                 "data_json_present": DASHBOARD_JSON.exists(),
                 "last_reconcile": LAST_RECONCILE,
                 "can_push_to_git": bool(os.environ.get("GITHUB_TOKEN")),
+                "dispatch_credentials": DISPATCH_CREDS,
             }
             self._send(200, json.dumps(payload, indent=1).encode(), "application/json")
             return
@@ -646,6 +647,7 @@ def main() -> None:
     # next scheduled job -- and the boot rebuild of data.json below
     # would publish the pre-merge numbers in the meantime.
     reconcile_ledger()
+    verify_dispatch_credentials()
     start_http_server()
     configure_git()
 
@@ -664,6 +666,12 @@ def main() -> None:
     boot_task = os.environ.get("RUN_TASK_ON_BOOT", "").strip()
     if boot_task in TASKS:
         log(f"--- RUN_TASK_ON_BOOT={boot_task} — running now ---")
+        # Same dispatch-first path the scheduler uses, so this escape
+        # hatch also serves as an end-to-end proof that Railway can
+        # drive GitHub Actions.
+        if dispatch_github(boot_task):
+            log(f"--- {boot_task} dispatched to GitHub Actions ---")
+            boot_task = ""
         try:
             TASKS[boot_task]()
         except Exception as exc:
@@ -718,6 +726,54 @@ def main() -> None:
             log(f"LOOP ERROR: {exc}")
 
         time.sleep(POLL_SECONDS)
+
+
+DISPATCH_CREDS: dict = {"checked": None, "ok": None, "detail": None}
+
+
+def verify_dispatch_credentials() -> None:
+    """Prove at boot that the token can actually reach the workflow.
+
+    Without this, a missing scope or an expired token is discovered at
+    03:00 when the night job silently fails to dispatch and the day's
+    evidence never gets collected. Tokens expire on a date nobody
+    remembers; this turns that into a visible state on /health instead
+    of a quiet stop.
+
+    Read-only: a GET against the workflow. It confirms the token is
+    valid and carries Actions access without triggering a run.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        DISPATCH_CREDS.update(
+            checked=datetime.now(ET).isoformat(timespec="seconds"), ok=False,
+            detail="GITHUB_TOKEN not set — Railway cannot dispatch; tasks run "
+                   "locally here and cannot fetch DraftKings odds")
+        log("dispatch credentials: NO TOKEN — GitHub cron is the only scheduler")
+        return
+
+    url = (f"https://api.github.com/repos/{GITHUB_REPO}"
+           f"/actions/workflows/daily.yml")
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("User-Agent", "strikeouts-worker")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read())
+        state = payload.get("state")
+        ok = resp.status == 200 and state == "active"
+        DISPATCH_CREDS.update(
+            checked=datetime.now(ET).isoformat(timespec="seconds"), ok=ok,
+            detail=f"workflow state={state}")
+        log(f"dispatch credentials: {'OK' if ok else 'PROBLEM'} "
+            f"(workflow state={state})")
+    except Exception as exc:
+        DISPATCH_CREDS.update(
+            checked=datetime.now(ET).isoformat(timespec="seconds"), ok=False,
+            detail=f"{type(exc).__name__}: {exc}")
+        log(f"dispatch credentials: FAILED ({type(exc).__name__}: {exc}) — "
+            f"token may be expired or missing Actions access")
 
 
 def dispatch_github(task: str) -> bool:
