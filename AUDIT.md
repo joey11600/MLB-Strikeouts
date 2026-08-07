@@ -704,6 +704,50 @@ Tracks open items, resolved items, and known risks.
   is unreachable, so the bundle's freshness never mattered here. The site
   would have shown the same stale board with or without it.
 
+### A-026: the book-line marker vanished because `line` is a string
+- **Filed/Resolved:** 2026-08-07 (operator noticed it missing from the card)
+- **Description:** `kdist-chart.tsx` computed
+  `lineX = PAD_L + (line + 0.5) * slot`. The slate JSON stores `line` as
+  the STRING "6.5", so this is `"6.50.5" * slot` -> **NaN**. The render
+  guard `lineX < W - PAD_R` is false for NaN, so the amber dashed line
+  and its label were skipped **silently** -- no error, no warning, the
+  marker simply was not there.
+- **Why it survived:** every other consumer of `line` only PRINTS it, and
+  "6.5" prints fine. Only the one site doing arithmetic broke.
+- **Resolution:** coerce with `Number()`, gate on `Number.isFinite`.
+  Fixed in the component, not in Python: the ledger's `line` is
+  legitimately a string for ladder rungs ("6+", per `_MERGE_KEYS`), so
+  re-typing the emitted value would reach well past this bug.
+- **Taken further,** since the operator also could not tell which way the
+  model leaned: the winning half of the distribution is tinted in the
+  side's colour with a wash band, the losing half stays grey, and a caret
+  marks the projection. The caret is a different SHAPE from the line on
+  purpose -- they usually sit within a batter of each other.
+- **Palette rule honoured:** the band is labelled in words, so hue never
+  carries meaning alone.
+- **Number discipline:** the band reads "62% OF CURVE" because that is
+  the area of the RAW model curve, while the card headline is the
+  market-blended 52.9%. Two unlabelled "chance this wins" figures on one
+  card is how a board stops being trusted.
+
+### A-027: Railway would rebuild on every ledger commit
+- **Filed/Resolved:** 2026-08-07
+- **Description:** connecting the repo (A-025) means Railway builds on
+  every push, including the 10-18 daily ledger commits. Each rebuild
+  restarts the container and interrupts the live starter watcher.
+- **Resolution:** `railway.json` -- config-as-code overrides the
+  dashboard and must sit at the repo root regardless of Root Directory:
+  `["**", "!/data/**", "/data/*.py", "!/dashboard/**"]`
+- **Two traps, both settled from Railway's docs rather than guessed:**
+  1. The leading `**` is load-bearing. Railway: "negations will only work
+     if you include files in a preceding rule." A bare `!/data/**`
+     matches nothing and silently does nothing -- a config that looks
+     applied and is not.
+  2. `/data/*.py` re-includes `backfill_statcast.py`, `game_context.py`
+     and `id_crosswalk.py`, worker CODE living in the same directory as
+     the ledger. Excluding `data/` wholesale would have stopped real code
+     changes from ever deploying.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

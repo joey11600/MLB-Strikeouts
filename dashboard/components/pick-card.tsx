@@ -598,6 +598,7 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
             line={p.line}
             actualK={p.actual_strikeouts ?? pick?.actual_strikeouts ?? null}
             side={side || undefined}
+            projection={p.expected_k ?? null}
             outcome={(() => {
               // Green if any bet on this card won; red only when every
               // graded bet (primary + ladder) lost; neutral otherwise.

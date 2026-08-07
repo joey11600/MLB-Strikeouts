@@ -1,6 +1,55 @@
 
 # Changelog
 
+## 2026-08-07 - The chart shows which way it leans (A-026, A-027)
+
+The book-line marker had silently disappeared from every pick card.
+`kdist-chart.tsx` did `(line + 0.5) * slot`, and the slate stores `line`
+as the string "6.5" - so that is `"6.50.5" * slot`, which is NaN, and
+`NaN < W - PAD_R` is false. The amber dashed line and its label were
+skipped with no error anywhere. Every other consumer of `line` only
+prints it, and "6.5" prints fine, which is why only this site broke.
+
+Coerced in the component, not in Python: the ledger's `line` is
+legitimately a string for ladder rungs ("6+"), so re-typing the emitted
+value would reach well past this bug.
+
+Then the bigger complaint - the chart said nothing about the pick it sat
+under. Every bar was the same grey. Now the half of the distribution that
+WINS the bet is tinted in the side's colour and washed with a band, the
+losing half stays grey, and a caret marks the projection. The caret is a
+different shape from the line on purpose; they usually sit within a
+batter of each other and two verticals would read as one idea.
+
+Labelled in words so hue never carries meaning alone. And it reads "62%
+OF CURVE", not "62%" - that is the raw model's area, while the card
+headline is the market-blended 52.9%. Two unlabelled "chance this wins"
+numbers on one card is how a board stops being trusted.
+
+Verified in the live DOM against the real Tolle card rather than by eye:
+dashed line at x=261.9 matching the computed 6.5 position, band spanning
+the UNDER side, 7 bars tinted vs 8 grey, caret at 6.0, and a
+screen-reader label reading "book line 6.5, UNDER wins on 62 percent of
+outcomes, projection 6.0".
+
+### railway.json - stop rebuilding on ledger churn (A-027)
+
+With the repo now connected, Railway would build on all 10-18 daily data
+commits, each restart interrupting the live starter watcher. Watch
+patterns: `["**", "!/data/**", "/data/*.py", "!/dashboard/**"]`
+
+Both traps came from reading Railway's docs rather than guessing. The
+leading `**` is required - "negations will only work if you include files
+in a preceding rule" - so the bare `!/data/**` suggested earlier would
+have matched nothing and silently done nothing. And `/data/*.py`
+re-includes three worker modules that live in the same directory as the
+ledger; excluding `data/` wholesale would have stopped real code changes
+from ever deploying.
+
+docs/RAILWAY.md records why Redeploy cannot ship new code (the Dockerfile
+bakes it in) and how to verify a deploy actually landed.
+
+
 ## 2026-08-07 — The worker served a seven-hour-old board (A-025)
 
 Found while verifying something else, which is the only reason it was
