@@ -521,6 +521,49 @@ Tracks open items, resolved items, and known risks.
   `auto: grade` / `auto: daily backup snapshot`), awaiting operator
   go-ahead before touching a sibling production system.
 
+### A-023a: the skip could have shipped code that never went live
+- **Filed/Resolved:** 2026-08-07 (found red-teaming A-023 the same day)
+- **Description:** the first implementation diffed `HEAD^` against
+  `HEAD`, which is correct only when a push carries exactly one commit.
+  One push can carry several. If a code commit sits UNDERNEATH a
+  data-only commit in the same push, `HEAD^..HEAD` sees only the data
+  commit, the build is skipped, and the code silently never reaches
+  production. Nothing turns red — Vercel records a CANCELED deployment
+  that is indistinguishable from the healthy case.
+- **Reachable here, not hypothetical:** `tools/odds_relay.py`
+  `_publish_hint()` prints `git push origin master` for the operator to
+  run by hand. A bare push ships every unpushed commit, and the odds
+  snapshot commit touches only `data/odds`, so it lands on top. Any
+  local code commit rides underneath it.
+- **Never actually happened:** repo history has zero merge commits and
+  every deployment so far advanced by exactly one commit. The exposure
+  was to operator habit, not to the CI pipeline (which commits
+  server-side on top of already-built code and stages only `data/` plus
+  `dashboard/public/data.json`).
+- **Resolution:** compare against `VERCEL_GIT_PREVIOUS_SHA` — per Vercel
+  docs, "the SHA of the last successful deployment; only available when
+  an Ignored Build Step is configured." A skipped build is not a
+  deployment, so the value stays pinned to the last commit whose code is
+  actually LIVE. Consecutive data commits each compare against real live
+  code, and a code commit anywhere in the gap is caught. No baseline,
+  unreachable baseline, or manual redeploy all build.
+- **Locked with tests:** `tests/test_vercel_ignore_build.py`, 6 cases
+  against a real throwaway git repo. The load-bearing one builds the
+  `[code, data]` push shape and asserts BUILD — it also asserts that the
+  naive `HEAD^` rule *would* have wrongly said data-only, so the test
+  fails if anyone reintroduces it.
+- **Mechanism confirmed by observation, not inference.** The build log
+  for d89633b shows Vercel running `bash scripts/vercel-ignore-build.sh`
+  and printing the script's own output plus a correct file list — which
+  proves in one block that vercel.json's `ignoreCommand` is read (no
+  dashboard override), bash runs it with no CRLF failure, and the parent
+  commit IS present in Vercel's clone. A clone too shallow to see
+  history was the one plausible silent killer and it is ruled out.
+- **Sidebar — why the hours were so large:** builds run on a 30-core
+  Turbo machine, so ~1.5 minutes of wall clock bills as ~45 CPU-minutes.
+  Machine size is a second, independent lever if ever needed; it matters
+  much less now that builds are rare.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

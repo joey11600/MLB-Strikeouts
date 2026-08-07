@@ -1,6 +1,50 @@
 
 # Changelog
 
+## 2026-08-07 — The build-skip compares against the last BUILD (A-023a)
+
+Red-teamed this morning's build-skip before trusting it, and found the
+first implementation wrong in the expensive direction.
+
+It diffed `HEAD^` against `HEAD`, which is only correct when a push
+carries exactly one commit. One push can carry several. Put a code
+commit underneath a data-only commit in the same push and `HEAD^..HEAD`
+sees only the data — build skipped, code silently never live, nothing
+red anywhere. Vercel just records a CANCELED deployment that looks
+exactly like the healthy case.
+
+Reachable here rather than theoretical: `tools/odds_relay.py`
+`_publish_hint()` tells the operator to run a bare `git push origin
+master`, which ships everything unpushed, and its odds commit touches
+only `data/odds` so it lands on top. It has never actually happened —
+zero merge commits in history, every deployment so far advancing by
+exactly one commit — but it depended on operator habit rather than on
+anything enforced.
+
+Now compares `VERCEL_GIT_PREVIOUS_SHA`, which Vercel documents as the
+last SUCCESSFUL deployment and only supplies when an Ignored Build Step
+is configured. A skipped build is not a deployment, so that value stays
+pinned to the last commit whose code is actually live — the correct
+baseline. A run of data commits each compares against real live code,
+and a code commit anywhere in the gap is caught. No baseline,
+unreachable baseline, and manual redeploys all build.
+
+`tests/test_vercel_ignore_build.py` locks it: 6 cases against a real
+throwaway git repo. The load-bearing one constructs the `[code, data]`
+push and asserts BUILD — and also asserts the naive `HEAD^` rule would
+have wrongly seen data-only, so it fails if anyone puts that back.
+
+The mechanism itself is confirmed by observation. The build log for
+d89633b shows Vercel running `bash scripts/vercel-ignore-build.sh` and
+printing the script's own output and file list, which proves in one
+block that the `ignoreCommand` is being read from vercel.json with no
+dashboard override, that bash runs it with no line-ending failure, and
+that the parent commit is present in Vercel's clone — a clone too
+shallow to see history was the one plausible silent killer.
+
+Also learned why the hours were so large: builds run on a 30-core Turbo
+machine, so ~1.5 minutes of wall clock bills as ~45 CPU-minutes.
+
 ## 2026-08-07 — Data commits stop rebuilding the site (A-023)
 
 The two MLB projects had eaten 92% of the Vercel build allowance in one
