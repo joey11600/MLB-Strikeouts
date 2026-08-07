@@ -391,8 +391,10 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
   const actualK = pick?.actual_strikeouts ?? p.actual_strikeouts;
   const live = p.live;
   const isFinal = live?.final ?? actualK != null;
+  // Requires isFinal: an in-game K total can still move, so tinting the
+  // slab on it would call a result that has not happened.
   const cleared =
-    actualK != null && p.line != null
+    isFinal && actualK != null && p.line != null
       ? actualK > p.line
         ? "over"
         : "under"

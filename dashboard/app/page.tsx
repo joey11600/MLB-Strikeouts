@@ -14,6 +14,7 @@ import {
 } from "@/components/filter-bar";
 import { PickCard } from "@/components/pick-card";
 import { HeroStats } from "@/components/stat-tiles";
+import { Scoreboard } from "@/components/scoreboard";
 
 function SlateView() {
   const { data, error } = useDashboard();
@@ -156,6 +157,35 @@ function SlateView() {
         </div>
       ) : (
         <>
+          {/* Scoreboard shows the WHOLE board, unfiltered, so the filter
+              chips above never hide a play from the at-a-glance view. */}
+          <Scoreboard
+            slate={slate}
+            onSelect={(key) => {
+              if (!expanded.has(key)) toggle(key);
+              // Deferred past React's commit so the expand has laid out
+              // before we measure. setTimeout rather than
+              // requestAnimationFrame on purpose: rAF is suspended while
+              // the tab is not compositing, so a frame-based deferral
+              // silently never runs in a background tab.
+              //
+              // Smooth scrolling is also frame-driven, so it is used only
+              // when the user has not asked for reduced motion — that
+              // check earns its keep twice here.
+              setTimeout(() => {
+                const el = document.getElementById(`pick-${key}`);
+                if (!el) return;
+                const smooth = !window.matchMedia(
+                  "(prefers-reduced-motion: reduce)",
+                ).matches;
+                el.scrollIntoView({
+                  behavior: smooth ? "smooth" : "auto",
+                  block: "center",
+                });
+              }, 0);
+            }}
+          />
+
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
               {current} board
@@ -169,13 +199,15 @@ function SlateView() {
             {pitchers.map((p) => {
               const key = `${p.pitcher_id}-${p.line}`;
               return (
+                // Anchor so a scoreboard stub can jump to its card.
+                <div key={key} id={`pick-${key}`}>
                 <PickCard
-                  key={key}
                   p={p}
                   expanded={expanded.has(key)}
                   onToggle={() => toggle(key)}
                   isTop={key === topKey}
                 />
+                </div>
               );
             })}
           </div>
