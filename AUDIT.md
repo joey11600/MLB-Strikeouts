@@ -688,6 +688,17 @@ Tracks open items, resolved items, and known risks.
   older than the repo's."** Every other check in the file inspects the
   repo, so all thirteen were green while the operator looked at a
   seven-hour-old board.
+- **The first version of the new check was fooled within the hour.** It
+  compared the payload's top-level `generated_at`, which only records
+  when data.json was last WRITTEN. The worker rebuilds that wrapper from
+  its own volume on every boot, so a restart with no pull emitted
+  "21:25" around a slate generated at 13:40 (24 pitchers, 0 bets) while
+  the repo held 20:47 (25 pitchers, 1 bet) -- and the check reported the
+  worker as NEWER than the repo and passed GREEN. A false all-clear on
+  the exact fault it was written for. Now compares the SLATE's own
+  stamp, which is content-derived and cannot be forged by a rebuild,
+  and also reports pitcher/bet counts so a same-age-different-content
+  split is a FAIL rather than silence.
 - **The build-skip (A-023) was NOT the cause** and was checked before
   being blamed: `loadData()` only reads the bundled copy when the worker
   is unreachable, so the bundle's freshness never mattered here. The site

@@ -535,6 +535,20 @@ def check_served_board_is_current(r: Report) -> None:
 
     Tolerance is generous on purpose: the worker's publish pass runs
     every 5 minutes, so a just-committed board legitimately lags briefly.
+
+    COMPARE THE SLATE'S STAMP, NOT THE PAYLOAD'S. The top-level
+    generated_at records only when data.json was last WRITTEN. The worker
+    rebuilds it from its own volume on every boot, so a container that has
+    never pulled emits a brand-new wrapper stamp wrapped around an
+    hours-old board. The first version of this check compared the wrapper
+    and was fooled inside the hour: at 21:25Z the worker advertised
+    "21:25" over a slate generated at 13:40 with 24 pitchers and 0 bets,
+    while the repo held 20:47 with 25 pitchers and 1 bet. The check
+    reported the worker as NEWER than the repo and passed green -- a
+    false all-clear on the exact fault it was written for.
+
+    The slate's own generated_at is content-derived: it is stamped when
+    the board is priced, so a rebuild-from-stale-state cannot forge it.
     """
     import urllib.request
 
@@ -542,10 +556,19 @@ def check_served_board_is_current(r: Report) -> None:
     if not local.exists():
         r.warn("served board is current", "no local data.json to compare")
         return
+
+    today = _today().isoformat()
+
+    def _board(payload: dict) -> tuple:
+        slate = (payload.get("slates") or {}).get(today) or {}
+        return (slate.get("generated_at"),
+                slate.get("pitcher_count"), slate.get("bet_count"))
+
     try:
-        want = json.loads(local.read_text(encoding="utf-8")).get("generated_at")
-        got = json.loads(urllib.request.urlopen(
-            f"{WORKER_URL}/data.json", timeout=25).read()).get("generated_at")
+        want, want_n, want_b = _board(
+            json.loads(local.read_text(encoding="utf-8")))
+        got, got_n, got_b = _board(json.loads(urllib.request.urlopen(
+            f"{WORKER_URL}/data.json", timeout=25).read()))
     except Exception as exc:
         # The worker being unreachable is its own condition, and the
         # dashboard handles it by falling back to the bundled copy.
@@ -553,25 +576,44 @@ def check_served_board_is_current(r: Report) -> None:
                f"worker unreachable ({type(exc).__name__}) — site is on the "
                f"bundled fallback")
         return
-    if not want or not got:
-        r.warn("served board is current", "missing generated_at on one side")
+    if not want:
+        r.warn("served board is current", f"no local slate for {today}")
+        return
+    if not got:
+        r.fail("served board is current",
+               f"worker is serving no slate at all for {today}",
+               "the site has nothing to show for today")
         return
     try:
         lag = (datetime.fromisoformat(want) - datetime.fromisoformat(got)).total_seconds() / 60
     except ValueError as exc:
         r.warn("served board is current", f"unparseable timestamps: {exc}")
         return
+
+    shape = ""
+    if (want_n, want_b) != (got_n, got_b):
+        shape = (f"; worker shows {got_n} pitchers/{got_b} bets vs the repo's "
+                 f"{want_n}/{want_b}")
+
     if lag > 45:
         r.fail("served board is current",
                f"worker serving a board {lag:.0f} min older than the repo's "
-               f"({got} vs {want})",
+               f"({got} vs {want}){shape}",
                "the operator is looking at a stale board; picks made after "
                "that time are invisible on the site")
     elif lag > 10:
         r.warn("served board is current",
-               f"worker {lag:.0f} min behind the repo — publish pass may be slow")
+               f"worker {lag:.0f} min behind the repo — publish pass may be "
+               f"slow{shape}")
+    elif shape:
+        # Same age, different content: not a staleness problem, but the two
+        # sides disagree about today and one of them is wrong.
+        r.fail("served board is current",
+               f"worker and repo boards are the same age but differ{shape}",
+               "two different boards are in circulation for the same slate")
     else:
-        r.ok("served board is current", f"worker within {max(lag, 0):.0f} min of the repo")
+        r.ok("served board is current",
+             f"worker within {max(lag, 0):.0f} min of the repo, {got_n} pitchers")
 
 
 CHECKS = [
