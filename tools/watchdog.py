@@ -313,6 +313,58 @@ def check_statcast_fresh(r: Report) -> None:
         r.ok("Statcast cache fresh", f"through {newest} ({len(files)} days)")
 
 
+def check_yesterdays_results_present(r: Report) -> None:
+    """Yesterday's board must actually carry results, not just exist.
+
+    "Statcast cache fresh" passes on a cache that has a FILE for
+    yesterday — even an empty one. On 2026-08-07 that check was green
+    while Railway served a board showing zero results for all twenty of
+    8/6's pitchers, because its cache only refreshes at 03:00 and
+    Savant had not published yet. Freshness of the file is not presence
+    of the data.
+
+    Same publish-lag window as the model log: before 13:00 ET a gap is
+    normal, after it is a real hole in what the operator sees.
+    """
+    y = (_today() - timedelta(days=1)).isoformat()
+    path = SLATES / f"{y}.json"
+    if not path.exists():
+        r.ok("yesterday's results present", f"no slate for {y}")
+        return
+    try:
+        pitchers = json.loads(path.read_text(encoding="utf-8")).get("pitchers", [])
+    except (OSError, ValueError) as exc:
+        r.warn("yesterday's results present", f"unreadable slate: {exc}")
+        return
+    if not pitchers:
+        r.ok("yesterday's results present", f"{y} board is empty")
+        return
+
+    try:
+        from datetime import date as _date
+
+        from data.backfill_statcast import load_cached
+        df = load_cached(_date.fromisoformat(y), _date.fromisoformat(y))
+        n_pitches = 0 if df.empty else len(df)
+    except Exception as exc:
+        r.warn("yesterday's results present", f"cache unreadable: {exc}")
+        return
+
+    if n_pitches == 0:
+        msg = f"{y}: {len(pitchers)} pitchers on the board, 0 pitches cached"
+        if datetime.now(ET).hour < 13:
+            r.warn("yesterday's results present",
+                   msg + " — Savant publishes mid-morning",
+                   "the board will show blanks until the cache is topped up")
+        else:
+            r.fail("yesterday's results present", msg,
+                   "the dashboard is showing a finished slate with no "
+                   "results; the Statcast cache never got refreshed")
+    else:
+        r.ok("yesterday's results present",
+             f"{y}: {n_pitches:,} pitches cached for {len(pitchers)} pitchers")
+
+
 def check_odds_provenance(r: Report) -> None:
     """No bet may be priced from odds of unknown or stale origin."""
     rows = [x for x in _rows(PICKS) if (x.get("bet_placed") or "").upper() == "Y"]
@@ -467,6 +519,7 @@ CHECKS = [
     check_model_log_growing,
     check_statcast_fresh,
     check_odds_provenance,
+    check_yesterdays_results_present,
     check_statcast_confirms_grades,
     check_scheduler_ran,
     check_dashboard_matches_ledger,

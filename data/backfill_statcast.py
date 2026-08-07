@@ -74,7 +74,12 @@ def backfill(start_date: date, end_date: date, sleep_sec: float = 1.0) -> None:
             # EMPTY_PARQUET_BYTES is well above a schema-only file but
             # far below any real day (a light slate is ~450 KB).
             fresh_enough = size > EMPTY_PARQUET_BYTES
-            settled = current < _today_et()
+            # A day is only final once it is at least two days old.
+            # Yesterday is re-fetched every time because a file written
+            # while its games were still playing is >20KB yet incomplete
+            # — "big enough" is not "finished", and the size check alone
+            # would freeze a partial day forever.
+            settled = current < _today_et() - timedelta(days=1)
             if fresh_enough and settled:
                 print(f"  [{day_num}/{total_days}] {date_str} — cached ({size:,} bytes)")
                 current += timedelta(days=1)

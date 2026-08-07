@@ -610,7 +610,16 @@ def _log_evidence() -> None:
     were lost (A-022). Six attempts a day means the board time can move
     -- as it just did, 10:30 -> 09:00 -- without putting the evidence at
     risk again.
+
+    refresh_cache() FIRST, and that ordering is the whole point.
+    model_log reads the Statcast cache; it does not fetch. Running it
+    six times against a cache that only refreshes at 03:00 just re-reads
+    the same empty file six times. That is precisely what happened on
+    2026-08-07: the retries were added without their input, so Railway
+    served a board with zero results for 8/6 all day while CI -- which
+    tops up the cache on every run -- had all twenty.
     """
+    refresh_cache()
     _run("model-log", [PYTHON, "tools/model_log.py"], 900)
     _run("shadow", [PYTHON, "tools/shadow.py"], 300)
 
@@ -639,7 +648,6 @@ def task_close() -> None:
 
 def task_night() -> None:
     sync_repo()
-    refresh_cache()
     # Grade BOTH dates explicitly rather than relying on run.py's
     # "yesterday" default: at 3am ET yesterday is the finished slate,
     # but a forced/late run at 10pm needs today. Grading is idempotent
@@ -685,8 +693,11 @@ def main() -> None:
     start_live_watcher()
     configure_git()
 
-    if not any(CACHE_DIR.glob("*/*")):
-        refresh_cache()
+    # Unconditional, not only when cold. A warm-but-STALE cache is the
+    # dangerous state: it looks populated, so the old "is it empty?"
+    # test passed and left yesterday's games missing. Topping up a warm
+    # cache is a fast no-op.
+    refresh_cache()
 
     # data.json is a DERIVED artifact and ships inside the image, so a
     # fresh deploy would otherwise serve a snapshot older than the
