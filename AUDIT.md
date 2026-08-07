@@ -354,10 +354,24 @@ Tracks open items, resolved items, and known risks.
   question that pays: is there any subpopulation where we beat the
   closing line? If there is not, no amount of model work fixes it.
 
-### A-019: GitHub's cron has never fired — the schedule is unproven
+### A-019: GitHub's cron fires, but hours late on first activation
 - **Filed:** 2026-08-06
-- **Status:** OPEN and unresolved. Watch this before trusting an
-  unattended stretch.
+- **Status:** RESOLVED — cron works; the Railway dispatch covers the lag
+- **Resolution (2026-08-06 21:51 ET):** the first schedule-triggered run
+  arrived **8 hours 39 minutes** after the workflow was created, then
+  succeeded. So GitHub cron is real but its first activation is very
+  slow and, per GitHub's own docs, deprioritised under load thereafter.
+  Treat it as a backstop, never as the clock.
+- **The grace windows earned their keep.** That 21:51 run found every
+  one of the day's six windows already past its grace period and logged
+  a SKIP for each with the exact lateness (night 1132 min, morning 682,
+  closes 577/412/217, lineups 307), then reported "nothing was due".
+  Without those windows it would have fired a *morning slate* job at
+  9:52pm and re-priced a slate whose games were over.
+- **Net:** two independent schedulers. Railway dispatches on time
+  (verified: all six windows hit on 2026-08-06); GitHub cron catches
+  anything Railway misses. Neither is a single point of failure.
+- **Original description kept below — the measurement stands.**
 - **Description:** the workflow was created 2026-08-06 13:12 ET. In the
   following 6.5 hours, twelve-plus cron windows passed and **zero**
   schedule-triggered runs occurred. Every run so far is a manual
