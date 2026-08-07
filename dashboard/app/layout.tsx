@@ -38,25 +38,28 @@ export default function RootLayout({
                   K
                 </span>
                 <span className="text-lg font-bold tracking-tight">
-                  Strikeouts Terminal
+                  {/* "Terminal" is decoration; dropping it below 400px
+                      keeps the header inside a 375px viewport, which it
+                      was overflowing by 4px and scrolling the page. */}
+                  Strikeouts<span className="hidden min-[400px]:inline"> Terminal</span>
                 </span>
               </Link>
-              <nav className="flex items-center gap-1 text-sm">
+              <nav className="flex shrink-0 items-center gap-0.5 text-sm sm:gap-1">
                 <Link
                   href="/"
-                  className="rounded-md px-3 py-1.5 text-ink-secondary transition-colors hover:bg-surface-2 hover:text-ink"
+                  className="rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-2 hover:text-ink sm:px-3"
                 >
                   Slate
                 </Link>
                 <Link
                   href="/performance"
-                  className="rounded-md px-3 py-1.5 text-ink-secondary transition-colors hover:bg-surface-2 hover:text-ink"
+                  className="rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-2 hover:text-ink sm:px-3"
                 >
                   Performance
                 </Link>
                 <Link
                   href="/model"
-                  className="rounded-md px-3 py-1.5 text-ink-secondary transition-colors hover:bg-surface-2 hover:text-ink"
+                  className="rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-2 hover:text-ink sm:px-3"
                 >
                   Model
                 </Link>

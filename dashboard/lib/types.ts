@@ -62,6 +62,18 @@ export interface SlatePitcher {
   primary_units_risked?: number;
   current_rules_primary_units?: number;
   k_dist: number[];
+  /** Live line from the MLB-API watcher (workers/live_strikeouts.py). */
+  live?: {
+    strikeouts: number | null;
+    batters_faced: number | null;
+    pitches: number | null;
+    innings: string | null;
+    final: boolean;
+    game_state?: string;
+    status?: string;
+  };
+  /** "live" when actual_strikeouts came from the watcher, not Statcast. */
+  result_source?: string;
   ladder: LadderRung[];
   pick: PickInfo | null;
   actual_strikeouts: number | null;

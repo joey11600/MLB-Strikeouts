@@ -42,6 +42,96 @@ function ResultBadge({ result, pnl, actualK }: {
   );
 }
 
+/** The outcome, sized to be read at a glance across a full board.
+ *
+ *  Result and SIDE both want green/red, so they are separated by FORM,
+ *  not hue: the side is an outline arrow on the line itself, the result
+ *  is this filled slab. Fill weight says "this is what happened";
+ *  colour only reinforces it. The K count and a "vs 5.5" reference sit
+ *  together so "did it clear?" needs no arithmetic.
+ */
+function ResultSlab({
+  k, line, graded, pnl, isFinal, leanHit, gameState,
+}: {
+  k: number | null;
+  line: number | null;
+  graded: string | null;
+  pnl?: number;
+  isFinal: boolean;
+  leanHit: boolean | null;
+  gameState?: string;
+}) {
+  if (k == null) {
+    if (gameState && !/scheduled|pre-game|warmup/i.test(gameState)) {
+      return (
+        <span className="figure whitespace-nowrap rounded-badge border border-line px-2 py-1 text-[10px] uppercase tracking-wider text-ink-muted">
+          {gameState}
+        </span>
+      );
+    }
+    return null;
+  }
+
+  // A settled BET is the loudest thing on the card. An unbet row still
+  // shows its number, quietly — the board is evidence either way.
+  const tone =
+    graded === "WIN"
+      ? "border-over bg-over-dim text-over"
+      : graded === "LOSS"
+        ? "border-under bg-under-dim text-under"
+        : graded
+          ? "border-line-strong bg-surface-2 text-ink-secondary"
+          : leanHit === true
+            ? "border-over/60 bg-over-dim text-ink"
+            : leanHit === false
+              ? "border-under/60 bg-under-dim text-ink"
+              : "border-line-strong bg-surface-2 text-ink";
+
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 flex-col items-end rounded-card border px-2.5 py-1.5 leading-none",
+        tone,
+        !isFinal && "animate-pulse",
+      )}
+      title={
+        graded
+          ? `Bet graded ${graded}`
+          : leanHit == null
+            ? undefined
+            : `Model leaned ${leanHit ? "correctly" : "wrong"} (not bet)`
+      }
+    >
+      <div className="flex items-baseline gap-1">
+        <span className="figure text-[22px] font-bold tabular-nums">{k}</span>
+        <span className="figure text-[11px] opacity-70">K</span>
+      </div>
+      {/* A graded BET says WIN/LOSS. An unbet row says whether the
+          model's lean was right, with a mark rather than colour alone —
+          most of the board is unbet, and "was it right?" is the whole
+          reason to look at it. */}
+      <div className="figure mt-1 whitespace-nowrap text-[9.5px] uppercase tracking-wider opacity-80">
+        {!isFinal
+          ? "in game"
+          : graded
+            ? graded
+            : leanHit === true
+              ? `✓ vs ${line}`
+              : leanHit === false
+                ? `✗ vs ${line}`
+                : line != null
+                  ? `vs ${line}`
+                  : "final"}
+      </div>
+      {graded && pnl !== undefined && (graded === "WIN" || graded === "LOSS") && (
+        <div className="figure mt-0.5 text-[10px] font-semibold tabular-nums">
+          {pnlStr(pnl)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StrengthBadge({ strength }: { strength?: string | null }) {
   if (!strength || strength === "NO_PLAY") return null;
   const cls =
@@ -276,16 +366,40 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
   const side = pick?.pick_side || p.best_side || "";
   const ladderBets = p.ladder.filter((r) => r.status === "bet" || r.pick?.bet_placed).length;
 
+  // The rail always carries the SIDE, bet or not. It used to light up
+  // only for placed bets, so a no-bet slate rendered twenty identical
+  // grey cards and the single most important distinction — which way
+  // the model leans — was invisible. Betting changes the INTENSITY, not
+  // the hue: a bet is a saturated rail, a lean is a quiet one.
   const spine =
-    hasBet && side === "OVER"
-      ? "before:bg-gradient-to-b before:from-over before:to-over/30"
-      : hasBet && side === "UNDER"
-        ? "before:bg-gradient-to-b before:from-under before:to-under/30"
+    side === "OVER"
+      ? hasBet
+        ? "before:bg-gradient-to-b before:from-over before:to-over/30"
+        : "before:bg-gradient-to-b before:from-over/45 before:to-over/5"
+      : side === "UNDER"
+        ? hasBet
+          ? "before:bg-gradient-to-b before:from-under before:to-under/30"
+          : "before:bg-gradient-to-b before:from-under/45 before:to-under/5"
         : "before:bg-white/10";
 
   const matchup = `${p.pitcher_team} ${p.is_home ? "vs" : "@"} ${p.opponent_team}`;
   const displayOdds =
     side === "UNDER" ? p.under_odds : p.over_odds;
+
+  // Result: the number you scan a 20-card board for. Actual K against
+  // the posted line, so "did it clear?" is answerable without arithmetic.
+  const actualK = pick?.actual_strikeouts ?? p.actual_strikeouts;
+  const live = p.live;
+  const isFinal = live?.final ?? actualK != null;
+  const cleared =
+    actualK != null && p.line != null
+      ? actualK > p.line
+        ? "over"
+        : "under"
+      : null;
+  // Did the model's lean come true? Distinct from bet W/L — most rows
+  // are not bets, and the board is still telling us something.
+  const leanHit = cleared != null && side ? cleared === side.toLowerCase() : null;
 
   return (
     <div
@@ -320,74 +434,88 @@ export function PickCard({ p, expanded, onToggle, isTop }: Props) {
               </span>
             )}
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {/* One hierarchy, not four equal chips. Side+line leads (it is
+              the pick), then the model's own numbers, then the market's
+              price, then the shortfall in muted text. Previously all
+              four rendered at the same weight, so nothing led and the
+              eye had nowhere to land. */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span
+              className={cn(
+                "figure text-[14px] font-bold tracking-tight",
+                side === "OVER"
+                  ? "text-over"
+                  : side === "UNDER"
+                    ? "text-under"
+                    : "text-ink-secondary",
+              )}
+            >
+              {/* Arrow, not colour alone: hue never carries meaning by
+                  itself, and these two are the whole point of the card. */}
+              {side === "OVER" ? "▲" : side === "UNDER" ? "▼" : ""} {side}{" "}
+              {p.line ?? "—"}
+            </span>
+
+            {p.blended_prob_over != null && (
+              <span className="figure text-[12px] text-ink">
+                {pctStr(
+                  side === "UNDER" ? 1 - p.blended_prob_over : p.blended_prob_over,
+                )}
+              </span>
+            )}
+
+            {p.expected_k != null && (
+              <span className="figure text-[11.5px] text-ink-secondary">
+                proj {p.expected_k.toFixed(1)}
+              </span>
+            )}
+
+            {/* Only the price for the side we are on. Both sides live in
+                the expanded view; showing them here forced a mental
+                lookup of which number applied. */}
+            <span className="figure text-[11.5px] text-ink-secondary">
+              {oddsStr(displayOdds)}
+            </span>
+
             {hasBet && pick ? (
               <>
-                <span
-                  className={cn(
-                    "figure text-[13px] font-semibold",
-                    side === "OVER" ? "text-over" : "text-under",
-                  )}
-                >
-                  {side} {p.line}
-                </span>
                 <StrengthBadge strength={pick.pick_strength} />
-                <Chip>{oddsStr(displayOdds)}</Chip>
-                {(pick.units_risked ?? 0) > 0 && <Chip>{pick.units_risked.toFixed(2)}u</Chip>}
-              </>
-            ) : (
-              <>
-                {/* Not betting it is not the same as having no opinion.
-                    Show the model's lean, its probability, and HOW FAR
-                    short of the bar it fell — otherwise a 20-pitcher
-                    board reads as 20 blanks and the day's real work is
-                    invisible. */}
-                <span className="figure text-[13px] text-ink-secondary">
-                  {p.best_side ?? ""} {p.line ?? "—"}
-                </span>
-                {p.blended_prob_over != null && (
-                  <Chip>
-                    {pctStr(
-                      p.best_side === "UNDER"
-                        ? 1 - p.blended_prob_over
-                        : p.blended_prob_over,
-                    )}
+                {(pick.units_risked ?? 0) > 0 && (
+                  <Chip className="border-accent/30 bg-accent-dim text-accent">
+                    {pick.units_risked.toFixed(2)}u
                   </Chip>
                 )}
-                <Chip>{oddsStr(p.over_odds)} / {oddsStr(p.under_odds)}</Chip>
-                {p.edge_best != null && p.threshold != null ? (
-                  <span
-                    className="figure text-[10.5px] text-ink-muted"
-                    title={`Edge ${(p.edge_best * 100).toFixed(1)}% vs a ${(p.threshold * 100).toFixed(1)}% bar`}
-                  >
-                    no bet · {((p.edge_best - p.threshold) * 100).toFixed(1)} pts short
-                  </span>
-                ) : (
-                  <span className="figure text-[10.5px] text-ink-muted">no bet</span>
-                )}
               </>
-            )}
+            ) : p.edge_best != null && p.threshold != null ? (
+              // ink-muted (#55555E) contrasts only 2.56:1 on the card and
+              // fails AA. ink-secondary reads 5.3:1 and still sits well
+              // below the primary figures, so the hierarchy survives.
+              <span
+                className="figure text-[11px] text-ink-secondary"
+                title={`Edge ${(p.edge_best * 100).toFixed(1)}% against a ${(p.threshold * 100).toFixed(1)}% bar`}
+              >
+                {((p.edge_best - p.threshold) * 100).toFixed(1)} pts short
+              </span>
+            ) : null}
+
             {ladderBets > 0 && (
               <Chip className="border-accent/25 bg-accent-dim text-accent">
                 LADDER ×{ladderBets}
               </Chip>
             )}
-            {p.expected_k != null && (
-              <Chip>E[K] {p.expected_k.toFixed(1)}</Chip>
-            )}
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5">
-          {pick?.graded_result ? (
-            <ResultBadge
-              result={pick.graded_result}
-              pnl={pick.profit_loss_units.value}
-              actualK={pick.actual_strikeouts ?? p.actual_strikeouts}
-            />
-          ) : p.actual_strikeouts != null ? (
-            <Chip>{p.actual_strikeouts}K</Chip>
-          ) : null}
+          <ResultSlab
+            k={actualK ?? null}
+            line={p.line ?? null}
+            graded={pick?.graded_result ?? null}
+            pnl={pick?.profit_loss_units.value}
+            isFinal={isFinal}
+            leanHit={leanHit}
+            gameState={live?.game_state}
+          />
           <motion.span
             animate={{ rotate: expanded ? 45 : 0 }}
             transition={{ duration: 0.3 }}
