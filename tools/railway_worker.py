@@ -728,7 +728,8 @@ def main() -> None:
         time.sleep(POLL_SECONDS)
 
 
-DISPATCH_CREDS: dict = {"checked": None, "ok": None, "detail": None}
+DISPATCH_CREDS: dict = {"checked": None, "ok": None, "detail": None,
+                        "token_days_left": None}
 
 
 def verify_dispatch_credentials() -> None:
@@ -761,13 +762,34 @@ def verify_dispatch_credentials() -> None:
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             payload = json.loads(resp.read())
+            # GitHub returns the PAT's expiry on every authenticated
+            # response. Capturing it turns "the token died and nothing
+            # ran" into a countdown you can see coming.
+            expires_raw = resp.headers.get(
+                "github-authentication-token-expiration") or ""
         state = payload.get("state")
         ok = resp.status == 200 and state == "active"
+
+        days_left = None
+        if expires_raw:
+            try:
+                stamp = expires_raw.strip().replace(" UTC", "+0000")
+                exp = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S%z")
+                days_left = (exp - datetime.now(exp.tzinfo)).days
+            except ValueError:
+                pass
+
+        detail = f"workflow state={state}"
+        if days_left is not None:
+            detail += f", token expires in {days_left}d ({expires_raw.strip()})"
+            if days_left <= 7:
+                ok = False
+                detail += " — RENEW NOW, dispatch stops silently when it lapses"
+
         DISPATCH_CREDS.update(
             checked=datetime.now(ET).isoformat(timespec="seconds"), ok=ok,
-            detail=f"workflow state={state}")
-        log(f"dispatch credentials: {'OK' if ok else 'PROBLEM'} "
-            f"(workflow state={state})")
+            detail=detail, token_days_left=days_left)
+        log(f"dispatch credentials: {'OK' if ok else 'PROBLEM'} ({detail})")
     except Exception as exc:
         DISPATCH_CREDS.update(
             checked=datetime.now(ET).isoformat(timespec="seconds"), ok=False,
