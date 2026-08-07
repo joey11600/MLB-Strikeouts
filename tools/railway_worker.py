@@ -72,7 +72,12 @@ SEASON_START = date(2026, 3, 26)
 # is short; a missed grade or slate is still worth producing.
 SCHEDULE = [
     ("night",   dtime(3, 0),   360),
-    ("morning", dtime(10, 30), 360),
+    # 09:00 at the operator's request — earlier board, more time to act.
+    # Note this is BEFORE Statcast reliably publishes yesterday's games
+    # (measured 0 pitches at 03:21 ET, 3,530 by 08:59 ET), which is why
+    # evidence logging is no longer tied to this job: _log_evidence()
+    # runs on EVERY task instead. See A-022.
+    ("morning", dtime(9, 0),   360),
     ("close",   dtime(12, 15), 45),
     ("close",   dtime(15, 0),  45),
     ("lineups", dtime(16, 45), 120),
@@ -592,17 +597,28 @@ def commit_and_push(context: str) -> None:
         log("committed locally only (no GITHUB_TOKEN)")
 
 
+def _log_evidence() -> None:
+    """Score every finished slate and refresh the shadow portfolio.
+
+    Called from EVERY task, not just one. Both steps are idempotent per
+    date and cost ~1s when there is nothing new, so the cheapest way to
+    guarantee a slate is logged is to keep trying all day.
+
+    That matters because the input is a third-party feed on its own
+    clock: Baseball Savant publishes yesterday's games mid-morning, and
+    tying the only attempt to a fixed time is exactly how 8/5 and 8/6
+    were lost (A-022). Six attempts a day means the board time can move
+    -- as it just did, 10:30 -> 09:00 -- without putting the evidence at
+    risk again.
+    """
+    _run("model-log", [PYTHON, "tools/model_log.py"], 900)
+    _run("shadow", [PYTHON, "tools/shadow.py"], 300)
+
+
 def task_morning() -> None:
     sync_repo()
     _run("daily-cycle", [PYTHON, "run.py"], 2400)
-    # Second pass at yesterday's model log. The 03:00 job runs BEFORE
-    # Baseball Savant publishes: on 2026-08-07 at 03:21 ET Statcast had
-    # 0 pitches for 8/6, and 3,530 by 08:59 ET. So the night job cannot
-    # be the only attempt, or every slate silently loses its ~20
-    # observations -- which is exactly what happened to 8/5 and 8/6.
-    # Both steps are idempotent per date, so a repeat costs nothing.
-    _run("model-log", [PYTHON, "tools/model_log.py"], 900)
-    _run("shadow", [PYTHON, "tools/shadow.py"], 300)
+    _log_evidence()
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("morning slate")
 
@@ -610,12 +626,14 @@ def task_morning() -> None:
 def task_lineups() -> None:
     sync_repo()
     _run("lineup-lock-predict", [PYTHON, "run.py", "predict"], 2400)
+    _log_evidence()
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("lineup-lock re-run")
 
 
 def task_close() -> None:
     _run("closing-odds", [PYTHON, "run.py", "close"], 600)
+    _log_evidence()
     commit_and_push("closing-odds snapshot")
 
 
@@ -636,12 +654,7 @@ def task_night() -> None:
     # Log prediction-vs-outcome for EVERY evaluated pitcher, not just the
     # bets: ~28 observations a night instead of ~3, and it measures the
     # model rather than the threshold-filtered bet sample.
-    _run("model-log", [PYTHON, "tools/model_log.py"], 900)
-    # Shadow portfolio: what the model WOULD have bet at other trust
-    # weights. Printed nightly so the evidence for the A-006 decision
-    # accumulates visibly instead of needing someone to remember to
-    # look. Read-only over model_log.csv; it writes nothing.
-    _run("shadow", [PYTHON, "tools/shadow.py"], 300)
+    _log_evidence()
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
     commit_and_push("overnight grading")
     # After the commit, so a failing invariant is loud without costing

@@ -1,6 +1,30 @@
 
 # Changelog
 
+## 2026-08-07 — Morning board moves to 09:00; evidence decoupled from it
+
+Operator asked for the board at 09:00 instead of 10:30. Straightforward
+on its own, except the morning job had just become the thing that
+rescued yesterday's observations (A-022) — and 09:00 sits BEFORE
+Baseball Savant reliably publishes. Measured on 8/7: 0 pitches for 8/6
+at 03:21 ET, 3,530 by 08:59. Moving the board earlier would have made
+the evidence more fragile, not less.
+
+So evidence logging is no longer attached to any single job.
+`_log_evidence()` runs `model_log` + `shadow` on EVERY task — night,
+morning, all three closes, and the lineup lock. Six attempts a day.
+Both steps are idempotent per date and take ~1s when there is nothing
+new, so the cheapest guarantee is to keep trying. The board time can now
+move again without anyone remembering this coupling exists.
+
+Watchdog threshold moved noon -> 13:00 ET to match. Attempts run at
+03:00, 09:00 and 12:15, so a noon cutoff would have opened a
+false-alarm window between 12:00 and the 12:15 attempt. A threshold
+that fires fifteen minutes before the thing that fixes it is worse than
+none, because it teaches you to ignore the alarm. Test updated: 12:00
+is now an expected WARN, 13:00 the first FAIL.
+
+
 ## 2026-08-06 — Shadow portfolio breaks the A-006 deadlock (A-015)
 
 The live filter bets almost nothing, and the reason is arithmetic, not

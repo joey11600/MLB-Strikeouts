@@ -50,7 +50,7 @@ on:
     # At 30-minute spacing every window gets multiple attempts:
     #   lineups 16:45 ET, 120 min grace -> 4 chances
     #   close   18:15 ET,  45 min grace -> 2 chances
-    #   morning 10:30 ET, 360 min grace -> many
+    #   morning 09:00 ET, 360 min grace -> many
     # Hourly gave the 45-minute close windows only ONE attempt, which
     # made a single allocation failure a lost CLV snapshot.
     - cron: "0,30 6-23 * * *"

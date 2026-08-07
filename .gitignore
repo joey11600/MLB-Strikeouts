@@ -28,3 +28,5 @@ data/game_context_cache/
 *.sqlite3
 
 .vercel
+__pycache__/
+*.pyc

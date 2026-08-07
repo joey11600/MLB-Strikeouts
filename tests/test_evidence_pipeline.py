@@ -70,7 +70,7 @@ def test_model_log_backfills_a_missing_date(tmp_path):
     """One good run must recover a slate an earlier run failed to log.
 
     This is the property that makes the 03:00 publish lag survivable: the
-    night job can log nothing and the 10:30 job still fills it in.
+    night job can log nothing and a later job still fills it in.
     """
     before = _isolated(tmp_path, drop_date="2026-08-06")
     import tools.model_log as ml
@@ -87,7 +87,7 @@ def test_model_log_backfills_a_missing_date(tmp_path):
 
 def test_model_log_is_idempotent(tmp_path):
     """Repeat runs must not duplicate rows — that is what makes running
-    it in BOTH the night and morning jobs free."""
+    it on every task free."""
     _isolated(tmp_path, drop_date=None)
     import tools.model_log as ml
     importlib.reload(ml)
@@ -104,14 +104,19 @@ def test_model_log_is_idempotent(tmp_path):
 
 @pytest.mark.parametrize(
     "hour,expected",
-    [(3, "WARN"), (6, "WARN"), (11, "WARN"), (12, "FAIL"), (15, "FAIL")],
+    # 12 is a WARN on purpose: the third logging attempt runs at 12:15,
+    # so failing at 12:00 would fire fifteen minutes before the thing
+    # that fixes it.
+    [(3, "WARN"), (6, "WARN"), (11, "WARN"), (12, "WARN"),
+     (13, "FAIL"), (15, "FAIL")],
 )
 def test_watchdog_tolerates_publish_lag_then_fails(tmp_path, hour, expected):
-    """Statcast publishes mid-morning, so a gap before noon is normal and
-    a gap after noon is a real loss.
+    """Statcast publishes mid-morning, so a gap before early afternoon is
+    normal and a gap after 13:00 ET — past three logging attempts — is a
+    real loss.
 
     Backwards in either direction is its own bug: fail-early paints every
-    run red from 03:00 to 10:30 until the alarm is ignored, and
+    run red all morning until the alarm is ignored, and
     fail-never means the next lost slate goes unnoticed the way 8/5 did.
     """
     _isolated(tmp_path, drop_date="2026-08-06")

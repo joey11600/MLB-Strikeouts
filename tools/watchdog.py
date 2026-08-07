@@ -268,19 +268,23 @@ def check_model_log_growing(r: Report) -> None:
     if yesterday in slate_dates and yesterday not in logged:
         # Baseball Savant publishes hours after the games end — measured
         # 0 pitches for 8/6 at 03:21 ET, 3,530 by 08:59 ET. So a gap
-        # before late morning means "not published yet", not "lost", and
-        # failing on it would paint every run red between 03:00 and the
-        # morning job. After noon it is a genuine loss.
-        if datetime.now(ET).hour < 12:
+        # before early afternoon means "not published yet", not "lost".
+        #
+        # 13:00 specifically: attempts run at 03:00, 09:00 and 12:15 ET,
+        # so this sits after the third. A noon cutoff would have opened a
+        # false-alarm window between 12:00 and the 12:15 attempt — and a
+        # threshold that fires just before the thing that fixes it is
+        # worse than no threshold, because it teaches you to ignore it.
+        if datetime.now(ET).hour < 13:
             r.warn("model log growing",
                    f"{yesterday} not logged yet "
                    f"({datetime.now(ET):%H:%M} ET) — Statcast usually "
-                   f"publishes mid-morning; the 10:30 job retries",
+                   f"publishes mid-morning; later jobs retry",
                    "only a failure if it is still missing this afternoon")
         else:
             r.fail("model log growing",
                    f"{yesterday} has a board but no model-log rows, and "
-                   f"it is past noon ET",
+                   f"it is past 13:00 ET (three attempts have run)",
                    "last night's ~20 observations were lost")
     elif missing:
         r.warn("model log growing", f"no rows for {missing[:3]}")
