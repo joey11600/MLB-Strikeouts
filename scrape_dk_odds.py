@@ -19,6 +19,13 @@ DraftKings API notes (undocumented, public, no auth):
   Category : 1031 (Pitcher Props)
   Subcat   : 15221 (Strikeouts Thrown O/U) -- Over/Under with two-sided odds
   Subcat   : 17323 (Strikeouts Thrown)     -- milestone lines (3+, 4+, 5+, ...)
+  Subcat   : 17413 (Outs Recorded O/U)     -- Over/Under, outs not strikeouts
+
+  Those three are the whole of category 1031; enumerate the rest with
+  the `subcategories` array that every response carries.  The outs board
+  is 1:1 with the strikeout board -- measured 2026-08-08, both returned
+  the same 14 pitchers -- so it costs one extra request, not a second
+  discovery pass.
 
   Schema: events / markets / selections are sibling arrays joined by IDs.
   Each market has its eventId; each selection has its marketId.
@@ -82,6 +89,16 @@ MLB_LEAGUE_ID = 84240
 PITCHER_PROPS_CAT = 1031       # category "Pitcher Props"
 STRIKEOUTS_OU_SUB = 15221      # subcategory "Strikeouts Thrown O/U"
 STRIKEOUTS_ALT_SUB = 17323     # subcategory "Strikeouts Thrown" (milestones)
+OUTS_OU_SUB = 17413            # subcategory "Outs Recorded O/U"
+
+# Market-name suffixes.  DK names each market "<Pitcher> <suffix>", so
+# the suffix is what we strip to recover the pitcher.  Note the outs
+# board does NOT echo its own subcategory name: the subcategory is
+# "Outs Recorded O/U" but every market inside it is named
+# "Gerrit Cole Outs O/U".  Verified live 2026-08-08 across 14 markets.
+STRIKEOUTS_OU_SUFFIX = " Strikeouts Thrown O/U"
+STRIKEOUTS_ALT_SUFFIX = " Strikeouts Thrown"
+OUTS_OU_SUFFIX = " Outs O/U"
 
 # Maximum units per bet -- referenced from CLAUDE.md money rules.
 MAX_STAKE_UNITS = 2
@@ -377,12 +394,22 @@ def _pitcher_team(
 # Extract structured odds from API response
 # ---------------------------------------------------------------------------
 
-def extract_ou_odds(data: dict) -> list[dict]:
-    """Parse the Strikeouts Thrown O/U response (subcategory 15221).
+def extract_ou_odds(
+    data: dict,
+    subcategory_id: int = STRIKEOUTS_OU_SUB,
+    name_suffix: str = STRIKEOUTS_OU_SUFFIX,
+) -> list[dict]:
+    """Parse a two-sided pitcher O/U board.
+
+    Defaults to Strikeouts Thrown O/U (subcategory 15221); pass
+    OUTS_OU_SUB / OUTS_OU_SUFFIX for the Outs Recorded board.  The two
+    boards are structurally identical -- same events/markets/selections
+    join, same outcomeType/points/displayOdds shape, same venueRole team
+    resolution -- so they share one parser rather than a near-duplicate.
 
     Each market is one pitcher's O/U line.  Two selections per market:
-    Over and Under, each with `points` (the line, e.g. 5.5) and
-    `displayOdds.american`.
+    Over and Under, each with `points` (the line, e.g. 5.5 strikeouts or
+    17.5 outs) and `displayOdds.american`.
 
     Returns one dict per pitcher with keys:
       pitcher_name, team, line, over_odds, under_odds, event_id,
@@ -401,16 +428,14 @@ def extract_ou_odds(data: dict) -> list[dict]:
 
     out: list[dict] = []
     for m in markets:
-        if m.get("subcategoryId") != STRIKEOUTS_OU_SUB:
+        if m.get("subcategoryId") != subcategory_id:
             continue
 
         event = events_by_id.get(m.get("eventId"))
         if not event:
             continue
 
-        pitcher_name = _pitcher_name_from_market(
-            m.get("name", ""), " Strikeouts Thrown O/U"
-        )
+        pitcher_name = _pitcher_name_from_market(m.get("name", ""), name_suffix)
 
         market_sels = sels_by_market.get(m["id"], [])
         over_odds = ""
@@ -458,6 +483,16 @@ def extract_ou_odds(data: dict) -> list[dict]:
     return out
 
 
+def extract_outs_ou_odds(data: dict) -> list[dict]:
+    """Parse the Outs Recorded O/U response (subcategory 17413).
+
+    Thin wrapper so this can be passed as _fetch_board's one-argument
+    `extractor`.  Same row shape as extract_ou_odds -- `line` carries
+    outs, not strikeouts.
+    """
+    return extract_ou_odds(data, OUTS_OU_SUB, OUTS_OU_SUFFIX)
+
+
 def extract_alt_lines(data: dict) -> list[dict]:
     """Parse the Strikeouts Thrown response (subcategory 17323).
 
@@ -489,7 +524,7 @@ def extract_alt_lines(data: dict) -> list[dict]:
             continue
 
         pitcher_name = _pitcher_name_from_market(
-            m.get("name", ""), " Strikeouts Thrown"
+            m.get("name", ""), STRIKEOUTS_ALT_SUFFIX
         )
         date_iso = utc_iso_to_et_date(event.get("startEventDate", ""))
 
@@ -839,6 +874,29 @@ def load_snapshot_props(
     )
 
 
+def load_snapshot_outs(
+    iso_date: str | None = None,
+    max_age_hours: float | None = None,
+) -> list[dict]:
+    """Load the newest pre-fetched Outs Recorded O/U board.
+
+    Separate prefixes from the strikeout board on purpose.  The
+    _candidate_snapshots regex anchors the date immediately after the
+    prefix, so "dk_outs" cannot match dk_k_*, and "closing_outs" cannot
+    match closing_* -- the two markets can never serve each other's
+    prices even though both carry a `line` column.
+    """
+    return _load_snapshot(
+        prefixes=["dk_outs", "closing_outs"],
+        key_fields=("pitcher_name", "event_id"),
+        required=("pitcher_name", "line"),
+        fields=OU_FIELDS,
+        kind="outs O/U",
+        iso_date=iso_date,
+        max_age_hours=max_age_hours,
+    )
+
+
 def load_snapshot_alts(
     iso_date: str | None = None,
     max_age_hours: float | None = None,
@@ -945,6 +1003,38 @@ def fetch_dk_strikeout_props(
         extractor=extract_ou_odds,
         loader=load_snapshot_props,
         kind="O/U",
+        retries=retries,
+        backoff=backoff,
+        allow_snapshot=allow_snapshot,
+        iso_date=iso_date,
+        max_age_hours=max_age_hours,
+    )
+
+
+def fetch_dk_outs_props(
+    retries: int = 3,
+    backoff: float = 2.0,
+    allow_snapshot: bool | None = None,
+    iso_date: str | None = None,
+    max_age_hours: float | None = None,
+) -> list[dict]:
+    """Fetch current DraftKings pitcher Outs Recorded O/U odds.
+
+    Same row shape as fetch_dk_strikeout_props(); `line` is outs, not
+    strikeouts.  Lines observed live are half-integers (14.5/15.5/16.5/
+    17.5), so the market resolves win/loss with no push -- but that is an
+    observation, not a guarantee, and nothing downstream may assume it.
+    An integer line would carry real push mass (P(exactly 18 outs) is
+    0.22 league-wide), so a caller that prices one must handle three
+    outcomes before quoting an edge.
+
+    See fetch_dk_strikeout_props for allow_snapshot semantics.
+    """
+    return _fetch_board(
+        subcategory_id=OUTS_OU_SUB,
+        extractor=extract_outs_ou_odds,
+        loader=load_snapshot_outs,
+        kind="outs O/U",
         retries=retries,
         backoff=backoff,
         allow_snapshot=allow_snapshot,
@@ -1340,13 +1430,44 @@ def self_test() -> int:
         import inspect as _inspect
         from tools import closing_odds as _co
         src = _inspect.getsource(_co.capture_closing)
-        ok = (src.count("allow_snapshot=False") >= 2
-              and "fetch_dk_strikeout_props()" not in src
-              and "fetch_dk_strikeout_alts()" not in src)
+        # Check the CALL SITES, not a substring count -- the prose around
+        # this function says "allow_snapshot=False" several times, so a
+        # count would pass on comments alone while a real call went
+        # unpinned. Every fetcher named here must be pinned at the call.
+        _pinned = ("fetch_dk_strikeout_props", "fetch_dk_strikeout_alts",
+                   "fetch_dk_outs_props")
+        unpinned = [
+            n for n in _pinned
+            if n + "(" in src and n + "(allow_snapshot=False)" not in src
+        ]
+        missing = [n for n in _pinned if n + "(" not in src]
+        ok = not unpinned and not missing
         check("capture_closing pins allow_snapshot=False", ok,
-              "a snapshot here would be re-dated to today and re-stamped "
-              "to now, laundering a stale board into the closing line"
-              if not ok else "both fetchers pinned")
+              (f"unpinned: {unpinned}; not captured at all: {missing} -- "
+               "a snapshot here would be re-dated to today and re-stamped "
+               "to now, laundering a stale board into the closing line")
+              if not ok else f"all {len(_pinned)} fetchers pinned at the call")
+
+        # -- D7. the outs board cannot serve strikeout prices, or vice
+        # versa. Both boards carry a `line` column and identical row
+        # shapes, so a prefix that matched across markets would quietly
+        # price 17.5 outs as 17.5 strikeouts. --
+        print("\nD7. outs and strikeout snapshots stay separated")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            _seed_test_odds_dir(tmp, iso_date)   # writes dk_k_* only
+            os.environ[SNAPSHOT_DIR_ENV] = str(tmp)
+            try:
+                got = fetch_dk_outs_props(
+                    allow_snapshot=True, retries=1, iso_date=iso_date)
+                check("outs fallback refuses the strikeout board", False,
+                      f"served {len(got)} rows from a dk_k_* file")
+            except OddsSnapshotUnavailable:
+                check("outs fallback refuses the strikeout board", True,
+                      "dk_k_*/closing_* are invisible to the outs loader")
+            except Exception as exc:
+                check("outs fallback refuses the strikeout board", False,
+                      f"raised {type(exc).__name__}: {exc}")
 
         # -- E. fallback is OFF unless asked for --
         print("\nE. fallback stays off by default")

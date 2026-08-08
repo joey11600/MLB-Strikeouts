@@ -18,8 +18,9 @@ Run this on the operator's PC.  It fetches the live board from the
 residential IP and writes the same snapshot CSVs the cloud worker
 already knows how to read:
 
-    data/odds/dk_k_<date>.csv        primary O/U board
+    data/odds/dk_k_<date>.csv        primary strikeout O/U board
     data/odds/dk_k_alts_<date>.csv   milestone / alt board
+    data/odds/dk_outs_<date>.csv     Outs Recorded O/U board
 
 The worker picks them up because:
 
@@ -65,6 +66,7 @@ from scrape_dk_odds import (  # noqa: E402
     OU_FIELDS,
     SNAPSHOT_FALLBACK_ENV,
     check_snapshot,
+    fetch_dk_outs_props,
     fetch_dk_strikeout_alts,
     fetch_dk_strikeout_props,
     write_csv,
@@ -79,8 +81,12 @@ def _log(msg: str) -> None:
     print(f"[{datetime.now(ET):%H:%M:%S ET}] {msg}", flush=True)
 
 
-def take_snapshot(iso_date: str | None = None, alts: bool = True) -> dict:
-    """Fetch the live board and write it to the odds directory.
+def take_snapshot(
+    iso_date: str | None = None,
+    alts: bool = True,
+    outs: bool = True,
+) -> dict:
+    """Fetch the live boards and write them to the odds directory.
 
     allow_snapshot=False throughout: this is the PRODUCER.  If it were
     allowed to fall back to reading a snapshot, a failed fetch would
@@ -116,6 +122,23 @@ def take_snapshot(iso_date: str | None = None, alts: bool = True) -> dict:
             written[str(alt_path)] = len(alt_rows)
             _log(f"wrote {len(alt_rows)} alt lines -> {alt_path}")
 
+    if outs:
+        # Strictly additive.  No strikeout pick depends on this board, so
+        # an outs failure must never cost us the K snapshot -- the same
+        # rule the alt board follows above.  Ordered last for that reason.
+        try:
+            outs_rows = fetch_dk_outs_props(allow_snapshot=False)
+        except Exception as exc:
+            _log(f"outs board fetch failed ({exc}) -- K boards still written")
+            outs_rows = []
+        if outs_rows:
+            outs_path = ODDS_DIR / f"dk_outs_{iso_date}.csv"
+            write_csv(outs_rows, outs_path, OU_FIELDS)
+            written[str(outs_path)] = len(outs_rows)
+            _log(f"wrote {len(outs_rows)} outs O/U lines -> {outs_path}")
+        else:
+            _log("no outs O/U markets returned -- nothing written")
+
     return written
 
 
@@ -136,7 +159,8 @@ def _publish_hint(written: dict) -> None:
 
 def cmd_snapshot(args) -> int:
     try:
-        written = take_snapshot(args.date, alts=not args.no_alts)
+        written = take_snapshot(
+            args.date, alts=not args.no_alts, outs=not args.no_outs)
     except Exception as exc:
         _log(f"FAILED: {type(exc).__name__}: {exc}")
         return 1
@@ -163,7 +187,8 @@ def cmd_watch(args) -> int:
     last: dict = {}
     while True:
         try:
-            last = take_snapshot(args.date, alts=not args.no_alts)
+            last = take_snapshot(
+                args.date, alts=not args.no_alts, outs=not args.no_outs)
         except Exception as exc:
             # A single failed poll is not fatal: the previous snapshot
             # stays on disk and ages, and the staleness ceiling in
@@ -195,9 +220,11 @@ def main() -> int:
                    help="Slate date (default: today ET)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("snapshot", help="Fetch live and write both boards")
+    s = sub.add_parser("snapshot", help="Fetch live and write all boards")
     s.add_argument("--no-alts", action="store_true",
                    help="Skip the milestone/alt board")
+    s.add_argument("--no-outs", action="store_true",
+                   help="Skip the Outs Recorded O/U board")
     s.set_defaults(func=cmd_snapshot)
 
     w = sub.add_parser("watch", help="Re-snapshot on an interval")
@@ -206,6 +233,7 @@ def main() -> int:
     w.add_argument("--until", metavar="HH:MM",
                    help="Stop at this ET time (default: run until Ctrl-C)")
     w.add_argument("--no-alts", action="store_true")
+    w.add_argument("--no-outs", action="store_true")
     w.set_defaults(func=cmd_watch)
 
     st = sub.add_parser("status", help="Report snapshot freshness (no network)")

@@ -10,7 +10,14 @@ dashboard/node_modules/
 dashboard/.next/
 dashboard/out/
 
-.git/
+# .git/ is NOT excluded, and must not be. The worker's whole job is to
+# pull what CI publishes and push back what the live watcher grades --
+# `git pull` and `git push` cannot run in a directory with no .git, and
+# they fail with exit 128 ("not a git repository"), not with anything
+# that looks like a network or auth problem. Excluding it on 2026-08-05
+# silently disabled both halves; A-025's pull fix and A-028's push fix
+# were both written afterwards against a container that could never run
+# either. Cost of shipping it: 9.3 MB.
 logs/
 __pycache__/
 *.pyc

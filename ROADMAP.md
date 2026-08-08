@@ -160,3 +160,50 @@
 - [ ] Apply the same build-skip to the NRFI project (99 CPU-hours,
   51.6% of the allowance, same `auto:` commit pattern) — separate
   repo, operator call
+
+## Phase 10 — Total outs model (research complete, capture started)
+
+A second market: starting-pitcher **total outs recorded** (DK subcat
+17413, "Outs Recorded O/U"), on its own dashboard page. Sibling to the
+strikeouts model, not a variant of it.
+
+- [x] Confirm the market exists and is reachable through the existing
+  scraper — 1:1 pitcher coverage with the strikeout board (2026-08-08)
+- [x] Capture outs O/U prices to `dk_outs_*` / `closing_outs_*`
+  (writer only; nothing prices a bet)
+- [ ] **Every day from here: run `python run.py close` (or
+  `tools/odds_relay.py watch`).** Closing prices are the one input that
+  cannot be backfilled. This is the whole reason Phase 10 starts with a
+  writer instead of a model.
+- [ ] Answer the threshold question before building (operator call): at
+  the measured 6.97% hold and `MODEL_TRUST_WEIGHT=0.5`, a bet needs
+  ~17.9pp of model-vs-market disagreement ≈ **3.3 outs ≈ 1.1 innings**.
+  Bets will be rare. Decide whether that is acceptable, or whether the
+  threshold structure needs rethinking for this market.
+- [ ] Source DK house rules for Outs Recorded — whole-number push,
+  suspended-game settlement, and the meaning of the `EarlyExit` tag on
+  every outs market. Currently assumed from the K market, which is the
+  same class of error as fabricating odds.
+- [ ] Inning-hazard distribution replacing the negative binomial.
+  65.5% of starts end on an exact multiple of 3; P(18 outs)=0.2201 vs
+  0.0730 under a moment-matched NB. AUDIT A-024's "family doesn't
+  matter" argument holds for K (shape cancels in the compound integral)
+  and does **not** survive the port — the outs line sits directly on the
+  lattice.
+- [ ] Per-PA on-base stage. Given perfect BF, outs still has residual
+  sd 2.30; given perfect BF *and* reached-base count it collapses to
+  0.76. That gap is the model.
+- [ ] `market` column in the ledger + identity key
+  `(game_pk, pitcher_id, market, line)` — the current non-collision
+  (K 3.5–8.5 vs outs 13.5–19.5) is an accident, not a guarantee
+- [ ] Market filter on `/model`, `/performance` and the headline P&L
+  **before** any outs pick enters the ledger — those aggregate the whole
+  ledger with no market filter today, so the first outs row silently
+  blends two markets into every published number
+- [ ] Re-key the correlation haircut. It fires on repeated `game_pk`
+  (cross-pitcher outs corr **+0.02** — nothing) and misses same-pitcher
+  K-vs-outs (**+0.50**, joint lift 1.21–1.61). Simplest safe v1: one bet
+  per pitcher per slate, larger edge wins.
+- [ ] `dashboard/app/outs/page.tsx` + its own payload artifact, added to
+  `DATA_ONLY_PATHS` in `scripts/vercel-ignore-build.sh` or every outs
+  data commit resumes burning full Next builds (the A-023 regression)

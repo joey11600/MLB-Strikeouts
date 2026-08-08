@@ -13,8 +13,9 @@ evening — every snapshot is kept, stamped with captured_at):
     python tools/closing_odds.py
 
 Snapshots append to:
-    data/odds/closing_YYYY-MM-DD.csv        (primary O/U board)
+    data/odds/closing_YYYY-MM-DD.csv        (primary strikeout O/U board)
     data/odds/closing_alts_YYYY-MM-DD.csv   (milestone alt board)
+    data/odds/closing_outs_YYYY-MM-DD.csv   (Outs Recorded O/U board)
 
 The grader picks the last snapshot at or before each game's start time
 and writes closing_over_odds / closing_under_odds / clv_pct into the
@@ -30,7 +31,11 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scrape_dk_odds import fetch_dk_strikeout_props, fetch_dk_strikeout_alts
+from scrape_dk_odds import (
+    fetch_dk_outs_props,
+    fetch_dk_strikeout_alts,
+    fetch_dk_strikeout_props,
+)
 
 ET = ZoneInfo("America/New_York")
 UTC = ZoneInfo("UTC")
@@ -131,8 +136,45 @@ def capture_closing(iso_date: str | None = None) -> dict:
             ODDS_DIR / f"closing_alts_{iso_date}.csv", ALT_FIELDS, alt_rows
         )
 
+    # Outs Recorded O/U. No model prices this market yet -- we capture it
+    # now purely because closing prices are perishable: a day not captured
+    # is gone permanently, and without a price history there is no way to
+    # ever score an outs model against the market (the same gap AUDIT
+    # A-002 records for strikeouts). Kept last and wrapped so a failure
+    # here cannot cost us the strikeout closing line, which does back
+    # money today. allow_snapshot=False for the reason above.
+    outs_rows = []
+    try:
+        outs = fetch_dk_outs_props(allow_snapshot=False)
+        print(f"  {len(outs)} outs O/U props")
+        for o in outs:
+            outs_rows.append({
+                "captured_at": captured_at,
+                "date": iso_date,
+                "pitcher_name": o.get("pitcher_name", ""),
+                "team": o.get("team", ""),
+                "line": o.get("line", ""),
+                "over_odds": o.get("over_odds", ""),
+                "under_odds": o.get("under_odds", ""),
+                "event_id": o.get("event_id", ""),
+                "start_time_utc": o.get("start_time_utc", ""),
+            })
+        if outs_rows:
+            _append_rows_atomic(
+                ODDS_DIR / f"closing_outs_{iso_date}.csv",
+                PRIMARY_FIELDS,
+                outs_rows,
+            )
+    except Exception as exc:
+        print(f"  outs board unavailable ({type(exc).__name__}: {exc}) "
+              f"-- strikeout closing lines still captured")
+
     print(f"  Snapshot appended to {ODDS_DIR}")
-    return {"primary": len(primary_rows), "alts": len(alt_rows)}
+    return {
+        "primary": len(primary_rows),
+        "alts": len(alt_rows),
+        "outs": len(outs_rows),
+    }
 
 
 if __name__ == "__main__":

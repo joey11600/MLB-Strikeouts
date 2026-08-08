@@ -227,7 +227,17 @@ class DataHandler(BaseHTTPRequestHandler):
                 # nothing anywhere said so, because /health only reported
                 # that data.json EXISTED -- never how old it was.
                 "last_publish": LAST_PUBLISH,
-                "can_push_to_git": bool(os.environ.get("GITHUB_TOKEN")),
+                # Reports the CAPABILITY, not the config. This used to be
+                # bool(GITHUB_TOKEN), which answers "is an env var set?"
+                # -- a question nothing depends on. It read `true` for 16
+                # hours on 2026-08-08 while every git command in the
+                # container failed with "not a git repository", because a
+                # token was indeed set and that was all it ever checked.
+                "can_push_to_git": bool(
+                    GIT_STATUS.get("is_repo")
+                    and GIT_STATUS.get("remote") == "authenticated"
+                ),
+                "git": GIT_STATUS,
                 "dispatch_credentials": DISPATCH_CREDS,
             }
             self._send(200, json.dumps(payload, indent=1).encode(), "application/json")
@@ -245,20 +255,81 @@ def start_http_server() -> None:
     log(f"serving /data.json and /health on :{PORT}")
 
 
+GIT_STATUS: dict = {"is_repo": None, "shallow": None, "remote": None,
+                    "error": None, "checked": None}
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=REPO, capture_output=True,
+                          text=True)
+
+
 def configure_git() -> None:
-    """Point the repo at an authenticated remote so the ledger can push."""
-    subprocess.run(["git", "config", "user.email", "worker@mlb-strikeouts"],
-                   cwd=REPO, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "Strikeouts Worker"],
-                   cwd=REPO, capture_output=True)
+    """Point the repo at an authenticated remote so the ledger can push.
+
+    EVERY step here is checked. The previous version ran four git
+    commands with capture_output=True and inspected none of them, then
+    logged "git remote configured" unconditionally. On 2026-08-08 that
+    line appeared in the boot log at 23:06 EDT while all four commands
+    were failing with exit 128 -- `.dockerignore` excluded `.git/`, so
+    /app was not a repository at all. The worker then ran 16 hours
+    dispatching work to CI and never pulling a single result back,
+    serving a board frozen at image-build time, while /health reported
+    can_push_to_git: true. A success line that cannot fail is worse than
+    no line: it is the thing you check first and it lies.
+    """
+    GIT_STATUS["checked"] = datetime.now(ET).isoformat(timespec="seconds")
+
+    probe = _git("rev-parse", "--git-dir")
+    if probe.returncode != 0:
+        GIT_STATUS.update(
+            is_repo=False,
+            error=(probe.stderr or "").strip() or f"exit {probe.returncode}",
+        )
+        # Loud, and not survivable-quiet: with no .git the worker cannot
+        # pull CI's board or push the watcher's grades, so it will serve
+        # whatever was baked into the image until someone notices.
+        log("FATAL git: {} is not a git repository ({}). The worker cannot "
+            "pull CI's output or push the ledger; it will serve a frozen "
+            "board. Check that .dockerignore does NOT exclude .git/."
+            .format(REPO, GIT_STATUS["error"]))
+        return
+    GIT_STATUS["is_repo"] = True
+
+    # Railway's builder may hand us a shallow clone; `git pull --rebase`
+    # against one can refuse with "refusing to merge unrelated histories".
+    shallow = _git("rev-parse", "--is-shallow-repository")
+    GIT_STATUS["shallow"] = (shallow.stdout or "").strip() == "true"
+    if GIT_STATUS["shallow"]:
+        un = _git("fetch", "--unshallow", "origin", "master")
+        log("git: shallow clone {}".format(
+            "unshallowed" if un.returncode == 0 else
+            f"could NOT be unshallowed ({(un.stderr or '').strip()[:120]})"))
+        GIT_STATUS["shallow"] = un.returncode != 0
+
+    for key, val in (("user.email", "worker@mlb-strikeouts"),
+                     ("user.name", "Strikeouts Worker")):
+        res = _git("config", key, val)
+        if res.returncode != 0:
+            log(f"WARNING git config {key} failed: "
+                f"{(res.stderr or '').strip()[:120]}")
+
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
-        log("WARNING: GITHUB_TOKEN unset — ledger changes will stay on the "
-            "volume and will NOT reach GitHub or the dashboard.")
+        GIT_STATUS["remote"] = "anonymous"
+        log("WARNING: GITHUB_TOKEN unset — pull works (public repo) but "
+            "ledger changes will stay on the volume and will NOT reach "
+            "GitHub or the dashboard.")
         return
     remote = f"https://x-access-token:{token}@github.com/{GITHUB_REPO}.git"
-    subprocess.run(["git", "remote", "set-url", "origin", remote],
-                   cwd=REPO, capture_output=True)
+    res = _git("remote", "set-url", "origin", remote)
+    if res.returncode != 0:
+        GIT_STATUS.update(remote="failed",
+                          error=(res.stderr or "").strip()[:200])
+        log(f"ERROR git remote set-url failed: {GIT_STATUS['error']} — "
+            f"pushes will not reach {GITHUB_REPO}")
+        return
+    GIT_STATUS["remote"] = "authenticated"
     log(f"git remote configured for {GITHUB_REPO}")
 
 

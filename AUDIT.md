@@ -781,6 +781,54 @@ Tracks open items, resolved items, and known risks.
   IS the ledger, and survives a missing volume (the publish pass runs
   every 5 minutes and is not worth an outage).
 
+### A-029: the container was never a git repository
+- **Filed/Resolved:** 2026-08-08 (8 consecutive CI failures; operator
+  asked why)
+- **Severity: the site showed nothing for today's slate, all day.** The
+  worker served slates for 08-04 through 08-07 while origin/master held
+  `data/slates/2026-08-08.json` with 28 priced pitchers. Because
+  `dashboard/lib/data-context.tsx` PREFERS the worker's `/data.json`
+  whenever it answers, the worker's frozen copy was the site.
+- **Root cause, one line:** `.dockerignore` excluded `.git/`. `COPY . .`
+  therefore produced an `/app` that is not a git repository, and every
+  git command in the container failed with **exit 128, "not a git
+  repository"** -- pull, push, checkout, diff, commit, all of it.
+- **A-025 and A-028 were both written against a container that could
+  never run either fix.** A-025 (2026-08-07) added the pull half; A-028
+  (2026-08-07) added the push half. `.dockerignore` excluded `.git/` on
+  2026-08-05, before both. Neither has ever executed successfully. The
+  worker has been dispatching to CI and discarding every result since.
+- **Why it survived 16 hours:** two mechanisms reported success they had
+  not verified.
+  1. `configure_git()` ran four `subprocess.run(..., capture_output=True)`
+     calls and checked **none** of their return codes, then logged
+     `git remote configured for joey11600/MLB-Strikeouts` unconditionally.
+     That line is in the 23:06 EDT boot log, immediately after four
+     exit-128 failures. A success line that cannot fail is worse than no
+     line: it is the first thing you check, and it lies.
+  2. `/health.can_push_to_git` was `bool(os.environ.get("GITHUB_TOKEN"))`
+     -- it answered "is an env var set?", a question nothing depends on.
+     It read `true` throughout.
+- **CI was not broken; CI was the only thing that noticed.** The
+  `served board is current` watchdog check (added by A-025, hardened by
+  A-026's slate-stamp fix) fired correctly on the first run after CI
+  published a board the worker lacked, and every run since. The eight
+  red runs are the alarm working.
+- **Resolution:**
+  1. `.git/` removed from `.dockerignore`, with the reason recorded
+     inline so it is not "tidied" back. Cost: 9.3 MB.
+  2. `configure_git()` probes `git rev-parse --git-dir` first and logs
+     FATAL with the remedy if it fails; checks every subsequent exit
+     code; handles a shallow builder clone via `fetch --unshallow`, since
+     `pull --rebase` against a shallow clone can refuse outright.
+  3. `can_push_to_git` now reports the CAPABILITY (repo present AND
+     authenticated remote set), and a new `git` block on `/health`
+     carries `is_repo` / `shallow` / `remote` / `error`.
+- **Watch on next deploy:** the boot log must show `git remote configured`
+  only after a successful probe, `/health.git.is_repo` must be `true`,
+  and the served board must reach today's date within one 5-minute
+  publish pass.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

@@ -152,7 +152,11 @@ cleanup spot (slot 4) is highest at 23.6%.
 - **MLB Stats API**: schedule, probables, lineups, venue, umpire.
   Non-commercial terms — see `docs/LICENSING.md`.
 - **Open-Meteo**: weather forecasts. Non-commercial free tier.
-- **DraftKings**: odds via unofficial JSON API (`curl_cffi`).
+- **DraftKings**: odds via unofficial JSON API (`curl_cffi`). Category
+  1031 (Pitcher Props) holds exactly three subcategories — 15221
+  Strikeouts Thrown O/U, 17323 Strikeouts Thrown (milestones), and
+  17413 Outs Recorded O/U. Every response carries a `subcategories`
+  array; enumerate from there rather than guessing IDs.
 - **Chadwick Bureau**: player ID crosswalk.
 
 ## Compound model — honest evaluation (Phase 9 cross-season; supersedes all earlier numbers)
@@ -512,8 +516,42 @@ A-007):
   rows predating provenance tracking), so "were the bad bets the ones
   priced off stale prices?" is answerable after the fact.
 
-`python scrape_dk_odds.py --self-test` covers all of it (11 cases,
-including old-content-with-fresh-mtime, which is the production case).
+- **Markets never share snapshot files.** The outs board uses
+  `dk_outs` / `closing_outs`; the strikeout board uses `dk_k` /
+  `closing`. Both carry a `line` column and identical row shapes, so a
+  prefix matching across markets would price 17.5 outs as 17.5
+  strikeouts silently. `_candidate_snapshots` anchors the date
+  immediately after the prefix, which makes the two sets disjoint by
+  construction rather than by convention.
+
+`python scrape_dk_odds.py --self-test` covers all of it (12 cases,
+including old-content-with-fresh-mtime, which is the production case,
+and D7 cross-market snapshot separation).
+
+### Outs Recorded capture (Phase 10, 2026-08-08)
+
+`fetch_dk_outs_props()` writes `dk_outs_*` / `closing_outs_*` and is a
+**writer only** — no caller in `daily_pipeline`, no ledger column, no
+grader, nothing prices an outs bet. It exists because closing prices
+are the one input that cannot be backfilled: a model can be built later
+from cached Statcast, a closing line from a given day cannot be
+reconstructed at all. Ordered last and wrapped in both producers, so an
+outs failure can never cost a strikeout closing line.
+
+Measured on the 2026-08-08 board, both samples:
+
+| | strikeouts | outs |
+|---|---|---|
+| hold | 5.99% (5.84–6.20) | **6.97%** (6.82–7.19) |
+| lines | 3.5–8.5 | 13.5–19.5, all half-integers |
+| coverage | 30 pitchers | same 30 pitchers |
+
+Outs is the **more expensive** market by ~1 point of hold, higher on
+all 14 pitchers in the head-to-head sample. Do not carry the K market's
+edge threshold across. Half-integer lines mean no push in practice, but
+that is an observation and not a guarantee — P(exactly 18 outs) is 0.22
+league-wide, so an integer line would carry first-order push mass and
+must not be priced until a three-outcome path exists.
 
 ## Live model measurement (Phase 9)
 
@@ -591,3 +629,19 @@ reach the dashboard but not git.
    mixes. Compare excess-over-floor instead.
 9. The volume ledger and the git ledger are merged, never replaced.
    Any reconcile is union-only and may not drop or downgrade a row.
+10. **The worker image must contain `.git`.** Railway is the clock and
+    CI is the hands; git is the only wire between them. `.dockerignore`
+    must never exclude `.git/` — without it every git call in the
+    container fails with exit 128 ("not a git repository"), the worker
+    silently serves a board frozen at image-build time, and because the
+    dashboard prefers the worker's `/data.json`, that frozen board IS
+    the site (A-029).
+11. **A health check reports capability, not configuration.** Probing
+    that an env var is set, or that a file exists, passes while the
+    thing it guards is broken — `can_push_to_git` read `true` for 16
+    hours across a container that could not run `git` at all. Check the
+    operation, or check nothing.
+12. **A success line must be able to fail.** `configure_git()` logged
+    "git remote configured" unconditionally after four unchecked
+    `subprocess.run(..., capture_output=True)` calls. Never log success
+    from a code path that cannot observe failure (A-029).

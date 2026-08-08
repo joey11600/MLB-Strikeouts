@@ -1,6 +1,109 @@
 
 # Changelog
 
+## 2026-08-08 - The container was never a git repository (A-029)
+
+Eight straight red CI runs, all failing the same watchdog check: the
+worker was serving no slate at all for today. origin/master had
+`data/slates/2026-08-08.json` with 28 priced pitchers. The worker was
+serving 08-04 through 08-07. Since `data-context.tsx` prefers the
+worker's `/data.json` whenever it answers, that frozen copy was the
+site, and the site had nothing to show for a live slate.
+
+`.dockerignore` excluded `.git/`. So `COPY . .` built an `/app` that is
+not a git repository, and every git command in the container failed with
+exit 128 -- pull, push, checkout, diff, commit. The Dockerfile installs
+git and says so in a comment: "git: the worker commits the ledger back
+to the repo." It never could.
+
+A-025 added the pull half on 08-07. A-028 added the push half on 08-07.
+The `.git/` exclusion landed 08-05, before both. Neither fix has ever
+executed. The worker has been dispatching work to CI and discarding
+every result since, serving whatever slates happened to be baked into
+the image at build time.
+
+Sixteen hours of that went unnoticed because two mechanisms reported
+success they never checked. `configure_git()` ran four subprocess calls
+with `capture_output=True`, inspected none of their return codes, and
+then logged "git remote configured for joey11600/MLB-Strikeouts". That
+line sits in the 23:06 EDT boot log directly beneath four exit-128
+failures. And `/health.can_push_to_git` was `bool(GITHUB_TOKEN)` -- it
+answered "is an env var set", which is not a question anything depends
+on, and answered `true` the whole time.
+
+CI was not broken. CI was the only thing that noticed. The `served board
+is current` check fired on the first run after a board existed that the
+worker lacked, and on every run since. The red is the alarm working.
+
+Fixed: `.git/` out of `.dockerignore` (9.3 MB), with the reason recorded
+inline so it does not get tidied back. `configure_git()` probes
+`git rev-parse --git-dir` before anything else and logs FATAL with the
+remedy when it fails, checks every exit code after that, and unshallows
+a shallow builder clone since `pull --rebase` can refuse against one.
+`can_push_to_git` now means what it says, and `/health` carries a `git`
+block with `is_repo` / `shallow` / `remote` / `error`.
+
+The general lesson is the one A-025 already paid for once: a check that
+inspects configuration instead of capability will pass while the thing
+it guards is broken.
+
+## 2026-08-08 - Start capturing outs prices before there is a model
+
+DraftKings sells an Outs Recorded O/U market. It is subcategory 17413,
+sitting in category 1031 next to the two strikeout boards we already
+scrape, and it covers exactly the pitchers we already price — measured
+2026-08-08, both boards returned the same 14 pitchers on the evening
+board and 30 on the day board.
+
+We have no model for it and none is proposed here. This commit captures
+the prices anyway, because they are perishable in a way the model is
+not. A model can be built in November from three seasons of cached
+Statcast. A closing line from 2026-08-08 cannot be reconstructed from
+anything, at any price, ever. AUDIT A-002 — never having scored the
+strikeout model against the market — exists because nobody was writing
+those prices down early enough. That mistake costs nothing to avoid
+twice.
+
+The two boards are structurally identical: same events/markets/
+selections join, same `outcomeType`/`points`/`displayOdds` shape, same
+`venueRole` team resolution. So `extract_ou_odds` takes a subcategory
+and a market-name suffix rather than being forked. The one real
+difference is that the outs subcategory does NOT echo its own name —
+the subcategory is "Outs Recorded O/U" but every market inside it is
+named "Gerrit Cole Outs O/U", so `OUTS_OU_SUFFIX` is `" Outs O/U"`.
+
+Snapshot prefixes are `dk_outs` / `closing_outs`. That separation is
+load-bearing rather than tidy: both boards carry a `line` column and
+identical row shapes, so a prefix that matched across markets would
+serve 17.5 outs as 17.5 strikeouts with nothing downstream noticing.
+`_candidate_snapshots` anchors the date immediately after the prefix,
+so the two can never see each other's files, and self-test D7 asserts
+it by seeding a `dk_k_*` board and requiring the outs loader to refuse.
+
+Outs capture is ordered last and wrapped in both producers. No
+strikeout pick depends on it, so an outs failure must never cost us a
+strikeout closing line, which does back money today — the same rule the
+alt board already follows.
+
+D6 changed shape. It counted occurrences of the string
+`allow_snapshot=False`, and the prose around `capture_closing` says
+that phrase several times, so the count passed on comments alone while
+a real call could go unpinned. It now checks each fetcher's actual call
+site and fails if a named board is missing entirely.
+
+Two claims made while scoping this were wrong and are corrected here
+rather than left in the transcript. Outs props are **not** cheaper than
+strikeout props: measured head-to-head on the same 14 pitchers at the
+same moment, strikeouts hold 5.99% and outs hold 6.97%, with outs
+higher on all 14. The earlier reading compared outs against CLAUDE.md's
+stated 8-12% prop assumption instead of against the actual strikeout
+book. And the line grid is not three coarse values — that was an
+artifact of a 14-market late-night board. The full day slate carries
+seven distinct lines, 13.5 through 19.5.
+
+Nothing prices an outs bet. `fetch_dk_outs_props` has no caller in
+`daily_pipeline`, no ledger column, no grader. This is a writer only.
+
 ## 2026-08-07 - The worker could grade a bet but never book it (A-028)
 
 Railway had Payton Tolle graded LOSS, 14 K, -2.0u within minutes of him
