@@ -517,6 +517,37 @@ def check_dashboard_matches_ledger(r: Report) -> None:
         r.ok("dashboard matches ledger", f"both {truth:+.2f}u")
 
 
+def _previous_published_board(today: str) -> str | None:
+    """generated_at of the board CI published BEFORE the current one.
+
+    This is what makes the publish-window grace safe. "Minutes behind" is
+    the wrong question -- lag is quantised to the gap between priced
+    boards, so a worker correctly one version behind can read 417 minutes
+    late. The right question is WHICH VERSION the worker is serving: one
+    behind is a worker mid-cycle, two or more behind is a worker that has
+    stopped keeping up. Bounding by minutes instead lets an arbitrarily
+    stale board sit inside the window.
+
+    daily.yml checks out with fetch-depth: 0, so the history is present.
+    Returns None on any failure; callers must treat that as "no grace".
+    """
+    import subprocess
+    try:
+        sha = subprocess.run(
+            ["git", "log", "--skip=1", "-1", "--format=%H", "--",
+             "dashboard/public/data.json"], cwd=ROOT, capture_output=True,
+            text=True, timeout=30).stdout.strip()
+        if not sha:
+            return None
+        blob = subprocess.run(
+            ["git", "show", f"{sha}:dashboard/public/data.json"],
+            cwd=ROOT, capture_output=True, text=True, timeout=30).stdout
+        return ((json.loads(blob).get("slates") or {})
+                .get(today) or {}).get("generated_at")
+    except Exception:
+        return None
+
+
 def check_served_board_is_current(r: Report) -> None:
     """What the SITE shows must match what the repo published.
 
@@ -576,6 +607,19 @@ def check_served_board_is_current(r: Report) -> None:
                f"worker unreachable ({type(exc).__name__}) — site is on the "
                f"bundled fallback")
         return
+    # /health is fetched SEPARATELY and fails CLOSED. Sharing a try block
+    # with /data.json turned a live stale-board outage into a green warn:
+    # /health does strictly more work than /data.json, so on a wedged
+    # container it fails first, and "worker unreachable — site is on the
+    # bundled fallback" would then be printed about a worker that had just
+    # answered, while the site rendered its stale board. No health means no
+    # grace, never a downgraded verdict.
+    try:
+        health = json.loads(urllib.request.urlopen(
+            f"{WORKER_URL}/health", timeout=25).read())
+    except Exception:
+        health = {}
+
     if not want:
         r.warn("served board is current", f"no local slate for {today}")
         return
@@ -585,8 +629,17 @@ def check_served_board_is_current(r: Report) -> None:
                "the site has nothing to show for today")
         return
     try:
-        lag = (datetime.fromisoformat(want) - datetime.fromisoformat(got)).total_seconds() / 60
-    except ValueError as exc:
+        want_dt, got_dt = datetime.fromisoformat(want), datetime.fromisoformat(got)
+        lag = (want_dt - got_dt).total_seconds() / 60
+        # How long the repo's board has EXISTED -- the only clock that can
+        # say whether the worker has had a fair chance to pull it.
+        # TypeError is caught too: this line mixes the runner's aware `now`
+        # with a stamp of unknown awareness, where the old code only ever
+        # subtracted two board stamps. An uncaught TypeError here is
+        # downgraded to a warn by run(), i.e. it silently disables the one
+        # check that must never go quiet.
+        available = (datetime.now(ET) - want_dt).total_seconds() / 60
+    except (ValueError, TypeError) as exc:
         r.warn("served board is current", f"unparseable timestamps: {exc}")
         return
 
@@ -595,16 +648,90 @@ def check_served_board_is_current(r: Report) -> None:
         shape = (f"; worker shows {got_n} pitchers/{got_b} bets vs the repo's "
                  f"{want_n}/{want_b}")
 
-    if lag > 45:
+    # `lag` is the age gap between two BOARD VERSIONS, not how long the
+    # worker has been failing to pull. Those come apart badly whenever the
+    # board sits unchanged for a while: on 2026-08-08 the board held at
+    # 13:49 for seven hours, CI regenerated it at 20:46:20 and ran this
+    # check 9 SECONDS later. lag was 417 min -- ten times the threshold --
+    # while the worker was nine seconds behind and had it on the next
+    # publish pass. Judged on lag alone this check fails every time a
+    # board is regenerated after a quiet stretch, which is how a real alarm
+    # gets trained into background noise.
+    #
+    # What the `lag > 45` branch did NOT do is catch the A-029 outage. Ten
+    # of the eleven failures that day came from `if not got:` above --
+    # "serving no slate at all" -- and the eleventh was the false positive
+    # described here. `lag > 45` has fired exactly once in its history and
+    # that firing was wrong, so relaxing it costs nothing measured. The
+    # risk this branch carries runs the other way: an unbounded grace
+    # window would sail straight through a stale-board outage, which is
+    # A-025's failure mode and did real harm (a LEAN hidden for two hours).
+    # Hence the version-identity and shape guards below rather than a
+    # looser minute threshold.
+    #
+    # The publish pass runs every PUBLISH_EVERY_SECONDS (300s). Give it two
+    # cycles plus margin before the worker is accountable for a board.
+    GRACE_MIN = 12
+
+    # The grace is only safe if the worker is demonstrably PULLING. Without
+    # that gate it is a hole: were CI ever to regenerate the board on every
+    # run, `available` would always be near zero, the grace would always
+    # apply, and a worker stuck for hours would never be reported -- the
+    # check would go quiet at exactly the moment it matters.
+    #
+    # The gate must read last_pull, NOT last_publish. last_publish is not a
+    # liveness signal for the pull and never was: publish_pass wraps the
+    # whole pass in try/except and `_run` returns False rather than raising,
+    # so a failed `git pull` leaves ok=True. Throughout the 16-hour A-029
+    # outage /health advertised `last_publish: {ok: true}` while every git
+    # command failed with exit 128. Grace granted on that basis would have
+    # silenced this check on the exact outage it caught.
+    pull = (health or {}).get("last_pull") or {}
+    try:
+        pull_age = (datetime.now(ET)
+                    - datetime.fromisoformat(pull["at"])).total_seconds() / 60
+    except (KeyError, TypeError, ValueError):
+        pull_age = None
+    # Bounded on BOTH sides: a negative pull_age is a skewed or lying clock,
+    # not evidence of health, and must not open the window.
+    pulling = (bool(pull.get("ok")) and pull_age is not None
+               and -2 <= pull_age <= 15)
+
+    # The worker must be exactly ONE version behind. Without this the grace
+    # is unbounded in lag -- verified: a 3.5-day-stale board serving 1
+    # pitcher against the repo's 28 reported ok, and so did a 26-hour-stale
+    # board hiding a bet the operator could not see.
+    prev = _previous_published_board(today)
+    one_behind = prev is not None and got == prev
+
+    if (0 <= available <= GRACE_MIN and lag > 0 and pulling
+            and one_behind and not shape):
+        r.ok("served board is current",
+             f"repo board is {available:.0f} min old and the worker pulled "
+             f"successfully {pull_age:.0f} min ago, serving the immediately "
+             f"previous board — within the publish window")
+    elif 0 <= available <= GRACE_MIN and lag > 0 and one_behind and not shape:
+        detail = ("no last_pull field — worker predates pull tracking"
+                  if not pull else
+                  f"last_pull ok={pull.get('ok')}, "
+                  + ("unknown age" if pull_age is None
+                     else f"{pull_age:.0f} min ago"))
         r.fail("served board is current",
-               f"worker serving a board {lag:.0f} min older than the repo's "
+               f"worker is behind a {available:.0f}-min-old board and cannot "
+               f"be shown to be pulling ({detail}){shape}",
+               "the board being new does not excuse this: if the worker is "
+               "not pulling it will never catch up on its own")
+    elif lag > 45:
+        r.fail("served board is current",
+               f"worker serving a board {lag:.0f} min older than the repo's, "
+               f"which has been available {available:.0f} min "
                f"({got} vs {want}){shape}",
                "the operator is looking at a stale board; picks made after "
                "that time are invisible on the site")
-    elif lag > 10:
+    elif lag > 0 and not shape:
         r.warn("served board is current",
-               f"worker {lag:.0f} min behind the repo — publish pass may be "
-               f"slow{shape}")
+               f"worker {lag:.0f} min behind a board published "
+               f"{available:.0f} min ago — publish pass may be slow")
     elif shape:
         # Same age, different content: not a staleness problem, but the two
         # sides disagree about today and one of them is wrong.

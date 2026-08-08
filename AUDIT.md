@@ -857,7 +857,56 @@ Tracks open items, resolved items, and known risks.
 - **Watch on next deploy:** the boot log must show `git remote configured`
   only after a successful probe, `/health.git.is_repo` must be `true`,
   and the served board must reach today's date within one 5-minute
-  publish pass.
+  publish pass. **Confirmed 2026-08-08 20:16Z:** `git.is_repo: true`,
+  `git.bootstrapped: true`, board within 0 min of the repo, CI green.
+- **Aftermath — the check that caught this was itself broken.** At 20:45Z
+  `served board is current` failed again, this time a FALSE POSITIVE. It
+  measured `lag` as the age gap between two BOARD VERSIONS: the board had
+  held at 13:49:41Z for seven hours, CI regenerated it at 20:46:20Z and
+  ran the check **9 seconds later**, so lag read 417 min against a 45-min
+  threshold while the worker was nine seconds behind and current on the
+  next pass. Structurally, that fires every time a board is regenerated
+  after a quiet stretch.
+- **Correction to this entry's own reasoning:** `lag > 45` did NOT catch
+  the outage. Ten of the eleven failures that day came from `if not got:`
+  -- *serving no slate at all* -- and the eleventh was the false positive
+  above. `lag > 45` has fired exactly once in its history and that firing
+  was wrong, so relaxing it costs nothing measured.
+- **Fix, after an adversarial review returned DO NOT SHIP on the first
+  attempt (four lenses, 26 findings, all reproduced):**
+  1. Judge by **version identity**, not minutes. `_previous_published_board()`
+     reads the prior published board from git history; grace applies only
+     to a worker exactly ONE version behind. The first attempt bounded the
+     window in minutes but left `lag` unbounded -- a **3.5-day-stale**
+     board reported `ok`, as did a 26-hour-stale board hiding a bet, which
+     is A-025's exact harm.
+  2. Gate grace on `/health.last_pull`, **never** `last_publish`.
+     `publish_pass` wraps the pass in try/except and `_run` returns False
+     rather than raising, so a failed pull leaves `ok=True` -- which is
+     why /health advertised `last_publish: {ok: true}` for 16 hours here.
+     Grace granted on that basis would have silenced the check on this
+     very outage.
+  3. Fetch `/health` in its OWN try, failing closed to `{}`. Sharing the
+     block with `/data.json` turned a live stale-board outage into a green
+     `warn` ("worker unreachable"), false in both clauses, exit 0.
+  4. Bound both clocks (`0 <= available`, `-2 <= pull_age`); a repo stamp
+     90 min in the future held grace open for 102 min.
+  5. `except (ValueError, TypeError)` -- the new `now - want_dt` line mixes
+     awareness, and an uncaught TypeError is downgraded to a warn, i.e. it
+     silently disables the one check that must never go quiet.
+  6. Shape mismatches stay FAIL at any lag.
+  - **Shipped in two commits on purpose.** `last_pull` had to be deployed
+    and confirmed on /health before the watchdog could consume it; merged
+    together, the check fails closed against every not-yet-redeployed
+    worker. A successful bootstrap also records a pull, or LAST_PULL sits
+    `{ok: None}` for up to five minutes after every deploy and reds a CI
+    run each time.
+  - **Locked with tests:** `tests/test_watchdog_served_board.py` -- the
+    real false positive is ok; no-slate still fails; a stale board with
+    MATCHING pitcher counts still fails (so version identity, not the
+    shape guard, is doing the work -- mutation-checked); shape mismatch in
+    the window fails; unreachable /health does not downgrade; missing or
+    failed `last_pull` gets no grace; negative clocks get no grace.
 
 ## Resolved
 

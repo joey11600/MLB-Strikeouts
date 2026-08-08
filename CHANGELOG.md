@@ -1,6 +1,66 @@
 
 # Changelog
 
+## 2026-08-08 - The alarm that caught the outage was itself broken (A-029)
+
+`served board is current` failed again at 20:45Z, and this time it was
+wrong. It measured `lag` as the age gap between two board VERSIONS. The
+board had held at 13:49:41Z for seven hours; CI regenerated it at
+20:46:20Z and ran the check nine seconds later. lag read 417 minutes
+against a 45-minute threshold while the worker was nine seconds behind
+and had the new board on the next pass. Every regeneration after a quiet
+stretch fires it.
+
+Worth fixing rather than muting, because this is the check that caught
+the real outage this morning, and an alarm that cries wolf on every
+regeneration is one you stop reading.
+
+It also turns out this entry's earlier reasoning was wrong about which
+branch did the catching. Ten of the eleven failures came from
+`if not got:` — *serving no slate at all*. `lag > 45` has fired exactly
+once in its history and that firing was the false positive. Relaxing it
+costs nothing measured; the risk runs the other way.
+
+The first fix was worse than the bug. An adversarial review — four
+independent lenses, 26 findings, every one reproduced against the real
+function — returned DO NOT SHIP:
+
+- The grace was bounded in minutes but **unbounded in lag**. A
+  3.5-day-stale board serving 1 pitcher against the repo's 28 reported
+  `ok`; so did a 26-hour-stale board hiding a bet, which is A-025's exact
+  harm. Fixed by judging **version identity** — grace applies only to a
+  worker exactly one version behind, read from git history.
+- The liveness gate used `last_publish.ok`, which is not a liveness
+  signal and never was. `publish_pass` wraps the pass in try/except and
+  `_run` returns False rather than raising, so a failed `git pull` leaves
+  `ok=True` — which is precisely why /health advertised
+  `last_publish: {ok: true}` for sixteen hours this morning. Grace on
+  that basis would have silenced the check on the very outage it caught.
+  Now gated on `last_pull`.
+- The `/health` fetch shared a try block with `/data.json`, converting a
+  live stale-board outage into a green `warn` reading "worker
+  unreachable — site is on the bundled fallback", false in both clauses,
+  exit 0. Now its own try, failing closed.
+- Negative clocks opened the window: a repo stamp 90 minutes in the
+  future held grace open for 102 minutes.
+- A `TypeError` the new arithmetic can raise was uncaught, and `run()`
+  downgrades that to a warn — silently disabling the one check that must
+  never go quiet.
+- Shape mismatches had been quietly downgraded from fail to warn.
+
+Shipped in two commits on purpose. `last_pull` had to be deployed and
+confirmed on /health before the watchdog could consume it; merged
+together the check fails closed against every worker that has not yet
+redeployed. A successful bootstrap now also records a pull, or LAST_PULL
+sits `{ok: None}` for five minutes after each deploy and reds a CI run
+every time — observed live while waiting for this rollout.
+
+`tests/test_watchdog_served_board.py` pins all of it: a branch that grew
+from two arms to six had zero coverage. The stale-board test uses
+MATCHING pitcher counts so version identity has to be what rejects it,
+and that was mutation-checked — stubbing the guard to True makes the test
+fail, so it is not passing incidentally.
+
 ## 2026-08-08 - The container builds its own checkout (A-029, second pass)
 
 The first fix was wrong about the mechanism. Taking `.git/` out of

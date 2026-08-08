@@ -263,6 +263,10 @@ def start_http_server() -> None:
 GIT_STATUS: dict = {"is_repo": None, "shallow": None, "remote": None,
                     "bootstrapped": None, "error": None, "checked": None}
 
+# Whether the worker is actually RECEIVING CI's work. Declared up here
+# because the boot-time bootstrap sets it before sync_repo ever runs.
+LAST_PULL: dict = {"at": None, "ok": None, "error": None}
+
 
 def _git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=REPO, capture_output=True,
@@ -328,6 +332,14 @@ def _bootstrap_repo(url: str) -> bool:
     _git("branch", "--set-upstream-to=origin/master", "master")
     head = (_git("rev-parse", "--short", "HEAD").stdout or "").strip()
     GIT_STATUS["bootstrapped"] = True
+    # A successful bootstrap fetched and reset to origin/master, so this
+    # container HAS received CI's work -- record it as a pull. Without
+    # this LAST_PULL stays {ok: None} until the first publish pass up to
+    # five minutes later, and anything gating on it (the watchdog's
+    # publish-window grace) reports a freshly-booted worker as broken.
+    # A red CI run after every deploy is how a real alarm gets ignored.
+    LAST_PULL.update(at=datetime.now(ET).isoformat(timespec="seconds"),
+                     ok=True, error=None)
     log(f"git: /app had no .git — bootstrapped a checkout at {head}")
     return True
 
@@ -405,9 +417,6 @@ def configure_git() -> None:
         return
     GIT_STATUS["remote"] = "authenticated"
     log(f"git remote configured for {GITHUB_REPO}")
-
-
-LAST_PULL: dict = {"at": None, "ok": None, "error": None}
 
 
 def sync_repo() -> None:
