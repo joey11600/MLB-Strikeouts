@@ -227,6 +227,11 @@ class DataHandler(BaseHTTPRequestHandler):
                 # nothing anywhere said so, because /health only reported
                 # that data.json EXISTED -- never how old it was.
                 "last_publish": LAST_PUBLISH,
+                # Whether the worker is actually RECEIVING CI's work.
+                # last_publish above is not that signal and never was: it
+                # reported ok=true for 16 hours across A-029 while every
+                # pull failed, because publish_pass swallows the result.
+                "last_pull": LAST_PULL,
                 # Reports the CAPABILITY, not the config. This used to be
                 # bool(GITHUB_TOKEN), which answers "is an env var set?"
                 # -- a question nothing depends on. It read `true` for 16
@@ -402,6 +407,9 @@ def configure_git() -> None:
     log(f"git remote configured for {GITHUB_REPO}")
 
 
+LAST_PULL: dict = {"at": None, "ok": None, "error": None}
+
+
 def sync_repo() -> None:
     """Pull, then merge the pulled ledger into the volume the jobs use.
 
@@ -419,8 +427,20 @@ def sync_repo() -> None:
     sees them, and its /data.json -- which the dashboard PREFERS over
     the bundled copy -- silently reports a record missing the picks.
     """
-    _run("git-pull", ["git", "pull", "--rebase", "--autostash",
-                      "origin", "master"], 180)
+    # Recorded as a FIRST-CLASS signal, not inferred from publish_pass.
+    # `_run` returns False on failure and never raises, and publish_pass
+    # wraps the whole pass in try/except and sets last_publish ok=True
+    # regardless -- so throughout the A-029 outage /health advertised
+    # `last_publish: {ok: true}` while every git command was failing with
+    # exit 128. Anything downstream that wants to know "is this worker
+    # actually receiving CI's work?" must read THIS, not last_publish.
+    ok = _run("git-pull", ["git", "pull", "--rebase", "--autostash",
+                           "origin", "master"], 180)
+    LAST_PULL.update(
+        at=datetime.now(ET).isoformat(timespec="seconds"),
+        ok=ok,
+        error=None if ok else "git pull failed — see the job log for the exit code",
+    )
     reconcile_ledger()
 
 
