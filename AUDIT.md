@@ -908,6 +908,47 @@ Tracks open items, resolved items, and known risks.
     the window fails; unreachable /health does not downgrade; missing or
     failed `last_pull` gets no grace; negative clocks get no grace.
 
+### A-030: the model log rebuilt dates it could not re-derive, and deleted the difference
+- **Filed/Resolved:** 2026-08-08 (a red regression test on master; found
+  while clearing it)
+- **Description:** `tools/model_log.py::log_dates()` did
+  `existing = [r for r in csv.DictReader(f) if r["date"] not in dates]`,
+  where `dates` is **every date with a slate file**. So every stored row
+  for those dates was dropped, then rows were regenerated only for
+  pitchers `_actuals_for()` could derive from the Statcast cache *at that
+  moment*. Those are not the same set. A date whose pitches are not in the
+  cache regenerates ZERO rows — and the delete stood.
+- **Measured, against the real 99-row log:** one run on a machine whose
+  cache stopped at 2026-08-06 destroyed **all 25 graded rows for
+  2026-08-07** — real `actual_k` / `actual_bf` outcomes, unrecoverable.
+  The run logged `2026-08-07: logged 0 pitchers` and reported success.
+- **Direct violation of CLAUDE.md's "Never delete rows"**, on the evidence
+  table `/model`, the live-calibration block and the shadow portfolio are
+  all scored from. A silent truncation there corrupts published
+  model-quality figures, not just a cache.
+- **Never fired in production.** `git log` over `data/model_log.csv` shows
+  26 -> 54 -> 74 -> 99 rows across 25 commits, monotonically increasing.
+  CI restores and tops up the Statcast cache before the pipeline runs, so
+  the derivation always had its data. Latent, not realised — but an
+  incomplete cache is an ordinary transient state (refresh lag, partial
+  restore, fresh checkout) and this runs on every close task, so it was
+  one unlucky ordering away at all times. The watchdog's "Statcast cache
+  fresh" check would have reported the cause, but only after the write.
+- **Second time in this area.** `Fix nightly evidence loss: 03:00 runs...`
+  (2026-08-07, 54 -> 74 rows) was the same family: a rebuild that assumed
+  what it could derive equalled what it had stored.
+- **Resolution:** union by `(date, game_pk, pitcher_id)`. A freshly
+  derived row supersedes the stored one — that is what lets the backfill
+  correct a row — but a stored row is never dropped merely because this
+  run could not re-derive it. Same union-only, never-downgrade rule the
+  ledger reconcile follows (KB invariant 9). A shrink guard raises
+  **before** `_write_atomic`, not after, or it would document the loss
+  instead of preventing it.
+- **Locked with tests:** `tests/test_evidence_pipeline.py::test_model_log_never_drops_a_date_it_cannot_rederive`
+  starves `_actuals_for` of the newest date and asserts no row disappears.
+  Mutation-checked: restoring the old filter line fails both it and
+  `test_model_log_backfills_a_missing_date`.
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)

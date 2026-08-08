@@ -136,3 +136,47 @@ def test_watchdog_tolerates_publish_lag_then_fails(tmp_path, hour, expected):
         wd.check_model_log_growing(report)
 
     assert report.rows[0]["status"] == expected
+
+
+def test_model_log_never_drops_a_date_it_cannot_rederive(tmp_path, monkeypatch):
+    """A date whose Statcast pitches are missing must keep its rows.
+
+    The regression this pins (AUDIT A-030): log_dates() dropped every
+    stored row whose date had a slate file, then regenerated only what
+    Statcast could derive right now. Those are different sets. A date not
+    yet in the cache regenerates ZERO rows, so the delete stood.
+
+    Measured against the real log before the fix: one run on a machine
+    whose cache stopped at 08-06 destroyed all 25 graded rows for 08-07 --
+    real actual_k/actual_bf outcomes, unrecoverable. An incomplete cache
+    is an ordinary transient state and this runs on every close task.
+    """
+    _isolated(tmp_path, drop_date=None)
+    import tools.model_log as ml
+    importlib.reload(ml)
+
+    before = _log_rows(tmp_path)
+    assert before, "fixture produced no rows"
+    dates = sorted({r["date"] for r in before})
+    starved = dates[-1]
+
+    # Statcast can derive nothing for the newest date -- exactly what a
+    # lagging or partially restored cache looks like.
+    real_actuals = ml._actuals_for
+
+    def _blind(target_dates):
+        keep = {d for d in target_dates if d != starved}
+        return real_actuals(keep) if keep else {}
+
+    monkeypatch.setattr(ml, "_actuals_for", _blind)
+    ml.log_dates()
+
+    after = _log_rows(tmp_path)
+    key = lambda r: (r["date"], r["game_pk"], r["pitcher_id"])  # noqa: E731
+    lost = [r for r in before if key(r) not in {key(x) for x in after}]
+    assert not lost, (
+        f"{len(lost)} row(s) deleted for dates that could not be re-derived, "
+        f"e.g. {lost[0]['date']} {lost[0]['pitcher_name']} "
+        f"(actual_k={lost[0]['actual_k']})"
+    )
+    assert len(after) >= len(before)

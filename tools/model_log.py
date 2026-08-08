@@ -115,7 +115,7 @@ def log_dates(targets: list[str] | None = None) -> int:
     existing = []
     if LOG_PATH.exists():
         with open(LOG_PATH, encoding="utf-8") as f:
-            existing = [r for r in csv.DictReader(f) if r["date"] not in dates]
+            existing = list(csv.DictReader(f))
 
     now = datetime.now(UTC).isoformat()
     rows = []
@@ -173,7 +173,39 @@ def log_dates(targets: list[str] | None = None) -> int:
         print(f"  {d}: logged {logged} pitchers"
               + ("  (reconstructed slate)" if recon else ""))
 
-    all_rows = existing + rows
+    # Union by key -- NEVER a wholesale replace of the dates being rebuilt.
+    #
+    # This used to drop every stored row whose date had a slate file, then
+    # regenerate only what Statcast could derive right now. Those are not
+    # the same set. A date whose pitches are not in the cache yet
+    # regenerates ZERO rows, so the delete stood and the evidence was gone
+    # for good. Measured 2026-08-08 against the real log: one run on a
+    # machine whose cache stopped at 08-06 destroyed all 25 graded rows for
+    # 08-07 -- real actual_k/actual_bf outcomes, unrecoverable. An
+    # incomplete cache is an ordinary transient state (refresh lag, a
+    # partial restore, a fresh checkout), and this runs on every close
+    # task, so the loss was one unlucky ordering away at all times.
+    #
+    # A freshly derived row supersedes the stored one -- that is what makes
+    # the backfill able to correct a row. But a stored row is never dropped
+    # merely because this run could not re-derive it. Same union-only,
+    # never-downgrade rule the ledger reconcile follows (KB invariant 9).
+    def _key(r: dict) -> tuple:
+        return (str(r.get("date")), str(r.get("game_pk")),
+                str(r.get("pitcher_id")))
+
+    merged = {_key(r): r for r in existing}
+    kept = len(merged)
+    for r in rows:
+        merged[_key(r)] = r
+    all_rows = list(merged.values())
+    # Checked BEFORE the write, or the guard documents the loss instead of
+    # preventing it.
+    if len(all_rows) < kept:
+        raise RuntimeError(
+            f"model log would shrink {kept} -> {len(all_rows)}; refusing to "
+            f"write. This function is append/update-only."
+        )
     all_rows.sort(key=lambda r: (r["date"], str(r["pitcher_name"])))
     _write_atomic(LOG_PATH, all_rows)
     print(f"\nmodel log now holds {len(all_rows)} prediction/outcome pairs -> {LOG_PATH}")

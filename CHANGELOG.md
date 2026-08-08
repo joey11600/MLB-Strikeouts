@@ -1,6 +1,46 @@
 
 # Changelog
 
+## 2026-08-08 - The model log deleted what it could not re-derive (A-030)
+
+`log_dates()` dropped every stored row whose date had a slate file, then
+regenerated rows only for pitchers Statcast could derive at that moment.
+Those are not the same set. A date whose pitches are not in the cache
+regenerates zero rows, and the delete stood.
+
+Measured against the real 99-row log: one run on a machine whose cache
+stopped at 08-06 destroyed all 25 graded rows for 08-07 — real actual_k
+and actual_bf outcomes, unrecoverable. The run printed
+`2026-08-07: logged 0 pitchers` and reported success.
+
+That is CLAUDE.md's "Never delete rows", on the evidence table `/model`,
+the live-calibration block and the shadow portfolio are scored from.
+Truncating it silently corrupts published model-quality numbers.
+
+It never fired in production. `git log` over `data/model_log.csv` shows
+26 -> 54 -> 74 -> 99 across 25 commits, monotonically increasing — CI
+restores and tops up the cache before the pipeline runs, so the
+derivation always had its data. Latent, not realised. But an incomplete
+cache is an ordinary transient state and this runs on every close task,
+so it was one unlucky ordering away the whole time. It surfaced on a
+local machine whose cache stopped a day short, which is exactly the shape
+of the accident.
+
+Second time in this area: `Fix nightly evidence loss` (2026-08-07,
+54 -> 74 rows) was the same family — a rebuild assuming what it can
+derive equals what it has stored.
+
+Now a union by (date, game_pk, pitcher_id). A freshly derived row
+supersedes the stored one, which is what lets a backfill correct a row,
+but a stored row is never dropped because this run could not re-derive
+it. The shrink guard raises before the write, not after, or it would
+document the loss rather than prevent it.
+
+Both the new regression test and the previously-red
+`test_model_log_backfills_a_missing_date` fail against the old line, so
+neither passes by accident. 38 tests, all green — the first clean suite
+since this started.
+
 ## 2026-08-08 - The alarm that caught the outage was itself broken (A-029)
 
 `served board is current` failed again at 20:45Z, and this time it was
