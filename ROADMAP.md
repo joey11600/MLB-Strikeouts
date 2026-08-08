@@ -207,3 +207,40 @@ strikeouts model, not a variant of it.
 - [ ] `dashboard/app/outs/page.tsx` + its own payload artifact, added to
   `DATA_ONLY_PATHS` in `scripts/vercel-ignore-build.sh` or every outs
   data commit resumes burning full Next builds (the A-023 regression)
+
+### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
+- [x] Per-start outs table, 13,170 regular-season starts 2024–2026
+  (`tools/build_outs_dataset.py` → `data/outs_starts.parquet`),
+  validated 548/548 against MLB boxscore `inningsPitched`
+- [x] Leakage-safe as-of features (`features/outs_asof.py`) + a
+  brute-force strictly-prior recomputation test
+- [x] Inning-lattice hazard model (`models/outs_hazard.py`): per-inning
+  completion, return-for-next-inning, and a partial-inning {0,1,2}
+  multinomial, composed into a PMF over 0..27
+- [x] **Gate 2 PASSES** — three-way out-of-sample, all 21 split-by-line
+  cells positive: **+5.64% / +4.99% / +7.49%** Brier skill vs the honest
+  as-of baseline (after dropping `career_x_season`)
+- [x] Lattice reproduced — chi² 13.23, df 9, **p = 0.152** (not
+  rejected) over k=12..21; the negative-binomial failure mode
+  (P(18)=0.073 vs 0.220 empirical) does not occur
+- [x] Leakage cleared four ways: shuffle control collapses to
+  −0.42%/−0.22%/−0.08% against a constant train-marginal; noise control
+  null; brute-force as-of recomputation bit-identical; self-inclusion
+  probe shows zero own-row feature movement
+- [x] Gate 4 — `career_x_season` dropped (r=+0.9955, VIF 350 on the S1
+  design; `season_start_number` saturates its cap on 74.5% of 2024 rows,
+  degenerating the interaction to 8×`career_start_number`)
+- [ ] **Gate 5 — NOT passed.** ECE 0.017–0.026 with single-bin gaps to
+  5.1pp, against a measured break-even requirement of ~3.6pp per side.
+  An edge filter would fire on calibration error as often as on edge.
+  Route through `models/calibration.py` and refit its own calibrator.
+- [ ] Gates 1/3/5 per-feature against the outs target — the effect sizes
+  in the spec are reproductions from the strikeouts gauntlet, not gate
+  passes on this target
+- [ ] `stop_rate_12` (sign-unstable across splits) and `stop_rate_21`
+  (design measures a null) are Gate-2 rejection candidates, currently
+  advisory-only
+- [ ] Score against the MARKET. Nothing here measures that — all skill
+  is vs a naive baseline, and exactly one ungraded outs slate exists.
+  **Do not let this touch `models/edge.py` until enough graded slates
+  are banked to fit and validate a calibrator.**

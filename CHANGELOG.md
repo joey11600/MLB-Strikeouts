@@ -1,6 +1,112 @@
 
 # Changelog
 
+## 2026-08-08 - Fitted OUTS RECORDED hazard model
+
+New `models/outs_hazard.py`: the fitted inning-lattice hazard model
+specified in `docs/OUTS_MODEL.md`, wired end to end onto
+`tools/build_outs_dataset.py` and `features/outs_asof.py`.
+
+    python -m models.outs_hazard --fit --train 2024,2025 --test 2026
+    python -m models.outs_hazard --three-way
+
+Three components fitted by L-BFGS-B MLE: per-inning completion logit,
+per-boundary return logit, and a per-inning {0,1,2} partial-inning
+multinomial. Free intercepts, covariate effects shared across
+boundaries except the quality block, whose per-boundary deviations are
+ridge-penalised. The composition recursion is imported from
+`models/outs_hazard_proto.py` rather than re-implemented, so there is
+one copy of the code that turns hazards into a PMF. All three
+components converge; every predicted PMF over all 13,170 starts sums
+to 1 within 5.6e-16.
+
+Penalty selected on the DECISION METRIC — mean Brier across the seven
+market lines, on a temporal split inside the training years, never on
+log-likelihood and never on the test years.
+
+Three-way out-of-sample Brier skill against the honest as-of baseline
+(the pitcher's own strictly-prior outs distribution shrunk toward the
+as-of league PMF): +4.48% (24 to 25), +4.68% (25 to 24), +7.48%
+(24+25 to 26). Positive in every direction, so it clears the
+both-directions rule.
+
+The sign gate tests `d E[outs]` from moving each term, not a raw
+coefficient. That distinction is the substance of the change: read as
+pooled slopes, four terms appeared to contradict the design's measured
+directions, and all four were artifacts of the test rather than the
+model. `stop_rate_b` is a statement about ONE boundary, and its shared
+column averages it over eight; the boundary-matched slope on
+`stop_rate_15` is negative in all three splits (-0.065/-0.103/-0.086)
+while the pooled one flips (+0.077/-0.086/+0.005). `is_debut` and
+`rest_unknown` are structurally coupled to the no-history block — a
+debut row necessarily has no prior-5 pitch budget — so flipping either
+alone describes a row that cannot exist; the coherent block moves are
+-3.47/-4.23/-3.84 and -1.32/-0.92/-1.12 outs, matching the design's
+raw 10.79-vs-16.11 and 14.71-vs-16.08. `save()` refuses when the gate
+fails, so a sign-violating model cannot reach disk.
+
+Two findings recorded rather than papered over. `stop_rate_12` is
+sign-unstable across the three splits and `stop_rate_21` moves outs
+the opposite way from the other quality terms where the design
+measures a null — both are Gate-2 rejection candidates and are
+reported as advisory, not gated. And the S1 direction under-predicts
+the mean by 0.36 outs: 90% of that (+0.325) is the career-history
+block, whose distribution shifts between 2024 and 2025 purely because
+the Statcast cache begins 2024-03-28. The decision split is unaffected
+(+0.045 outs).
+
+The design spec is serialized as a plain dict, not as a pickled
+dataclass instance. Fitting runs as `python -m models.outs_hazard`,
+where the module is `__main__`, so a pickled instance would carry
+`__module__ == "__main__"` and be unloadable from the daily pipeline —
+a write-only model file. Caught by the API verification.
+
+Calibration is usable but not yet passed: ECE 0.017-0.026 across the
+seven lines on the 2026 split. Per `docs/OUTS_MODEL.md` section 10 the
+raw hazard output must route through `models/calibration.py` before it
+prices anything.
+
+## 2026-08-08 - As-of feature set for the OUTS RECORDED model (Task C)
+
+New `features/outs_asof.py`: the Tier-1 leakage-safe feature set for
+starting-pitcher total outs, plus `tests/test_outs_asof.py`.
+
+Follows `features/asof.py` conventions: hardcoded season starts, no
+carry-across-seasons, cumsum-minus-current for every strictly-prior
+aggregate, `shrink_rate`-style pseudo-count shrinkage. Two as-of
+granularities: pitcher features use strictly-prior STARTS, league and
+opponent features use strictly-prior DAYS (a doubleheader's game 1 is
+excluded from game 2).
+
+`exp_o` ships in both required forms — the scalar expanding mean and the
+per-pitcher stop-rate vector at boundaries {12,15,18,21}, each shrunk
+toward the as-of league hazard. Prior weights are grid-searched, not
+asserted: `W_EXPO = 1.0` start (RMSE argmin 1.00/1.25/0.75 across the
+three seasons, scored on common support so W=0 is not evaluated on an
+easier subset), `W_HAZ = 24` starts-that-reached-b (log-loss argmin
+24/32/24, flat across 16-48).
+
+Career left-edge contamination is handled: 166 of 589 pitchers (28.2%)
+have their first cached start within 14 days of 2024-03-28 and are
+excluded from the `is_debut` treatment. Not excluding them dilutes the
+debut effect by 1.043 outs (10.787 genuine vs 11.830 pooled).
+
+Gate 4: exactly two pairs exceed |r| > 0.85, both by construction —
+`exp_o` vs `exp_o_shrunk` (+0.976) and `season_start_number` vs
+`career_x_season` (+0.974). `RECOMMENDED_MODEL_SET` resolves both by
+dropping one member; nothing else exceeds 0.774, max VIF 4.93.
+
+The test file is the point of the change. Four independent attacks —
+brute-force recomputation from strictly-prior rows, future perturbation,
+same-day/doubleheader perturbation, and row-order invariance — run on
+synthetic data and on the real 13,170-start table. A 7-mutant injection
+run (own-row leak, same-day league leak, roll-then-shift budget window,
+missing left-edge guard, imputed null rest, softened opponent gate,
+same-day opponent leak) kills 7/7. An earlier version killed only 6/7:
+the synthetic season was too short for any team to clear
+`MIN_OPP_GAMES`, so the opponent branch was never exercised and a leak
+in it was undetectable. The fixture now asserts that branch is live.
+
 ## 2026-08-08 - The model log deleted what it could not re-derive (A-030)
 
 `log_dates()` dropped every stored row whose date had a slate file, then

@@ -70,6 +70,51 @@ The raw constants (0.84, 0.16) assumed a 19.05% league K rate. Fed
 2026 inputs without renormalization, f(0.225, 0.225) = 0.2500 — a
 +2.5 pp systematic inflation.
 
+### Outs Recorded — a SECOND, separate model family
+
+The DraftKings "Outs Recorded O/U" market (subcategory 17413,
+half-integer lines 13.5–19.5) does **not** reuse the Stage A × Stage B
+compound above, and must not. Outs is a stopping time on a lattice,
+not a count: 65.5% of starts end on an exact multiple of 3 because the
+removal decision is made at inning boundaries. A moment-matched
+negative binomial puts 0.073 on 18 outs against an empirical 0.220.
+
+```
+for inning j = 1..9:
+  X_j ∈ {0,1,2,3}   outs recorded in inning j        logit P(X_j=3) = γ_j + x'δ + x_Q'δ_j
+  R_j ∈ {0,1}       comes back out for inning j+1    logit P(R_j=1) = α_j + x'β + x_Q'β_j
+  X_j < 3           removed mid-inning               P(X_j=r | X_j<3) = softmax(ψ_j)
+Compose → P(outs = k) for k in 0..27
+```
+
+The 27-out ceiling is enforced by the **absence** of a parameter — `α`
+has 8 entries for 9 innings, so no `R_9` exists and no code path
+advances past inning 9. Nothing is ever clipped; the recursion
+normalizes by construction (measured worst |Σ−1| = 5.6e-16 over all
+13,170 starts).
+
+| Piece | File |
+|---|---|
+| Spec and every design decision | `docs/OUTS_MODEL.md` |
+| Composition recursion + self-tests | `models/outs_hazard_proto.py` |
+| Fitted model, CLI, save/load | `models/outs_hazard.py` |
+| Per-start label table | `tools/build_outs_dataset.py` |
+| External validator vs MLB boxscores | `tools/validate_outs_vs_mlb.py` |
+| As-of features | `features/outs_asof.py` |
+
+Fit and evaluate:
+
+```
+python -m models.outs_hazard --fit --train 2024,2025 --test 2026
+python -m models.outs_hazard --three-way
+```
+
+Out-of-sample Brier skill vs the honest as-of baseline: +4.48% / +4.68%
+/ +7.48% across the three mandated splits. **Not yet bettable** —
+calibration shows ECE 0.017–0.026, so the output must route through
+`models/calibration.py` first, and Gates 1–5 have not been run on the
+individual features against this target.
+
 ## Variance decomposition (computed from real data)
 
 Computed from 1,454 starts by 217 pitchers, June–Aug 2026.
