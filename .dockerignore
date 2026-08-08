@@ -10,14 +10,18 @@ dashboard/node_modules/
 dashboard/.next/
 dashboard/out/
 
-# .git/ is NOT excluded, and must not be. The worker's whole job is to
-# pull what CI publishes and push back what the live watcher grades --
-# `git pull` and `git push` cannot run in a directory with no .git, and
-# they fail with exit 128 ("not a git repository"), not with anything
-# that looks like a network or auth problem. Excluding it on 2026-08-05
-# silently disabled both halves; A-025's pull fix and A-028's push fix
-# were both written afterwards against a container that could never run
-# either. Cost of shipping it: 9.3 MB.
+# .git/ is deliberately NOT excluded here -- but do not rely on that
+# alone. Railway's builder ships a source ARCHIVE, not a clone: its
+# build log reads "fetching snapshot" then "unpacking archive", so the
+# build context contains no .git to copy in the first place. Removing
+# the exclusion (A-029) was a genuine fix and changed nothing on
+# Railway. What actually makes the worker a checkout is
+# `_bootstrap_repo()` in tools/railway_worker.py, which runs git
+# init/fetch/reset at boot.
+#
+# Keep the exclusion off anyway: it costs 9.3 MB, it makes a locally
+# built image behave like the deployed one, and re-adding it would break
+# any builder that DOES provide .git.
 logs/
 __pycache__/
 *.pyc

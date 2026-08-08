@@ -256,12 +256,75 @@ def start_http_server() -> None:
 
 
 GIT_STATUS: dict = {"is_repo": None, "shallow": None, "remote": None,
-                    "error": None, "checked": None}
+                    "bootstrapped": None, "error": None, "checked": None}
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=REPO, capture_output=True,
                           text=True)
+
+
+def _remote_url() -> str:
+    """Authenticated when a token exists, public otherwise.
+
+    The repo is public, so an anonymous URL still pulls. Only the push
+    half needs the token.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        return f"https://x-access-token:{token}@github.com/{GITHUB_REPO}.git"
+    return f"https://github.com/{GITHUB_REPO}.git"
+
+
+def _bootstrap_repo(url: str) -> bool:
+    """Make /app a real checkout of origin/master when it is not one.
+
+    Railway's builder ships a source ARCHIVE, never a clone -- the build
+    log reads "fetching snapshot" then "unpacking archive". So /app has
+    NEVER contained .git, whatever .dockerignore says. Removing the
+    `.git/` exclusion (A-029, first attempt) was a genuine bug fix and
+    changed nothing here: there is no .git in the build context to copy.
+    The container has to create the checkout itself.
+
+    `reset --hard` is safe here, and the reason is worth stating because
+    it would not be safe in a lot of repos:
+
+      * No symlinks are involved. seed_volume_state() copies image ->
+        volume precisely so the ledger is a REAL file on /data/state;
+        the atomic-write pattern destroys symlinked destinations. So
+        nothing git touches in /app can reach the volume's ledger.
+      * Nothing tracked by git is excluded from the image. Every
+        .dockerignore entry (statcast_cache, chadwick_cache, node_modules,
+        .next, out, logs, .vercel) covers only gitignored paths, so the
+        unpacked archive is a complete checkout of the build commit and
+        the reset has no phantom deletions to apply.
+
+    Resetting to origin/master rather than the build commit is
+    deliberate: CI commits every few minutes, so by boot the archive is
+    usually already behind, and _merge_dir reads FILES out of this
+    checkout -- not git objects. A repo whose HEAD is current but whose
+    working tree is stale would merge yesterday's board into the volume
+    and look perfectly healthy doing it.
+    """
+    steps = (
+        ("git init",   ("init", "-b", "master")),
+        ("git remote", ("remote", "add", "origin", url)),
+        ("git fetch",  ("fetch", "--no-tags", "origin")),
+        ("git reset",  ("reset", "--hard", "origin/master")),
+    )
+    for label, args in steps:
+        res = _git(*args)
+        if res.returncode != 0:
+            err = (res.stderr or "").strip()
+            # Never let a token reach the log.
+            GIT_STATUS.update(bootstrapped=False, error=f"{label}: {err[:160]}")
+            log(f"FATAL git bootstrap failed at {label}: {err[:200]}")
+            return False
+    _git("branch", "--set-upstream-to=origin/master", "master")
+    head = (_git("rev-parse", "--short", "HEAD").stdout or "").strip()
+    GIT_STATUS["bootstrapped"] = True
+    log(f"git: /app had no .git — bootstrapped a checkout at {head}")
+    return True
 
 
 def configure_git() -> None:
@@ -279,21 +342,27 @@ def configure_git() -> None:
     no line: it is the thing you check first and it lies.
     """
     GIT_STATUS["checked"] = datetime.now(ET).isoformat(timespec="seconds")
+    url = _remote_url()
 
     probe = _git("rev-parse", "--git-dir")
     if probe.returncode != 0:
-        GIT_STATUS.update(
-            is_repo=False,
-            error=(probe.stderr or "").strip() or f"exit {probe.returncode}",
-        )
-        # Loud, and not survivable-quiet: with no .git the worker cannot
-        # pull CI's board or push the watcher's grades, so it will serve
-        # whatever was baked into the image until someone notices.
-        log("FATAL git: {} is not a git repository ({}). The worker cannot "
-            "pull CI's output or push the ledger; it will serve a frozen "
-            "board. Check that .dockerignore does NOT exclude .git/."
-            .format(REPO, GIT_STATUS["error"]))
-        return
+        # Expected on Railway every boot: the builder unpacks an archive,
+        # so there is no .git to inherit. Build one rather than spend the
+        # day serving a frozen board.
+        if not _bootstrap_repo(url):
+            GIT_STATUS.update(
+                is_repo=False,
+                error=GIT_STATUS.get("error")
+                or (probe.stderr or "").strip() or f"exit {probe.returncode}",
+            )
+            log("FATAL git: {} is not a git repository and could not be "
+                "bootstrapped. The worker cannot pull CI's output or push "
+                "the ledger; it will serve a frozen board."
+                .format(REPO))
+            return
+        GIT_STATUS["error"] = None
+    else:
+        GIT_STATUS["bootstrapped"] = False
     GIT_STATUS["is_repo"] = True
 
     # Railway's builder may hand us a shallow clone; `git pull --rebase`
@@ -314,15 +383,15 @@ def configure_git() -> None:
             log(f"WARNING git config {key} failed: "
                 f"{(res.stderr or '').strip()[:120]}")
 
-    token = os.environ.get("GITHUB_TOKEN")
-    if not token:
+    if not os.environ.get("GITHUB_TOKEN"):
         GIT_STATUS["remote"] = "anonymous"
         log("WARNING: GITHUB_TOKEN unset — pull works (public repo) but "
             "ledger changes will stay on the volume and will NOT reach "
             "GitHub or the dashboard.")
         return
-    remote = f"https://x-access-token:{token}@github.com/{GITHUB_REPO}.git"
-    res = _git("remote", "set-url", "origin", remote)
+    # Idempotent: set-url whether the remote came from the bootstrap or
+    # from an inherited checkout, so both paths end authenticated.
+    res = _git("remote", "set-url", "origin", url)
     if res.returncode != 0:
         GIT_STATUS.update(remote="failed",
                           error=(res.stderr or "").strip()[:200])
@@ -877,6 +946,15 @@ TASKS = {
 def main() -> None:
     log("=== Strikeouts Railway worker starting ===")
     log(f"cache: {CACHE_DIR}  state: {STATE_PATH}")
+    # FIRST, before anything reads the checkout. On Railway /app arrives
+    # as an unpacked archive with no .git, so this is what turns it into
+    # a real checkout and fast-forwards it to origin/master. Both of the
+    # next two steps read files out of that checkout: seed_volume_state()
+    # fills gaps in the volume from it, and reconcile_ledger() merges its
+    # data/ into the volume. Run them against the unrefreshed archive and
+    # the boot rebuild of data.json publishes a board that is already
+    # behind -- which is precisely the failure A-029 was filed for.
+    configure_git()
     seed_volume_state()
     # A redeploy is exactly when the checkout changes, so reconcile here
     # too and not only at task time. Without it, a deploy that carries
@@ -887,7 +965,6 @@ def main() -> None:
     verify_dispatch_credentials()
     start_http_server()
     start_live_watcher()
-    configure_git()
 
     # Unconditional, not only when cold. A warm-but-STALE cache is the
     # dangerous state: it looks populated, so the old "is it empty?"

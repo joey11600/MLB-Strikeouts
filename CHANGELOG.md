@@ -1,6 +1,52 @@
 
 # Changelog
 
+## 2026-08-08 - The container builds its own checkout (A-029, second pass)
+
+The first fix was wrong about the mechanism. Taking `.git/` out of
+`.dockerignore` deployed clean as 5309d93, and the container came up
+still reporting `git.is_repo: false`.
+
+Railway's builder does not hand Docker a clone. Its build log reads
+`fetching snapshot` then `unpacking archive` — the build context is a
+source tarball with no `.git` in it at all. The `.dockerignore`
+exclusion was a real bug and it was never the operative one. `/app` has
+never been a repository and, on that builder, never could have been.
+
+The detection added in the first pass is what caught this, within one
+deploy instead of another sixteen hours. That is the entire argument for
+checking capability instead of configuration: the fix failed and said so
+immediately, in the same field that had been lying all day.
+
+`_bootstrap_repo()` is the real fix. When `/app` is not a repository the
+worker builds one — init, remote add, fetch, `reset --hard
+origin/master` — then re-probes. Two things make `reset --hard` safe
+here, and both were checked rather than assumed. No symlinks are
+involved: `seed_volume_state()` copies image to volume precisely so the
+ledger is a real file on `/data/state`, because the atomic-write pattern
+destroys symlinked destinations. And nothing tracked by git is excluded
+from the image — every `.dockerignore` entry covers gitignored paths
+only — so the unpacked archive is a complete checkout and the reset has
+no phantom deletions to apply.
+
+It resets to origin/master rather than to the build commit. CI commits
+every few minutes, so the archive is usually already behind by boot, and
+`_merge_dir` reads FILES out of this checkout rather than git objects. A
+repo with a current HEAD over a stale working tree would merge
+yesterday's board into the volume and look perfectly healthy doing it.
+
+`configure_git()` now runs first in `main()`, ahead of
+`seed_volume_state()` and `reconcile_ledger()`. Both read files out of
+the checkout, so bootstrapping after them would have published a
+boot-time `data.json` that was already behind — the exact failure this
+audit item is about.
+
+Three more tests: the bootstrap builds a populated, clean checkout (run
+against this repo as the remote, so it stays offline); an inherited
+`.git` is never re-initialised or reset, since that would discard
+mirrored ledger rows before they were pushed; and a bootstrap failure
+never puts the token in the log.
+
 ## 2026-08-08 - The container was never a git repository (A-029)
 
 Eight straight red CI runs, all failing the same watchdog check: the

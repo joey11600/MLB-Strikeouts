@@ -814,9 +814,39 @@ Tracks open items, resolved items, and known risks.
   A-026's slate-stamp fix) fired correctly on the first run after CI
   published a board the worker lacked, and every run since. The eight
   red runs are the alarm working.
+- **CORRECTION — the first fix was wrong about the mechanism.** Removing
+  the `.dockerignore` exclusion was deployed as `5309d93`, the deploy
+  succeeded, and the container came up still reporting
+  `git.is_repo: false`. The exclusion was a real bug and not the
+  operative one: **Railway's builder ships a source ARCHIVE, not a
+  clone.** Its build log reads `fetching snapshot` -> `unpacking
+  archive`, so there is no `.git` in the build context to copy no matter
+  what `.dockerignore` says. `/app` has never been a repository and
+  never would have been.
+  - The new detection is what caught this, within one deploy, instead of
+    another 16 hours. That is the whole argument for checking the
+    capability: the fix failed and said so immediately.
 - **Resolution:**
-  1. `.git/` removed from `.dockerignore`, with the reason recorded
-     inline so it is not "tidied" back. Cost: 9.3 MB.
+  1. `_bootstrap_repo()` -- the operative fix. When `/app` is not a
+     repository, the worker builds one: `git init` / `remote add` /
+     `fetch` / `reset --hard origin/master`, then re-probes.
+     `reset --hard` is safe here for two specific reasons, both checked:
+     no symlinks are involved (`seed_volume_state` copies image->volume
+     precisely so the ledger is a real file on `/data/state`), and
+     nothing tracked by git is excluded from the image (every
+     `.dockerignore` entry covers gitignored paths only), so the reset
+     has no phantom deletions to apply. It resets to **origin/master**
+     rather than the build commit because CI commits every few minutes
+     and `_merge_dir` reads FILES, not git objects -- a current HEAD over
+     a stale working tree would merge yesterday's board into the volume
+     and look healthy doing it.
+  2. `configure_git()` moved to the TOP of `main()`, before
+     `seed_volume_state()` and `reconcile_ledger()`. Both read files out
+     of the checkout, so bootstrapping after them would publish a
+     boot-time `data.json` that is already behind.
+  3. `.git/` removed from `.dockerignore` and kept off: it costs 9.3 MB,
+     makes a locally built image behave like the deployed one, and
+     re-adding it would break any builder that does provide `.git`.
   2. `configure_git()` probes `git rev-parse --git-dir` first and logs
      FATAL with the remedy if it fails; checks every subsequent exit
      code; handles a shallow builder clone via `fetch --unshallow`, since
