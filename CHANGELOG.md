@@ -1,6 +1,34 @@
 
 # Changelog
 
+## 2026-08-07 - The worker could grade a bet but never book it (A-028)
+
+Railway had Payton Tolle graded LOSS, 14 K, -2.0u within minutes of him
+being pulled, and reconciled 10 of 10 picks. Git's row was blank, so
+pl_calc -- the only sanctioned source of a P&L number -- still reported
+the pre-game total. The early-grading work from A-020/A-021 existed and
+could not reach the books.
+
+Two independent breaks, and fixing either alone would have changed
+nothing. `_merge_csv` unions repo -> volume and never writes back, so
+anything the container produces stays on the volume. And
+`commit_and_push()` is only called from the four task functions, which
+only run when `dispatch_github()` FAILS -- since the token was added it
+always succeeds, so the push never ran at all.
+
+This is A-025's mirror image. That was the pull half: work done on GitHub
+not reaching the container. This is the push half: work done in the
+container not reaching git. Splitting the work across two machines broke
+the loop at both ends, and this morning only one end got fixed.
+
+`mirror_volume_to_repo()` copies the volume's ledger into the checkout,
+then the publish pass commits and pushes. Ordering is load-bearing:
+reconcile unions the pulled rows into the volume first, so the volume is
+a superset by the time we copy back and the copy can only add rows, never
+drop them. tests/test_volume_mirror.py asserts exactly that, plus the CI
+no-op and surviving a missing volume.
+
+
 ## 2026-08-07 - The chart shows which way it leans (A-026, A-027)
 
 The book-line marker had silently disappeared from every pick card.

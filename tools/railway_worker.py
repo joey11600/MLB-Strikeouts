@@ -293,6 +293,57 @@ LAST_PUBLISH: dict = {"at": None, "ok": None, "error": None,
                       "served_generated_at": None}
 
 
+def mirror_volume_to_repo() -> int:
+    """Copy the volume's ledger into the git checkout so it can be pushed.
+
+    The missing direction. `_merge_csv` unions repo -> volume and never
+    writes back, so anything this container produces stays on the volume:
+    the live watcher grades a starter the moment he is pulled (A-021),
+    writes it to the volume, rebuilds the served board -- and the ledger
+    in git never hears about it.
+
+    Measured 2026-08-07: the worker had Payton Tolle graded LOSS, 14 K,
+    -2.0u, and reconciled 10 of 10 picks at 22:57. Git's newest row for
+    him was blank, so `tools/pl_calc.py` -- which reads the repo and is
+    the ONLY sanctioned source of a P&L figure -- still reported the
+    pre-game total. Early grading existed and could not reach the books.
+
+    Safe because reconcile runs FIRST: it unions the freshly pulled repo
+    rows into the volume, union-only and never downgrading, so by the
+    time we copy back the volume is a superset of the checkout. Nothing
+    can be lost by this direction; it can only add.
+
+    Returns the number of files copied, for the log.
+    """
+    try:
+        from tracker import DATA_STATE_DIR as _LEDGER_DIR
+        if _LEDGER_DIR.resolve() == (REPO / "data").resolve():
+            return 0  # CI: the checkout IS the ledger, nothing to mirror
+    except OSError:
+        return 0
+
+    if not VOLUME_STATE.exists():
+        return 0
+
+    copied = 0
+    for name in ("picks_2026.csv", "model_log.csv", "pick_changes.csv"):
+        src = VOLUME_STATE / name
+        if src.exists():
+            shutil.copy2(src, REPO / "data" / name)
+            copied += 1
+    for sub in ("slates", "odds"):
+        src_dir = VOLUME_STATE / sub
+        if not src_dir.is_dir():
+            continue
+        dest_dir = REPO / "data" / sub
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for f in src_dir.iterdir():
+            if f.is_file():
+                shutil.copy2(f, dest_dir / f.name)
+                copied += 1
+    return copied
+
+
 def publish_pass() -> None:
     """Pull whatever GitHub Actions published, and re-serve it.
 
@@ -323,7 +374,18 @@ def publish_pass() -> None:
         _run("drop-derived",
              ["git", "checkout", "--", "dashboard/public/data.json"], 60)
         sync_repo()
+        # Push half. sync_repo() has just unioned the pulled rows into the
+        # volume, so the volume is now a superset of the checkout -- copy
+        # it back and mirror it to git. Without this the live watcher's
+        # grades never leave the container and pl_calc, which reads the
+        # repo, reports a P&L the operator can see is wrong on the board.
+        n = mirror_volume_to_repo()
+        if n:
+            log(f"mirrored {n} ledger file(s) from the volume into the checkout")
         _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+        # No-ops when nothing changed ("git: nothing to commit"), so this
+        # is cheap to run every pass and only speaks when there is news.
+        commit_and_push("live grades")
         served = None
         try:
             served = json.loads(
@@ -637,8 +699,12 @@ def commit_and_push(context: str) -> None:
             "dashboard reads it live over HTTP")
         return
     subprocess.run(
-        ["git", "add", "data/picks_2026.csv", "data/slates",
-         "data/pick_changes.csv", "data/odds", "dashboard/public/data.json"],
+        # model_log.csv rides along: it is the evidence table the /model
+        # page and the shadow portfolio are scored from, and it is
+        # produced on the volume like everything else here.
+        ["git", "add", "data/picks_2026.csv", "data/model_log.csv",
+         "data/slates", "data/pick_changes.csv", "data/odds",
+         "dashboard/public/data.json"],
         cwd=REPO, capture_output=True,
     )
     staged = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO)

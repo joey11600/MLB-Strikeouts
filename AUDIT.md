@@ -748,6 +748,39 @@ Tracks open items, resolved items, and known risks.
      the ledger. Excluding `data/` wholesale would have stopped real code
      changes from ever deploying.
 
+### A-028: the worker could grade a bet but never book it
+- **Filed/Resolved:** 2026-08-07
+- **Description:** Railway graded Payton Tolle LOSS / 14 K / -2.0u the
+  moment he was pulled and reconciled 10 of 10 picks at 22:57. Git's
+  ledger row was still blank, so `tools/pl_calc.py` -- which reads the
+  repo and is the ONLY sanctioned source of a P&L figure -- reported the
+  pre-game total. Early grading (A-020/A-021) existed and could not reach
+  the books.
+- **TWO independent breaks; fixing either alone changes nothing:**
+  1. `_merge_csv` unions repo -> volume and never writes back, so
+     anything this container produces stays on the volume. The live
+     watcher grades to the volume; the checkout never hears about it.
+  2. `commit_and_push()` is only called from the four task functions,
+     and those only run when `dispatch_github()` FAILS. Since the token
+     was added, dispatch always succeeds -- so it never ran at all.
+- **Same root cause as A-025, opposite direction.** A-025 was the pull
+  half: work done on GitHub not reaching the container. This is the push
+  half: work done in the container not reaching git. The dispatch split
+  broke the loop at both ends and only one end was fixed.
+- **Resolution:** `mirror_volume_to_repo()` copies the volume's ledger
+  into the checkout, then `publish_pass()` commits and pushes. Ordering
+  is load-bearing: reconcile unions the freshly pulled repo rows into the
+  volume FIRST, so by the time we copy back the volume is a superset and
+  the copy can only add. `commit_and_push` no-ops when nothing changed,
+  so running it every 5 minutes is free.
+- **model_log.csv added to the staged set** -- the evidence table the
+  /model page and shadow portfolio are scored from, produced on the
+  volume like everything else.
+- **Locked with tests:** `tests/test_volume_mirror.py` -- mirrors a
+  volume-only grade, carries slates/odds, no-ops on CI where the checkout
+  IS the ledger, and survives a missing volume (the publish pass runs
+  every 5 minutes and is not worth an outage).
+
 ## Resolved
 
 ### R-005: T2 promotions re-gauntleted — all three demoted (was A-005)
