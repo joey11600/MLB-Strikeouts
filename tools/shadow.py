@@ -220,6 +220,23 @@ def evaluate(rows: list[dict], trust: float, closing: dict) -> dict:
     }
 
 
+#: A-006: raise MODEL_TRUST_WEIGHT only after this many GRADED BETS with
+#: positive average CLV. Bets, not evaluated pitchers -- see build().
+BET_TARGET = 100
+
+
+def _is_ready(g: dict | None) -> bool:
+    """Both halves of A-006, or not ready.
+
+    Positive CLV alone is not enough (it can be one lucky bet) and volume
+    alone is not enough (a losing edge does not improve with repetition).
+    """
+    if not g:
+        return False
+    clv = g.get("avg_clv_pct")
+    return bool(g.get("n_bets", 0) >= BET_TARGET and clv is not None and clv > 0)
+
+
 def build(include_reconstructed: bool = False) -> dict:
     rows = load_rows(include_reconstructed)
     closing = _closing_odds_index()
@@ -238,8 +255,26 @@ def build(include_reconstructed: bool = False) -> dict:
         "includes_reconstructed": include_reconstructed,
         "production_trust_weight": MODEL_TRUST_WEIGHT,
         "grid": grid,
-        "target_observations": 100,
-        "ready_to_decide": len(rows) >= 100,
+        # A-006's gate is "100+ graded BETS with positive average CLV" --
+        # not 100 evaluated pitchers. Counting observations declared READY
+        # at 100 rows while the production weight had TWO bets behind it,
+        # roughly fiftyfold less evidence than the gate asks for, and it
+        # erred toward RAISING the trust weight, which increases stake
+        # exposure. A readiness signal that answers an easier question than
+        # the one that matters is the same defect as a health check
+        # reporting configuration instead of capability.
+        #
+        # Readiness is judged at the PRODUCTION weight, because that is the
+        # only column whose bets are real. The other columns are
+        # counterfactual: useful for direction, never sufficient on their
+        # own to move a money rule.
+        "target_graded_bets": BET_TARGET,
+        "n_observations_note": (
+            "observations are evaluated pitchers, NOT bets -- they size the "
+            "evidence pool, they do not satisfy A-006"
+        ),
+        "ready_to_decide": _is_ready(next(
+            (g for g in grid if g["is_production"]), None)),
         "note": (
             "Counterfactual. No money was placed on any of these. "
             "Sizing, edge and threshold come from the production "
@@ -263,23 +298,40 @@ def main() -> int:
     print("=" * 74)
     print("SHADOW PORTFOLIO — what the model would have bet (no money at risk)")
     print("=" * 74)
-    print(f"  observations: {data['n_observations']} over {data['n_dates']} slate(s)")
+    prod = next((g for g in data["grid"] if g["is_production"]), None)
+    target = data["target_graded_bets"]
+    print(f"  observations: {data['n_observations']} over {data['n_dates']} slate(s)"
+          f"  (evaluated pitchers, NOT bets)")
     print(f"  reconstructed rows included: {data['includes_reconstructed']}")
-    print(f"  target before deciding: {data['target_observations']}"
-          f"  -> {'READY' if data['ready_to_decide'] else 'NOT YET'}")
+    if prod:
+        clv = prod["avg_clv_pct"]
+        print(f"  A-006 gate: {target}+ graded bets AND positive average CLV, "
+              f"at the live weight ({prod['trust_weight']:.2f})")
+        print(f"     graded bets: {prod['n_bets']}/{target}"
+              f"   average CLV: "
+              + (f"{clv:+.2f}%" if clv is not None else "—")
+              + f"   -> {'READY' if data['ready_to_decide'] else 'NOT YET'}")
     print()
     print(f"  {'TRUST':>6} {'BETS':>5} {'W-L':>7} {'HIT':>6} {'UNITS':>7} "
-          f"{'P&L':>8} {'ROI':>7} {'CLV':>7}")
+          f"{'P&L':>8} {'ROI':>7} {'CLV':>7} {'vs TARGET':>10}")
     for g in data["grid"]:
         tag = " (live)" if g["is_production"] else ""
         hit = f"{g['hit_rate']:.0%}" if g["hit_rate"] is not None else "—"
         roi = f"{g['roi']:+.1%}" if g["roi"] is not None else "—"
         clv = f"{g['avg_clv_pct']:+.2f}%" if g["avg_clv_pct"] is not None else "—"
+        # Naming the shortfall on every row, so no column can be read as
+        # decisive on a handful of bets just because its CLV looks good.
+        prog = f"{g['n_bets']}/{target}"
         print(f"  {g['trust_weight']:>6.2f} {g['n_bets']:>5} "
               f"{g['wins']}-{g['losses']:<5} {hit:>6} "
               f"{g['units_staked']['value']:>7.2f} "
-              f"{g['pnl']['value']:>+8.2f} {roi:>7} {clv:>7}{tag}")
+              f"{g['pnl']['value']:>+8.2f} {roi:>7} {clv:>7} {prog:>10}{tag}")
     print()
+    if not data["ready_to_decide"]:
+        print("  NOT YET — do not move the trust weight on this. Every column")
+        print("  above the live one is COUNTERFACTUAL: it shows direction, not")
+        print("  evidence. A CLV that looks good on a handful of bets is noise.")
+        print()
     print("  CLV is the signal to watch — it converges in weeks where W/L needs")
     print("  months. A trust weight is only worth raising if its CLV stays")
     print("  positive as the sample grows.")

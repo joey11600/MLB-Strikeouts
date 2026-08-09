@@ -245,6 +245,35 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-031: the shadow tool declared a money decision ready on the wrong count
+- **Filed/Resolved:** 2026-08-09
+- **Description:** `tools/shadow.py` computed
+  `ready_to_decide = len(rows) >= 100`, counting **observations**
+  (evaluated pitchers). A-006's gate is **"100+ graded BETS with positive
+  average CLV"**. Measured 2026-08-09: 100 observations printed `READY`
+  while the production weight had **2 bets** behind it and an average CLV
+  of **-15.95%** — roughly fiftyfold less evidence than the gate asks
+  for, and it erred toward RAISING `MODEL_TRUST_WEIGHT`, which increases
+  stake exposure.
+- **Third instance of one defect this week.** `can_push_to_git` reported
+  an env var instead of a capability (A-029); the served-board check
+  measured version age instead of staleness (A-029); this reported
+  evidence volume instead of evidence of the kind the gate names. Each
+  answered an easier question than the one that mattered, and each read
+  green while the thing it guarded was not satisfied.
+- **Resolution:** `_is_ready()` requires BOTH halves — `n_bets >=
+  BET_TARGET` **and** positive average CLV — judged at the **production**
+  weight, because only that column's bets are real. The rest of the grid
+  is counterfactual and shows direction, never authorisation. Every row
+  now prints its own `n/100` shortfall, and a NOT-YET verdict says so in
+  words rather than leaving a good-looking CLV column to be read as
+  decisive.
+- **Locked with tests:** `tests/test_shadow_readiness.py` — observations
+  are not bets; volume alone is not enough; both halves must pass
+  together; a missing production column fails closed; readiness is not
+  read off whichever counterfactual column looks best.
+  Mutation-checked: restoring the always-ready form fails four of five.
+
 ### A-015: The bet filter is set where nothing can pass (A-006 deadlock)
 - **Filed:** 2026-08-06
 - **Status:** Evidence collection shipped; the money decision is the
