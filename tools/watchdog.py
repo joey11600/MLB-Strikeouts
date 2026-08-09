@@ -517,6 +517,44 @@ def check_dashboard_matches_ledger(r: Report) -> None:
         r.ok("dashboard matches ledger", f"both {truth:+.2f}u")
 
 
+#: The worker's publish pass runs every PUBLISH_EVERY_SECONDS (300s). Give it
+#: two cycles plus margin before it is accountable for a board it has not had
+#: time to fetch. Module-level because BOTH no-slate and stale-slate paths use
+#: it, and they must never drift apart.
+GRACE_MIN = 12
+
+
+def _worker_is_pulling(health: dict) -> tuple[bool, float | None, dict]:
+    """Is this worker demonstrably RECEIVING CI's work right now?
+
+    Reads last_pull, NEVER last_publish. last_publish is not a liveness signal
+    for the pull and never was: publish_pass wraps the whole pass in
+    try/except and `_run` returns False rather than raising, so a failed
+    `git pull` leaves ok=True. Throughout the 16-hour A-029 outage /health
+    advertised `last_publish: {ok: true}` while every git command in the
+    container failed with exit 128. Any grace granted on that basis would have
+    silenced this check on the exact outage it caught.
+
+    Bounded on BOTH sides: a negative age is a skewed or lying clock, not
+    evidence of health, and must not open the window.
+    """
+    pull = (health or {}).get("last_pull") or {}
+    try:
+        age = (datetime.now(ET)
+               - datetime.fromisoformat(pull["at"])).total_seconds() / 60
+    except (KeyError, TypeError, ValueError):
+        age = None
+    ok = bool(pull.get("ok")) and age is not None and -2 <= age <= 15
+    return ok, age, pull
+
+
+def _pull_detail(pull: dict, pull_age: float | None) -> str:
+    if not pull:
+        return "no last_pull field — worker predates pull tracking"
+    age = "unknown age" if pull_age is None else f"{pull_age:.0f} min ago"
+    return f"last_pull ok={pull.get('ok')}, {age}"
+
+
 def _previous_published_board(today: str) -> str | None:
     """generated_at of the board CI published BEFORE the current one.
 
@@ -623,13 +661,44 @@ def check_served_board_is_current(r: Report) -> None:
     if not want:
         r.warn("served board is current", f"no local slate for {today}")
         return
+
+    # `available` and `pulling` are needed BEFORE the no-slate branch, because
+    # the first board of any day makes `got` legitimately empty for one publish
+    # cycle. Measured 2026-08-09: data/slates/2026-08-09.json was first
+    # committed at 13:05:40Z and this check ran at 13:05:52Z -- TWELVE SECONDS
+    # later, against a 300s publish pass. Two runs failed; the next two passed
+    # untouched once the worker pulled. Left alone this fires every single
+    # morning, on the one branch that must stay trustworthy.
+    try:
+        want_dt = datetime.fromisoformat(want)
+        available = (datetime.now(ET) - want_dt).total_seconds() / 60
+    except (ValueError, TypeError) as exc:
+        r.warn("served board is current", f"unparseable timestamps: {exc}")
+        return
+    pulling, pull_age, pull = _worker_is_pulling(health)
+
     if not got:
-        r.fail("served board is current",
-               f"worker is serving no slate at all for {today}",
-               "the site has nothing to show for today")
+        # Grace here is gated exactly as it is below, minus the version
+        # identity test -- there is no served version to compare when the
+        # worker has nothing. It stays safe against A-029 because BOTH guards
+        # reject that outage independently: the board was hours old at most
+        # check times, and the worker carried no successful pull at any of
+        # them. Ten of that day's eleven failures came through this branch and
+        # every one of them still fails.
+        if 0 <= available <= GRACE_MIN and pulling:
+            r.ok("served board is current",
+                 f"first board for {today} published {available:.1f} min ago; "
+                 f"worker pulled successfully {pull_age:.0f} min ago and has "
+                 f"not served it yet — within the publish window")
+        else:
+            r.fail("served board is current",
+                   f"worker is serving no slate at all for {today} "
+                   f"(board published {available:.0f} min ago; "
+                   f"{_pull_detail(pull, pull_age)})",
+                   "the site has nothing to show for today")
         return
     try:
-        want_dt, got_dt = datetime.fromisoformat(want), datetime.fromisoformat(got)
+        got_dt = datetime.fromisoformat(got)
         lag = (want_dt - got_dt).total_seconds() / 60
         # How long the repo's board has EXISTED -- the only clock that can
         # say whether the worker has had a fair chance to pull it.
@@ -669,34 +738,6 @@ def check_served_board_is_current(r: Report) -> None:
     # Hence the version-identity and shape guards below rather than a
     # looser minute threshold.
     #
-    # The publish pass runs every PUBLISH_EVERY_SECONDS (300s). Give it two
-    # cycles plus margin before the worker is accountable for a board.
-    GRACE_MIN = 12
-
-    # The grace is only safe if the worker is demonstrably PULLING. Without
-    # that gate it is a hole: were CI ever to regenerate the board on every
-    # run, `available` would always be near zero, the grace would always
-    # apply, and a worker stuck for hours would never be reported -- the
-    # check would go quiet at exactly the moment it matters.
-    #
-    # The gate must read last_pull, NOT last_publish. last_publish is not a
-    # liveness signal for the pull and never was: publish_pass wraps the
-    # whole pass in try/except and `_run` returns False rather than raising,
-    # so a failed `git pull` leaves ok=True. Throughout the 16-hour A-029
-    # outage /health advertised `last_publish: {ok: true}` while every git
-    # command failed with exit 128. Grace granted on that basis would have
-    # silenced this check on the exact outage it caught.
-    pull = (health or {}).get("last_pull") or {}
-    try:
-        pull_age = (datetime.now(ET)
-                    - datetime.fromisoformat(pull["at"])).total_seconds() / 60
-    except (KeyError, TypeError, ValueError):
-        pull_age = None
-    # Bounded on BOTH sides: a negative pull_age is a skewed or lying clock,
-    # not evidence of health, and must not open the window.
-    pulling = (bool(pull.get("ok")) and pull_age is not None
-               and -2 <= pull_age <= 15)
-
     # The worker must be exactly ONE version behind. Without this the grace
     # is unbounded in lag -- verified: a 3.5-day-stale board serving 1
     # pitcher against the repo's 28 reported ok, and so did a 26-hour-stale
@@ -711,14 +752,10 @@ def check_served_board_is_current(r: Report) -> None:
              f"successfully {pull_age:.0f} min ago, serving the immediately "
              f"previous board — within the publish window")
     elif 0 <= available <= GRACE_MIN and lag > 0 and one_behind and not shape:
-        detail = ("no last_pull field — worker predates pull tracking"
-                  if not pull else
-                  f"last_pull ok={pull.get('ok')}, "
-                  + ("unknown age" if pull_age is None
-                     else f"{pull_age:.0f} min ago"))
         r.fail("served board is current",
                f"worker is behind a {available:.0f}-min-old board and cannot "
-               f"be shown to be pulling ({detail}){shape}",
+               f"be shown to be pulling ({_pull_detail(pull, pull_age)})"
+               f"{shape}",
                "the board being new does not excuse this: if the worker is "
                "not pulling it will never catch up on its own")
     elif lag > 45:

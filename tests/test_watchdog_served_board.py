@@ -112,12 +112,42 @@ def test_the_real_false_positive_is_ok(harness):
 
 # --- property 1: must not go quiet -------------------------------------
 
-def test_no_slate_at_all_still_fails(harness):
-    """Ten of the eleven A-029 failures came from THIS branch, not from
-    the lag threshold. It must stay byte-identical in behaviour."""
+def test_no_slate_at_all_fails_once_the_board_has_been_available(harness):
+    """Ten of the eleven A-029 failures came from THIS branch.
+
+    The outage condition is a board that has been sitting available while
+    the worker serves nothing — not a board published seconds ago.
+    """
+    old = "2026-08-08T18:00:00+00:00"          # ~166 min before NOW
+    status, detail = harness(
+        repo=_payload(old), worker=_payload(None), health=PULLING)
+    assert status == W.FAIL, detail
+    assert "no slate at all" in detail
+
+
+def test_first_board_of_the_day_is_not_an_outage(harness):
+    """The daily false positive this branch used to produce.
+
+    Measured 2026-08-09: data/slates/2026-08-09.json was first committed
+    at 13:05:40Z and the check ran at 13:05:52Z — twelve seconds later,
+    against a 300s publish pass. Two runs failed; the next two passed
+    untouched once the worker pulled. Before today's board exists the
+    check warns (no local slate), so this fires exactly once a morning,
+    on the one branch that has to stay trustworthy.
+    """
     status, detail = harness(
         repo=_payload(REPO_BOARD), worker=_payload(None), health=PULLING)
-    assert status == W.FAIL
+    assert status == W.OK, detail
+
+
+def test_no_slate_and_not_pulling_fails_even_on_a_fresh_board(harness):
+    """A fresh board must not excuse a worker that cannot be shown to be
+    pulling — that combination IS the A-029 shape, and during that outage
+    /health carried no last_pull at all."""
+    status, detail = harness(
+        repo=_payload(REPO_BOARD), worker=_payload(None),
+        health={"last_publish": {"at": "2026-08-08T16:44:00-04:00", "ok": True}})
+    assert status == W.FAIL, detail
     assert "no slate at all" in detail
 
 

@@ -1,6 +1,41 @@
 
 # Changelog
 
+## 2026-08-09 - The first board of the day is not an outage (A-029)
+
+Two runs failed this morning with `worker is serving no slate at all for
+2026-08-09`. The worker was fine.
+
+`data/slates/2026-08-09.json` was first committed at 13:05:40Z. The
+watchdog ran at 13:05:52Z — **twelve seconds later**, against a 300-second
+publish pass. The next two runs passed untouched once the worker pulled.
+
+This is the same false positive fixed yesterday, on the branch that was
+deliberately left alone because it is the one that caught the real
+outage. Yesterday's fix covered "worker has an older version"; it did not
+cover "worker has nothing yet", which is exactly what the first board of
+any day looks like. Before that board exists the check warns (no local
+slate), so this fires once every morning — on the branch that most needs
+to stay trustworthy.
+
+The no-slate branch now takes the same two guards as the stale-slate one:
+the board must be inside GRACE_MIN, and the worker must be demonstrably
+pulling. Not the version-identity guard — there is no served version to
+compare when the worker has nothing.
+
+It stays safe against A-029 because both guards reject that outage
+independently: the board was hours old at most check times, and the
+worker carried no successful pull at any of them. Ten of that day's
+eleven failures came through this branch and every one still fails.
+
+GRACE_MIN and the pulling test are now module-level and shared, rather
+than computed inline in one branch — the two paths must not drift.
+
+Three tests: the outage shape (board available 166 min, worker serving
+nothing) still fails; the first-board-of-day case passes; a fresh board
+with no provable pull still fails. Mutation-checked — dropping the
+pulling gate breaks the third. 73 tests pass.
+
 ## 2026-08-08 - Fitted OUTS RECORDED hazard model
 
 New `models/outs_hazard.py`: the fitted inning-lattice hazard model
