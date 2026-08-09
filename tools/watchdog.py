@@ -555,33 +555,55 @@ def _pull_detail(pull: dict, pull_age: float | None) -> str:
     return f"last_pull ok={pull.get('ok')}, {age}"
 
 
-def _previous_published_board(today: str) -> str | None:
-    """generated_at of the board CI published BEFORE the current one.
+def _superseded_minutes_ago(today: str, got: str | None) -> float | None:
+    """How long ago did the board the worker is serving stop being current?
 
-    This is what makes the publish-window grace safe. "Minutes behind" is
-    the wrong question -- lag is quantised to the gap between priced
-    boards, so a worker correctly one version behind can read 417 minutes
-    late. The right question is WHICH VERSION the worker is serving: one
-    behind is a worker mid-cycle, two or more behind is a worker that has
-    stopped keeping up. Bounding by minutes instead lets an arbitrarily
-    stale board sit inside the window.
+    This is the general form of the question, and getting there took three
+    rounds of false alarms because each earlier form answered a NARROWER one:
+
+      * "minutes behind" (lag) -- wrong, because lag is quantised to the gap
+        between priced boards. A worker correctly one version behind read 417
+        minutes late on 2026-08-08.
+      * "is it exactly one version behind" -- better, but CI can regenerate
+        twice inside one publish cycle, which leaves a healthy worker two
+        behind and fails it.
+
+    The invariant that actually holds: a worker is fine iff the version it
+    serves only just stopped being current. Serving nothing is the same
+    question with the answer "since the first board of the day published".
 
     daily.yml checks out with fetch-depth: 0, so the history is present.
-    Returns None on any failure; callers must treat that as "no grace".
+    Returns None on any failure; callers MUST treat that as "no grace".
     """
     import subprocess
     try:
-        sha = subprocess.run(
-            ["git", "log", "--skip=1", "-1", "--format=%H", "--",
-             "dashboard/public/data.json"], cwd=ROOT, capture_output=True,
-            text=True, timeout=30).stdout.strip()
-        if not sha:
+        log = subprocess.run(
+            ["git", "log", "--format=%H %cI", "-n", "40", "--",
+             "dashboard/public/data.json"],
+            cwd=ROOT, capture_output=True, text=True, timeout=30).stdout.strip()
+        if not log:
             return None
-        blob = subprocess.run(
-            ["git", "show", f"{sha}:dashboard/public/data.json"],
-            cwd=ROOT, capture_output=True, text=True, timeout=30).stdout
-        return ((json.loads(blob).get("slates") or {})
-                .get(today) or {}).get("generated_at")
+        # Newest first: (commit time, that commit's stamp for `today`).
+        hist: list[tuple[datetime, str | None]] = []
+        for line in log.splitlines():
+            sha, _, when = line.partition(" ")
+            blob = subprocess.run(
+                ["git", "show", f"{sha}:dashboard/public/data.json"],
+                cwd=ROOT, capture_output=True, text=True, timeout=30).stdout
+            try:
+                stamp = ((json.loads(blob).get("slates") or {})
+                         .get(today) or {}).get("generated_at")
+            except Exception:
+                stamp = None
+            hist.append((datetime.fromisoformat(when), stamp))
+
+        # The newest commit still carrying the worker's version. Everything
+        # newer than it superseded that version; the OLDEST of those is the
+        # moment it stopped being current.
+        idx = next((i for i, (_, s) in enumerate(hist) if s == got), None)
+        if idx is None or idx == 0:
+            return None          # unknown version, or already current
+        return (datetime.now(ET) - hist[idx - 1][0]).total_seconds() / 60
     except Exception:
         return None
 
@@ -742,16 +764,37 @@ def check_served_board_is_current(r: Report) -> None:
     # is unbounded in lag -- verified: a 3.5-day-stale board serving 1
     # pitcher against the repo's 28 reported ok, and so did a 26-hour-stale
     # board hiding a bet the operator could not see.
-    prev = _previous_published_board(today)
-    one_behind = prev is not None and got == prev
+    superseded = _superseded_minutes_ago(today, got)
+    mid_cycle = superseded is not None and 0 <= superseded <= GRACE_MIN
 
-    if (0 <= available <= GRACE_MIN and lag > 0 and pulling
-            and one_behind and not shape):
+    # THE INVARIANT, stated once because getting it wrong has cost three
+    # rounds of false alarms: grace applies exactly when the version the
+    # worker serves only JUST stopped being current, and the worker is
+    # provably pulling. Nothing else.
+    #
+    # `shape` is deliberately NOT a condition. A worker a version behind
+    # necessarily carries the old content -- that is what "behind" means -- so
+    # requiring `mid_cycle and not shape` collapses to "behind AND the
+    # regeneration changed nothing", which is almost never true; a board
+    # usually regenerates precisely BECAUSE its content changed. Measured
+    # 2026-08-09 20:46Z: the worker held the previous board exactly
+    # (13:05:35, 26 pitchers) against a repo that had just moved to 20:45:54
+    # with 27, and the shape term alone failed a healthy mid-cycle worker.
+    # Staleness is already bounded by when the served version was superseded.
+    #
+    # shape still does real work in the lag == 0 arm below, where two boards
+    # of the SAME age disagree and one of them is genuinely wrong.
+    # `available >= -2` is a clock-sanity bound, not the grace gate (that is
+    # `mid_cycle`, read from git commit times rather than a board stamp the
+    # worker could have written). A repo board dated in the future means a
+    # broken clock somewhere, and a broken clock must never open the window:
+    # a stamp 90 minutes ahead previously held grace open for 102 minutes.
+    if lag > 0 and pulling and mid_cycle and available >= -2:
         r.ok("served board is current",
-             f"repo board is {available:.0f} min old and the worker pulled "
-             f"successfully {pull_age:.0f} min ago, serving the immediately "
-             f"previous board — within the publish window")
-    elif 0 <= available <= GRACE_MIN and lag > 0 and one_behind and not shape:
+             f"worker's board was superseded {superseded:.1f} min ago and it "
+             f"pulled successfully {pull_age:.0f} min ago — within the "
+             f"publish window{shape}")
+    elif lag > 0 and mid_cycle:
         r.fail("served board is current",
                f"worker is behind a {available:.0f}-min-old board and cannot "
                f"be shown to be pulling ({_pull_detail(pull, pull_age)})"

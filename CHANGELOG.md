@@ -1,6 +1,54 @@
 
 # Changelog
 
+## 2026-08-09 - Ask the general question: when did the served board stop being current
+
+Third false positive in two days from the same check, and this one was
+caused by a guard I added yesterday.
+
+At 20:46:10Z the worker was serving the previous board exactly
+(13:05:35, 26 pitchers) while CI had just published 20:45:54 with 27.
+`mid_cycle` was satisfied. What failed it was `not shape` — and a worker
+one version behind NECESSARILY carries the old content. Requiring
+`one_behind and not shape` collapses to "one behind and the regeneration
+changed nothing", which is almost never true, since a board usually
+regenerates precisely because its content changed. The guard negated the
+thing it was bolted onto.
+
+The deeper problem is that each fix answered a narrower question than
+the real one:
+
+  - "how many minutes behind?" — wrong, lag is quantised to the gap
+    between priced boards, so a correct worker read 417 minutes late
+  - "is it exactly one version behind?" — better, but CI can regenerate
+    twice inside one publish cycle and leave a healthy worker two behind
+  - "one behind AND identical content?" — self-defeating, as above
+
+The question that actually holds: **when did the version the worker is
+serving stop being current?** If that was less than GRACE_MIN ago, the
+worker is mid-cycle. Serving nothing is the same question with the
+answer "since the first board of the day published".
+
+`_superseded_minutes_ago()` reads that from the published history of
+`dashboard/public/data.json`, using git commit times rather than a board
+stamp the worker itself could have written. It returns None for a
+version that is current, unknown, or absent — and every caller treats
+None as no grace, so it fails closed.
+
+`shape` is no longer a grace condition. It still does real work in the
+equal-age arm, where two boards of the SAME age disagree and one of them
+is genuinely wrong. The difference is still printed in the OK message,
+so a mid-cycle worker's content gap stays visible rather than silent.
+
+`available` is demoted from gate to clock-sanity bound (>= -2): a repo
+board dated in the future means a broken clock, and a broken clock must
+not open the window.
+
+Verified against the real history in a worktree at origin/master: the
+version the worker was serving reports superseded 7.6 min ago; the
+current version, an unknown version, and no version all report None.
+Replaying the exact 20:46:10Z state now returns OK. 74 tests pass.
+
 ## 2026-08-09 - The first board of the day is not an outage (A-029)
 
 Two runs failed this morning with `worker is serving no slate at all for

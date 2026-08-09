@@ -63,10 +63,14 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.setattr(W, "datetime", _FrozenDT)
     monkeypatch.setattr(W, "_today", lambda: datetime.fromisoformat(TODAY).date())
 
-    def run(*, repo, worker, health, prev=PREV_BOARD):
+    def run(*, repo, worker, health, superseded=0.2):
+        """`superseded` = minutes since the worker's version stopped being
+        current. 0.2 is the observed real case (a board replaced seconds
+        before the check ran). None means "unknown version" -> no grace."""
         (tmp_path / "dashboard" / "public" / "data.json").write_text(
             json.dumps(repo), encoding="utf-8")
-        monkeypatch.setattr(W, "_previous_published_board", lambda _t: prev)
+        monkeypatch.setattr(W, "_superseded_minutes_ago",
+                            lambda _t, _got: superseded)
 
         class _Resp:
             def __init__(self, body): self._b = json.dumps(body).encode()
@@ -164,17 +168,37 @@ def test_arbitrarily_stale_board_is_not_excused_by_a_fresh_repo_board(harness):
     status, detail = harness(
         repo=_payload(REPO_BOARD, n=28, b=0),
         worker=_payload("2026-08-05T09:00:00+00:00", n=28, b=0),
-        health=PULLING)
+        health=PULLING, superseded=5040.0)   # superseded 3.5 days ago
     assert status == W.FAIL, detail
 
 
-def test_shape_mismatch_inside_the_grace_window_fails(harness):
-    """Same generated_at lineage but a different board: two boards are in
-    circulation and one of them is wrong. Never excused by grace."""
+def test_one_version_behind_with_changed_content_is_ok(harness):
+    """A worker one version behind necessarily carries the OLD content.
+
+    Requiring `one_behind and not shape` collapses to "one behind and the
+    regeneration changed nothing", which is almost never true — and a
+    board usually regenerates precisely BECAUSE its content changed.
+    Measured 2026-08-09 20:46Z: worker on the previous board exactly
+    (13:05:35, 26 pitchers) against a repo that had just moved to
+    20:45:54 with 27. The shape term alone failed a healthy mid-cycle
+    worker. Version identity is what bounds staleness here.
+    """
+    status, detail = harness(
+        repo=_payload(REPO_BOARD, n=27, b=3),
+        worker=_payload(PREV_BOARD, n=26, b=0),
+        health=PULLING)
+    assert status == W.OK, detail
+    assert "26 pitchers" in detail, "the difference must still be reported"
+
+
+def test_shape_mismatch_at_equal_age_still_fails(harness):
+    """Where the shape guard genuinely earns its place: two boards of the
+    SAME age that disagree. One of them is wrong and it is not a
+    staleness problem."""
     status, detail = harness(
         repo=_payload(REPO_BOARD, n=28, b=3),
-        worker=_payload(PREV_BOARD, n=24, b=0),
-        health=PULLING)
+        worker=_payload(REPO_BOARD, n=24, b=0),
+        health=PULLING, superseded=None)
     assert status == W.FAIL, detail
 
 
@@ -186,7 +210,7 @@ def test_health_unreachable_does_not_downgrade_a_stale_board(harness):
     status, detail = harness(
         repo=_payload(REPO_BOARD),
         worker=_payload("2026-08-08T10:46:20+00:00"),
-        health=TimeoutError("timed out"))
+        health=TimeoutError("timed out"), superseded=600.0)
     assert status == W.FAIL, detail
     assert "unreachable" not in detail
 
@@ -217,12 +241,12 @@ def test_negative_clocks_do_not_open_the_window(harness):
     status, _ = harness(
         repo=_payload(future),
         worker=_payload("2026-08-08T04:46:20+00:00"),
-        health=PULLING, prev="2026-08-08T04:46:20+00:00")
+        health=PULLING, superseded=0.2)
     assert status == W.FAIL
 
     status, _ = harness(                            # pull_age = -5 min
         repo=_payload(REPO_BOARD),
         worker=_payload("2026-08-08T10:46:20+00:00"),
         health={"last_pull": {"at": "2026-08-08T16:51:29-04:00", "ok": True}},
-        prev="2026-08-08T10:46:20+00:00")
+        superseded=0.2)
     assert status == W.FAIL
