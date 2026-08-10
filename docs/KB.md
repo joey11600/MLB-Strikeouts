@@ -489,6 +489,27 @@ Operator flow after any data change:
 `python tools/dashboard_data.py` → commit → push (Vercel builds), or
 `npx vercel --prod --yes` from the repo root.
 
+**What Vercel actually runs, and what it deliberately does not.** Two
+overrides in `vercel.json` exist purely to keep the build cheap, and
+both have cost real money when absent (A-023, A-033):
+
+- `ignoreCommand` → `scripts/vercel-ignore-build.sh`. A push whose diff
+  since the LAST BUILD touches only `data/` and
+  `dashboard/public/data.json` exits 0 and Vercel skips. Baseline is
+  `VERCEL_GIT_PREVIOUS_SHA`, not `HEAD^` (A-023a), and the script
+  deepens the shallow clone to reach it (A-033). It fails toward
+  BUILDING: a needless build costs seconds, a wrongly skipped one ships
+  stale code with nothing turning red.
+- `installCommand` → a no-op `echo`. Without it Vercel finds the root
+  `requirements.txt`, and on its CPython 3.14 image neither numpy nor
+  pandas has a wheel, so both compile from source — 84s of Python
+  against 23s for the site that ships. Nothing in `dashboard/` imports
+  Python. `requirements.txt` is for CI and Railway and still works
+  normally there; only Vercel's install step is suppressed.
+
+Adding a Python function under `api/` would need this revisited — the
+install step is off for the whole project, not just the dashboard.
+
 Stack: Next.js App Router (static export, trailingSlash), Tailwind v4
 tokens from the Dark Terminal palette, 21st.dev components
 (@originui/accordion, @ssicevs/market-snapshot P&L chart,

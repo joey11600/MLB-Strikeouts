@@ -11,7 +11,10 @@
 # 48 runs a day that was 48 full Next.js builds a day, and the strikeouts
 # project alone burned 78 CPU-hours in one billing cycle -- each build
 # runs on a 30-core machine, so ~1.5 minutes of wall clock bills as ~45
-# CPU-minutes.
+# CPU-minutes. Those figures are pre-A-033: most of that 1.5 minutes was
+# Vercel installing the root requirements.txt and compiling numpy and
+# pandas from source for a site that runs no Python. `installCommand` in
+# vercel.json now suppresses it and the build proper is ~23 s.
 #
 # Almost all of it was waste, because the dashboard does not READ the
 # committed data.json in normal operation. dashboard/lib/data-context.tsx
@@ -67,15 +70,51 @@ if [ "$BASE" = "$(git rev-parse HEAD)" ]; then
   exit 1
 fi
 
-# Vercel clones shallow. After a run of skipped data commits the last
-# built commit can fall outside that window, so reach back for it.
-if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-  git fetch --depth=250 origin "$BASE" >/dev/null 2>&1 \
-    || git fetch --deepen=250 >/dev/null 2>&1 \
-    || true
+# Vercel clones shallow (~10 commits). The worker pushes a data commit
+# every 5 minutes, so the last BUILT commit leaves that window in under
+# an hour. The first version of this reach-back did not work, and it
+# failed silently: every fetch went to /dev/null, so the only evidence
+# was the "not reachable" line below firing about twice every 90
+# minutes -- ~30 needless 30-core builds a day (A-033).
+#
+# Two things are fixed here. Failures are LOGGED, so the next time this
+# breaks the reason is in the build log instead of having to be inferred
+# from a bill. And the depth is no longer a fixed number: now that the
+# skip actually holds, builds are rare and the gap back to the last one
+# grows without bound, so any constant would eventually be too small.
+# --unshallow has no such ceiling and the whole repo is ~20 MB.
+have_base() { git cat-file -e "${BASE}^{commit}" 2>/dev/null; }
+
+try_fetch() {
+  label="$1"
+  shift
+  if out=$("$@" 2>&1); then
+    echo "  fetch[$label]: ok"
+  else
+    # First line, not last: git's closing lines are the generic "make
+    # sure you have the correct access rights" boilerplate, while the
+    # actual fatal is line 1.
+    echo "  fetch[$label]: failed — $(printf '%s' "$out" | head -1)"
+  fi
+}
+
+if ! have_base; then
+  # Cheap first: extend the shallow window along the branch we are on.
+  try_fetch deepen git fetch --deepen=500 origin "${VERCEL_GIT_COMMIT_REF:-master}"
 fi
 
-if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+if ! have_base; then
+  # No ceiling. Errors harmlessly if the clone is already complete.
+  try_fetch unshallow git fetch --unshallow origin
+fi
+
+if ! have_base; then
+  # Complete clone and still missing: BASE was force-pushed away or is
+  # off-branch. Ask for it by name before giving up.
+  try_fetch by-sha git fetch origin "$BASE"
+fi
+
+if ! have_base; then
   echo "last built commit $BASE is not reachable in this clone — building"
   exit 1
 fi

@@ -245,6 +245,64 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-033: the A-023 build-skip half-worked, and every surviving build compiled numpy
+- **Filed/Resolved:** 2026-08-10 (found from the operator's Vercel usage
+  chart: 91 CPU-hours on `mlb-strikeouts` for Aug 7-10, 96.4% of all
+  build CPU across their three projects)
+- **Description:** two independent causes multiplying. A-023's skip was
+  working — most deployments are CANCELED and no verdict was wrong — but
+  its recovery path was not, and each build that did survive spent four
+  fifths of its time on Python the site does not use.
+- **Cause 1 — the reach-back never worked, and failed silently.** Vercel
+  clones ~10 commits deep; the worker pushes every 5 minutes, so the last
+  BUILT commit leaves that window in under an hour. The fetch meant to
+  retrieve it was `git fetch --depth=250 origin "$BASE"` (fetch by raw
+  SHA, which GitHub refuses) falling back to `git fetch --deepen=250`
+  with no remote. Both were redirected to `/dev/null`, so the failure
+  left no evidence beyond the fail-safe firing.
+- **Measured, not assumed:** two independent windows of Vercel's
+  deployment list — Aug 9 06:14-07:55 ET and Aug 10 12:36-13:52 UTC —
+  each show exactly 2 forced builds per ~90 minutes, i.e. ~30 needless
+  30-core builds a day, every one of them announcing
+  `last built commit ... is not reachable in this clone — building`.
+- **Cause 2 — `requirements.txt` triggered a Python install on a static
+  site.** Vercel auto-detects it at the repo root. On CPython 3.14.3
+  neither numpy 2.2.5 nor pandas 2.2.3 has a wheel, so both compiled from
+  source: 60s and 81s, 84s of Python against 23s of npm + `next build`.
+  A larger share of CPU than of wall clock, since the compile
+  parallelises across 30 cores and `next build` does not.
+  `dashboard/package.json` declares no Python dependency and `dashboard/`
+  holds no `.py` file.
+- **Arithmetic reconciles:** ~30 builds/day x 4 days ~= 120 builds; 91
+  CPU-hours / 120 ~= 45 CPU-min per build, matching the ~45 CPU-min/build
+  already recorded in the A-023 header comment.
+- **Resolution:** deepen along the BRANCH (`git fetch --deepen=500 origin
+  $VERCEL_GIT_COMMIT_REF`) with `--unshallow` behind it and fetch-by-SHA
+  last; no fixed depth can be right once the skip holds and the gap
+  between builds grows without bound. Every failure is now printed.
+  `installCommand` in `vercel.json` overrides the auto-detected install.
+  CI and Railway still use `requirements.txt` normally.
+- **Re-tested against a real depth-10 shallow clone** reproducing the
+  Vercel condition: data-only gap SKIPs (exit 0), gap containing a code
+  commit BUILDs (exit 1), unreachable base BUILDs with all three fetch
+  failures named. The fail-toward-BUILD guarantee of A-023a is unchanged.
+- **NOT yet proven in production, and worth stating plainly:** a local
+  clone permits fetching an arbitrary SHA and GitHub does not, so the OLD
+  commands also succeed locally. The local harness therefore cannot
+  reproduce the failure it fixes; it can only show the new decisions are
+  right. Deepen-by-branch is an ordinary operation GitHub supports, but
+  confirmation is the next real build log. Cause 2's fix is deterministic
+  and lands regardless — 91 hours to roughly 19 on its own.
+- **Generalises to:** any fallback whose failure path is the expensive
+  one. `|| true` with output sent to `/dev/null` converts a broken
+  recovery into a silent recurring cost. If a fail-safe is worth having,
+  its firing is worth logging with the reason attached.
+- **Follow-on, not fixed here:** a code commit pushed during a worker
+  cycle builds twice, because `VERCEL_GIT_PREVIOUS_SHA` still points at
+  the pre-code build while the first build is in flight. With cause 2
+  fixed a duplicate costs ~23s, so it is left alone rather than guessed
+  at.
+
 ### A-032: two dead inputs, and a lineup fallback with zero variance
 - **Filed/Resolved:** 2026-08-10 (found by a 68-factor screen answering
   "which factors are wrong")

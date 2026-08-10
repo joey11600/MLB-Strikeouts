@@ -157,9 +157,19 @@
   `ignoreCommand` skips when the diff touches only `data/` and
   `dashboard/public/data.json`, since the site reads live from the
   worker anyway
+- [x] Close the two leaks the skip did not stop (A-033) — the
+  shallow-clone reach-back never worked and failed into BUILDING ~30x a
+  day, and every surviving build compiled numpy and pandas from source
+  because Vercel auto-installs root `requirements.txt`. 91 CPU-hours
+  Aug 7-10
+- [ ] Confirm A-033 in production: check a build log for
+  `fetch[deepen]: ok` and the absence of `Building numpy`, then re-read
+  the usage chart after a full slate day. Cause 1's fix cannot be
+  proven locally (see A-033)
 - [ ] Apply the same build-skip to the NRFI project (99 CPU-hours,
   51.6% of the allowance, same `auto:` commit pattern) — separate
-  repo, operator call
+  repo, operator call. Check it for the `requirements.txt` install too;
+  it is the same repo shape and likely carries the same A-033 cause 2
 
 ## Phase 10 — Total outs model (research complete, capture started)
 

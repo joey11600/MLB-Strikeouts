@@ -2,5 +2,6 @@
   "buildCommand": "cd dashboard && npm install && npm run build",
   "outputDirectory": "dashboard/out",
   "cleanUrls": true,
-  "ignoreCommand": "bash scripts/vercel-ignore-build.sh"
+  "ignoreCommand": "bash scripts/vercel-ignore-build.sh",
+  "installCommand": "echo 'skipped: requirements.txt is for CI and Railway, not for building a static Next.js site (A-033)'"
 }

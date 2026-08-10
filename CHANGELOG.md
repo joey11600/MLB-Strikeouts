@@ -1,6 +1,73 @@
 
 # Changelog
 
+## 2026-08-10 - 91 CPU-hours of builds: the skip half-worked, and every build compiled numpy
+
+The operator's Vercel usage for Aug 7-10 read 91 CPU-hours on
+`mlb-strikeouts`, 96.4% of all build CPU across their three projects.
+A-023 was supposed to have fixed this on 8/7. It had not. Two
+independent causes were multiplying.
+
+**Cause 1 — the reach-back for the last built commit never worked.**
+Vercel clones ~10 commits deep. The Railway worker pushes a data commit
+every 5 minutes, so the last BUILT commit leaves that window in under an
+hour. `vercel-ignore-build.sh` tried to fetch it back and, when that
+failed, took its designed fail-safe and built. The fetch failed every
+time, and silently: all three attempts were redirected to `/dev/null`,
+so the only trace was one line in a build log nobody reads.
+
+Measured from Vercel's deployment list rather than assumed — two
+independent windows, Aug 9 06:14-07:55 ET and Aug 10 12:36-13:52 UTC,
+both show exactly 2 forced builds per ~90 minutes:
+
+    13:35:57  last built commit 68a4ef8... is not reachable in this clone — building
+
+That is ~30 needless 30-core builds a day. The skip itself was working:
+the great majority of deployments are CANCELED, and the classifier's
+verdicts are still correct. Only the recovery path was broken.
+
+Fixed by deepening along the BRANCH rather than fetching by SHA, with
+`--unshallow` behind it (no fixed depth can be right once the skip
+holds and builds become rare), and by LOGGING each failure instead of
+discarding it.
+
+**Cause 2 — every build compiled numpy and pandas from source, for a
+static site that runs no Python.** Vercel auto-detects `requirements.txt`
+at the repo root and installs it before the build command. It is on
+CPython 3.14.3, for which numpy 2.2.5 and pandas 2.2.3 publish no
+wheels, so both were built from source on a 30-core machine. Timed from
+the 09:47 ET build log:
+
+    13:47:38  Building numpy==2.2.5
+    13:48:38     Built numpy==2.2.5        60s
+    13:48:58     Built pandas==2.2.3       81s
+    13:49:03  > next build
+    13:49:22  Build Completed             ← 23s for the actual site
+
+84 seconds of Python against 23 seconds of npm + Next.js: about four
+fifths of every build's wall clock, and a larger share of its CPU, since
+compiling numpy parallelises across all 30 cores and `next build` does
+not. `dashboard/package.json` has no Python dependency and
+`dashboard/` contains no `.py` file. `requirements.txt` exists for CI
+and Railway, both of which are unaffected — it is only the Vercel
+install step that has no use for it. Overridden with `installCommand`.
+
+**Arithmetic that reconciles:** ~30 builds/day x 4 days ~= 120 builds;
+91 CPU-hours / 120 ~= 45 CPU-minutes per build, matching the ~45
+CPU-min/build figure already recorded in the A-023 header comment.
+
+**What is proven and what is not.** The classifier was re-tested against
+a real depth-10 shallow clone reproducing the Vercel condition: a
+data-only gap now SKIPs (exit 0), a gap containing a code commit BUILDs
+(exit 1), and a genuinely unreachable base BUILDs with all three fetch
+failures printed. Cause 2's fix is deterministic. Cause 1's fix is NOT
+yet proven in production: a local clone lets you fetch an arbitrary SHA
+and GitHub does not, so the old commands succeed locally and fail on
+Vercel — the local test cannot reproduce the failure it fixes. The
+deepen-by-branch call is a plain operation GitHub certainly supports,
+but it is confirmed only by the next real build log. If it still fails,
+the log now says why. Cause 2 alone takes 91 hours to roughly 19.
+
 ## 2026-08-10 - Two levers tested: one killed, one instrumented
 
 **Reweighting Stage B: KILLED, and it does not reproduce.**
