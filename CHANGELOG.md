@@ -1,6 +1,52 @@
 
 # Changelog
 
+## 2026-08-10 - Two levers tested: one killed, one instrumented
+
+**Reweighting Stage B: KILLED, and it does not reproduce.**
+
+The 68-factor screen reported `logit_batter_k` fitted at +1.213 to +1.223
+against a shipped +1.06479, i.e. "12% light". Refitting through the
+PRODUCTION pipeline gives it at +1.0472 (2024), +1.0690 (2025), +1.0916
+(2026), +1.0565 (24+25), +1.0648 (pooled) — never +1.21. The screen's
+figure came from its own re-implementation with a different feature
+construction. Editing the shipped constant to match it would have been
+exactly the retune-the-constant antipattern A-009 warns against.
+
+A real finding sat underneath it: both coefficients drift monotonically
+across seasons — `tto_3` at -0.1834 / -0.2125 / -0.2503 and
+`logit_batter_k` at +1.0472 / +1.0690 / +1.0916 — so the pooled fit lags
+the current regime by ~19% on `tto_3`. KB.md already records a 2026
+regime break (ABS challenge system).
+
+Tested the way CLAUDE.md requires for a regime-scoped claim, a
+within-2026 time split (train 2026 H1, test 2026 H2, 33,354 -> 33,024
+PAs):
+
+    fitted on 2024+2025 : Brier 0.166643   tto_3 -0.1982
+    fitted on 2026 H1   : Brier 0.166696   tto_3 -0.2650
+    improvement -0.032%, paired t = -1.55
+
+The regime-matched fit is WORSE out of sample. The smaller sample costs
+more than the regime match gains. **No reweight shipped**, in either
+form.
+
+**`is_home` instrumented.** It is the only one of 68 screened factors
+with signal against the posted LINE rather than merely against actual
+strikeouts: home starters beat their line by +0.300 K and away starters
+by -0.500 (gap 0.800, SE 0.407, t = +1.97, positive in 4 of 5 slates),
+while the market appears not to price it (`line ~ is_home`, t = -0.21).
+On the 74 rows that now carry the column the gap reads +1.146, t = +2.28.
+
+It is one factor of 68 with a slate flipping sign, so it is a LEAD and
+nothing sizes on it. Logging it makes it judgable forward instead of
+re-derived by joining slate JSON every time someone asks. Backfill
+populated 74 of 126 rows — the dates a local cache can re-derive; the
+other 52 kept their existing values rather than being dropped, which is
+A-030's union rule working as intended.
+
+79 tests pass.
+
 ## 2026-08-10 - Delete two dead inputs, stop fabricating the lineup (A-032)
 
 A 68-factor three-way screen over 13,170 starts, run to answer "which

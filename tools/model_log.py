@@ -50,6 +50,18 @@ LOG_PATH = DATA_STATE_DIR / "model_log.csv"
 
 FIELDS = [
     "date", "game_pk", "pitcher_id", "pitcher_name", "pitcher_team",
+    # is_home is logged for ONE reason: it is the only one of 68 screened
+    # factors with signal against the posted LINE rather than merely against
+    # actual strikeouts. Measured on 126 logged rows, home starters beat
+    # their line by +0.300 K and away starters by -0.500 -- a 0.800 gap,
+    # SE 0.407, t = +1.97, positive in 4 of 5 slates -- while the market
+    # appears not to price it (line ~ is_home gives t = -0.21).
+    #
+    # That is one factor out of 68 with one slate flipping sign, so it is a
+    # LEAD, not a finding, and nothing sizes on it. Logging it here is what
+    # makes it judgable forward instead of re-derived by joining slates
+    # every time someone asks.
+    "is_home",
     "opponent_team", "line", "over_odds", "under_odds", "lineup_source",
     "expected_bf", "expected_k",
     "p_over_raw", "p_over_calibrated", "blended_prob_over", "fair_over",
@@ -144,6 +156,11 @@ def log_dates(targets: list[str] | None = None) -> int:
                 "pitcher_id": pid,
                 "pitcher_name": p.get("pitcher_name"),
                 "pitcher_team": p.get("pitcher_team"),
+                # 1/0 rather than True/False so the column reads straight
+                # into arithmetic without a per-consumer string coercion --
+                # the `line` column is a string and that cost a silent NaN
+                # in the chart renderer once already (A-026).
+                "is_home": 1 if p.get("is_home") else 0,
                 "opponent_team": p.get("opponent_team"),
                 "line": line,
                 "over_odds": p.get("over_odds"),
