@@ -77,12 +77,28 @@ fi
 # was the "not reachable" line below firing about twice every 90
 # minutes -- ~30 needless 30-core builds a day (A-033).
 #
-# Two things are fixed here. Failures are LOGGED, so the next time this
-# breaks the reason is in the build log instead of having to be inferred
-# from a bill. And the depth is no longer a fixed number: now that the
-# skip actually holds, builds are rare and the gap back to the last one
-# grows without bound, so any constant would eventually be too small.
-# --unshallow has no such ceiling and the whole repo is ~20 MB.
+# THERE IS NO REMOTE NAMED origin. Measured, not assumed: the build at
+# 2026-08-10 14:58 UTC printed, three times,
+#
+#     fetch[deepen]: failed — fatal: 'origin' does not appear to be a
+#     git repository
+#
+# Vercel's build container has the objects and refs but no configured
+# remote, so every `git fetch ... origin ...` was dead on arrival. That
+# is the whole reason the original reach-back never worked -- not
+# GitHub's SHA-fetch policy, not credentials, which is what the first
+# pass at A-033 guessed. The guess only fell over because the failures
+# are now printed instead of sent to /dev/null.
+#
+# So: use whatever remote the clone actually has, and if it has none,
+# rebuild the provider URL from the VERCEL_GIT_* variables. The repo is
+# public, so no credential is involved; a private repo would fail here
+# and fall through to BUILDING, which is the safe direction to be wrong.
+#
+# The depth is also no longer a fixed number. Now that the skip holds,
+# builds are rare and the gap back to the last one grows without bound,
+# so any constant would eventually be too small. --unshallow has no
+# such ceiling and the whole repo is ~20 MB.
 have_base() { git cat-file -e "${BASE}^{commit}" 2>/dev/null; }
 
 try_fetch() {
@@ -99,19 +115,38 @@ try_fetch() {
 }
 
 if ! have_base; then
-  # Cheap first: extend the shallow window along the branch we are on.
-  try_fetch deepen git fetch --deepen=500 origin "${VERCEL_GIT_COMMIT_REF:-master}"
+  # Print what the clone really has, so the next surprise is one log
+  # line away rather than another billing cycle.
+  echo "  remotes configured: [$(git remote | tr '\n' ' ' | sed 's/ $//')]"
+  REMOTE="$(git remote | head -1)"
+  if [ -z "$REMOTE" ] \
+     && [ -n "${VERCEL_GIT_REPO_OWNER:-}" ] \
+     && [ -n "${VERCEL_GIT_REPO_SLUG:-}" ]; then
+    case "${VERCEL_GIT_PROVIDER:-github}" in
+      github) REMOTE="https://github.com/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}.git" ;;
+      gitlab) REMOTE="https://gitlab.com/${VERCEL_GIT_REPO_OWNER}/${VERCEL_GIT_REPO_SLUG}.git" ;;
+      *)      REMOTE="" ;;
+    esac
+  fi
+  echo "  using remote: ${REMOTE:-<none available>}"
 fi
 
-if ! have_base; then
-  # No ceiling. Errors harmlessly if the clone is already complete.
-  try_fetch unshallow git fetch --unshallow origin
-fi
+if [ -n "${REMOTE:-}" ]; then
+  if ! have_base; then
+    # Cheap first: extend the shallow window along the branch we are on.
+    try_fetch deepen git fetch --deepen=500 "$REMOTE" "${VERCEL_GIT_COMMIT_REF:-master}"
+  fi
 
-if ! have_base; then
-  # Complete clone and still missing: BASE was force-pushed away or is
-  # off-branch. Ask for it by name before giving up.
-  try_fetch by-sha git fetch origin "$BASE"
+  if ! have_base; then
+    # No ceiling. Errors harmlessly if the clone is already complete.
+    try_fetch unshallow git fetch --unshallow "$REMOTE"
+  fi
+
+  if ! have_base; then
+    # Still missing: BASE was force-pushed away or is off-branch. Ask
+    # for it by name. GitHub does serve reachable SHAs this way.
+    try_fetch by-sha git fetch --depth=1 "$REMOTE" "$BASE"
+  fi
 fi
 
 if ! have_base; then

@@ -26,10 +26,25 @@ That is ~30 needless 30-core builds a day. The skip itself was working:
 the great majority of deployments are CANCELED, and the classifier's
 verdicts are still correct. Only the recovery path was broken.
 
-Fixed by deepening along the BRANCH rather than fetching by SHA, with
-`--unshallow` behind it (no fixed depth can be right once the skip
-holds and builds become rare), and by LOGGING each failure instead of
-discarding it.
+Fixed in two passes, and the first pass guessed the cause wrong.
+
+The guess was that GitHub refuses to serve a raw SHA, so the fix
+deepened along the BRANCH instead — plus `--unshallow` behind it, since
+no fixed depth can be right once the skip holds and builds become rare,
+and LOGGING on every failure instead of `/dev/null`. That last part is
+the only reason the guess was caught. The 14:58 UTC build printed:
+
+    fetch[deepen]:    failed — fatal: 'origin' does not appear to be a git repository
+    fetch[unshallow]: failed — fatal: 'origin' does not appear to be a git repository
+    fetch[by-sha]:    failed — fatal: 'origin' does not appear to be a git repository
+
+**There is no remote named `origin` in Vercel's build container.** It
+has the objects and the refs, but no configured remote, so every
+`git fetch ... origin ...` was dead on arrival — the original script's
+and the replacement's alike. Nothing to do with SHA policy or
+credentials. The script now reads the remote list, falls back to
+rebuilding the provider URL from `VERCEL_GIT_REPO_OWNER` /
+`VERCEL_GIT_REPO_SLUG` when the list is empty, and prints both.
 
 **Cause 2 — every build compiled numpy and pandas from source, for a
 static site that runs no Python.** Vercel auto-detects `requirements.txt`
@@ -56,17 +71,29 @@ install step that has no use for it. Overridden with `installCommand`.
 91 CPU-hours / 120 ~= 45 CPU-minutes per build, matching the ~45
 CPU-min/build figure already recorded in the A-023 header comment.
 
-**What is proven and what is not.** The classifier was re-tested against
-a real depth-10 shallow clone reproducing the Vercel condition: a
-data-only gap now SKIPs (exit 0), a gap containing a code commit BUILDs
-(exit 1), and a genuinely unreachable base BUILDs with all three fetch
-failures printed. Cause 2's fix is deterministic. Cause 1's fix is NOT
-yet proven in production: a local clone lets you fetch an arbitrary SHA
-and GitHub does not, so the old commands succeed locally and fail on
-Vercel — the local test cannot reproduce the failure it fixes. The
-deepen-by-branch call is a plain operation GitHub certainly supports,
-but it is confirmed only by the next real build log. If it still fails,
-the log now says why. Cause 2 alone takes 91 hours to roughly 19.
+**Both fixes verified.** Cause 2 in production, on the build this commit
+triggered: `Build Completed in /vercel/output [19s]` against `[2m]`
+before it, with no `Using CPython`, no `Building numpy`, no `Building
+pandas`.
+
+Cause 1 against a local clone that now reproduces the real condition
+exactly — depth 10, `git remote remove origin`, a 25-commit data-only
+gap:
+
+      remotes configured: []
+      using remote: https://github.com/joey11600/MLB-Strikeouts.git
+      fetch[deepen]: ok
+    only data has changed since the last build (7cad004) — skipping build
+
+and the same harness still BUILDs when a code commit sits in the gap,
+and BUILDs with all failures named when no remote can be reached at all.
+A-023a's fail-toward-BUILD is intact in every path.
+
+**The lesson is about the `/dev/null`, not the git.** The first pass at
+cause 1 was a plausible, confidently-argued, wrong diagnosis, and it
+would have shipped as "fixed" if the failure path had stayed silent. A
+fail-safe that fires without saying why converts a broken recovery into
+a recurring bill. It cost 91 CPU-hours to learn that here.
 
 ## 2026-08-10 - Two levers tested: one killed, one instrumented
 

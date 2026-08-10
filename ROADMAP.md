@@ -162,10 +162,14 @@
   day, and every surviving build compiled numpy and pandas from source
   because Vercel auto-installs root `requirements.txt`. 91 CPU-hours
   Aug 7-10
-- [ ] Confirm A-033 in production: check a build log for
-  `fetch[deepen]: ok` and the absence of `Building numpy`, then re-read
-  the usage chart after a full slate day. Cause 1's fix cannot be
-  proven locally (see A-033)
+- [x] Confirm A-033 cause 2 in production — build wall clock 2m -> 19s,
+  no `Building numpy` in the log
+- [x] Confirm A-033 cause 1 — the real fault was that Vercel's container
+  has NO remote named `origin`, found only because the retry now logs
+  its failures. Fixed and reproduced locally with `git remote remove
+  origin` + a 25-commit gap
+- [ ] Re-read the Vercel usage chart after a full slate day and confirm
+  the number actually landed near ~1-2 CPU-hours/day
 - [ ] Apply the same build-skip to the NRFI project (99 CPU-hours,
   51.6% of the allowance, same `auto:` commit pattern) — separate
   repo, operator call. Check it for the `requirements.txt` install too;

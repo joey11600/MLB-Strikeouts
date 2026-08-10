@@ -256,10 +256,20 @@ Tracks open items, resolved items, and known risks.
 - **Cause 1 — the reach-back never worked, and failed silently.** Vercel
   clones ~10 commits deep; the worker pushes every 5 minutes, so the last
   BUILT commit leaves that window in under an hour. The fetch meant to
-  retrieve it was `git fetch --depth=250 origin "$BASE"` (fetch by raw
-  SHA, which GitHub refuses) falling back to `git fetch --deepen=250`
-  with no remote. Both were redirected to `/dev/null`, so the failure
-  left no evidence beyond the fail-safe firing.
+  retrieve it was `git fetch --depth=250 origin "$BASE"` falling back to
+  `git fetch --deepen=250`. Both were redirected to `/dev/null`, so the
+  failure left no evidence beyond the fail-safe firing.
+- **The first fix guessed the cause wrong, and the logging caught it.**
+  The guess was that GitHub refuses to serve a raw SHA. It does not
+  matter whether it does: **there is no remote named `origin` in Vercel's
+  build container at all.** The 14:58 UTC build, the first to run with
+  failures printed rather than discarded, said so three times:
+  `fatal: 'origin' does not appear to be a git repository`. The container
+  has the objects and refs but no configured remote, so every
+  `git fetch ... origin ...` was dead on arrival — the original script's
+  and its replacement's alike. Resolution: read `git remote`, and when it
+  is empty rebuild the provider URL from `VERCEL_GIT_REPO_OWNER` /
+  `VERCEL_GIT_REPO_SLUG`. Both values are printed.
 - **Measured, not assumed:** two independent windows of Vercel's
   deployment list — Aug 9 06:14-07:55 ET and Aug 10 12:36-13:52 UTC —
   each show exactly 2 forced builds per ~90 minutes, i.e. ~30 needless
@@ -282,17 +292,22 @@ Tracks open items, resolved items, and known risks.
   between builds grows without bound. Every failure is now printed.
   `installCommand` in `vercel.json` overrides the auto-detected install.
   CI and Railway still use `requirements.txt` normally.
-- **Re-tested against a real depth-10 shallow clone** reproducing the
-  Vercel condition: data-only gap SKIPs (exit 0), gap containing a code
-  commit BUILDs (exit 1), unreachable base BUILDs with all three fetch
-  failures named. The fail-toward-BUILD guarantee of A-023a is unchanged.
-- **NOT yet proven in production, and worth stating plainly:** a local
-  clone permits fetching an arbitrary SHA and GitHub does not, so the OLD
-  commands also succeed locally. The local harness therefore cannot
-  reproduce the failure it fixes; it can only show the new decisions are
-  right. Deepen-by-branch is an ordinary operation GitHub supports, but
-  confirmation is the next real build log. Cause 2's fix is deterministic
-  and lands regardless — 91 hours to roughly 19 on its own.
+- **Cause 2 verified in production:** the build this work triggered
+  reported `Build Completed in /vercel/output [19s]` against `[2m]`
+  immediately before, with no `Using CPython` / `Building numpy` /
+  `Building pandas` anywhere in the log.
+- **Cause 1 verified against a harness that now reproduces the real
+  condition** — depth-10 clone, `git remote remove origin`, 25-commit
+  data-only gap — which the first harness did not, because it left
+  `origin` in place and a local remote serves any SHA. It now prints
+  `remotes configured: []`, `using remote: https://github.com/...`,
+  `fetch[deepen]: ok`, and SKIPs. The same harness still BUILDs when a
+  code commit is in the gap, and BUILDs with every failure named when no
+  remote is reachable. A-023a's fail-toward-BUILD holds in all paths.
+- **Generalises harder than the git detail does:** the first diagnosis of
+  cause 1 was plausible, argued with confidence, and wrong, and it would
+  have shipped as "fixed" had the failure path stayed silent. The
+  logging, not the reasoning, produced the answer.
 - **Generalises to:** any fallback whose failure path is the expensive
   one. `|| true` with output sent to `/dev/null` converts a broken
   recovery into a silent recurring cost. If a fail-safe is worth having,

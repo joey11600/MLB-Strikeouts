@@ -500,6 +500,13 @@ both have cost real money when absent (A-023, A-033):
   deepens the shallow clone to reach it (A-033). It fails toward
   BUILDING: a needless build costs seconds, a wrongly skipped one ships
   stale code with nothing turning red.
+  **Vercel's build container has no remote named `origin`** — it has the
+  objects and refs and nothing to fetch from. Any `git fetch ... origin`
+  added here will fail. The script reads `git remote` and, finding it
+  empty, rebuilds the URL from `VERCEL_GIT_REPO_OWNER` /
+  `VERCEL_GIT_REPO_SLUG`. This works because the repo is public; if it
+  is ever made private the reach-back will fail and every data commit
+  will start building again (loudly — the failures are printed).
 - `installCommand` → a no-op `echo`. Without it Vercel finds the root
   `requirements.txt`, and on its CPython 3.14 image neither numpy nor
   pandas has a wheel, so both compile from source — 84s of Python
