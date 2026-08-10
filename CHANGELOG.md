@@ -1,6 +1,70 @@
 
 # Changelog
 
+## 2026-08-10 - Delete two dead inputs, stop fabricating the lineup (A-032)
+
+A 68-factor three-way screen over 13,170 starts, run to answer "which
+factors are wrong", found three defects that are true regardless of any
+edge question.
+
+**`has_pitch_limit` fitted to exactly +0.00000 and always would.**
+`prepare_training_data` hardcodes it False on every training row, because
+`data/manual_pitch_limits.csv` has never held a data row — the column had
+no variance to fit. It could not move a price in either direction.
+Removed from the design. Announced limits still bind at serve time
+through the direct BF cap in `predict_bf_distribution`; that is a
+different mechanism and it stays.
+
+**`bp_heavy` fails Gate 2 in every direction** on total K: dRMSE
+-0.023 / -0.035 / -0.006, t -0.51 / +1.33 / +0.64, and it is null on
+batters faced too. The same term measured for the outs target flipped
+sign by season. CLAUDE.md rejects a feature that helps in only one
+temporal direction; this one helps in none. Removed.
+
+**The lineup fallback was a constant with zero variance.** When no lineup
+is posted, `daily_pipeline` substituted `[LEAGUE_K_RATE] * 9` — which
+fired on 31.7% of the logged board (40 of 126 rows) and discarded
+everything we know about the opponent. It now uses the opponent TEAM's
+as-of shrunk K%. Measured out-of-sample RMSE on total K, common n=9,894:
+
+    opponent representation   24->25   25->24   24+25->26
+    real nine (confirmed)     2.2280   2.2355     2.2516
+    team as-of K% (now)       2.2419   2.2510     2.2618
+    constant 0.225 (was)      2.2720   2.3021     2.2755
+
+The team rate recovers 68.5% / 76.8% / 57.0% of a confirmed lineup, in
+every direction. Verified live across 30 teams: 0.183 (AZ) to 0.254
+(CIN), sd 0.0169 against the constant's 0.0000 — at ~22 batters faced
+that spread is ~1.6 strikeouts the model previously could not see. When a
+team has no batting history the pipeline now SKIPS rather than
+substituting a league average, because an invented input is exactly what
+the edge filter selects into the bet list (A-007).
+
+Backtest after the change, cross-season: **+3.9% / +4.9% / +3.2%** vs the
+naive baseline (was +3.8% / +4.8% / +3.2%). Both directions positive,
+decision split positive. Removing the two terms cost nothing, which is
+what "they were carrying nothing" looks like. Stage A is now 4
+coefficients; the calibrator was refit on the new out-of-sample
+predictions.
+
+**What this does NOT fix.** The measured weight on the model's
+disagreement with the market is w* = -0.775 (negative in 5/5 slates,
+permutation p = 0.040). The cause is not an inverted factor: the model
+prices the SAME three variables the line does at nearly the same weights,
+so its disagreement is largely estimation noise on shared inputs, and
+noise added to a better forecast can only raise Brier. 16-18% of the
+line's variance sits outside everything this repo can compute, and THAT
+part predicts actual strikeouts at t = +2.62 — the largest t-statistic
+anywhere on the board, and it belongs to the market. The 68-factor screen
+establishes it is not in the pitch-level cache.
+
+Corrected in passing: `logit_batter_k` is NOT worthless, contrary to a
+reading ported from the outs research. It is the most valuable term in
+the model (dropping it costs +1.85/+2.84/+1.08% out-of-sample RMSE) and
+the shipped +1.06479 is ~12% light against refits of +1.213 to +1.223.
+The outs finding did not transfer because a strikeout and a groundout are
+both one out.
+
 ## 2026-08-09 - Ask the general question: when did the served board stop being current
 
 Third false positive in two days from the same check, and this one was

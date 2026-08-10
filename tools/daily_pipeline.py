@@ -281,6 +281,47 @@ def _compute_batter_k_rates(
     return k_rates
 
 
+def _compute_team_k_rate(statcast_df: pd.DataFrame, team: str) -> float | None:
+    """As-of shrunk K% for a whole team's batters. None if unknown.
+
+    The pre-lineup fallback. It replaces `[LEAGUE_K_RATE] * 9`, a constant
+    with ZERO variance that fired on 31.7% of the logged board (40 of 126
+    rows) and threw away everything we know about the opponent.
+
+    Measured out-of-sample RMSE on total K, 2024-2026, common n = 9,894:
+
+        opponent representation   24->25    25->24   24+25->26
+        real nine (confirmed)     2.2280    2.2355     2.2516
+        team as-of K% (this)      2.2419    2.2510     2.2618
+        constant 0.225 (was)      2.2720    2.3021     2.2755
+
+    The team rate recovers 68.5% / 76.8% / 57.0% of what a confirmed lineup
+    is worth, in every temporal direction. corr(nine, team) = 0.845;
+    sd(nine) 0.0156, sd(team) 0.0190, sd(constant) 0.0000.
+
+    Same empirical-Bayes shrinkage as the per-batter path so live inputs
+    match the distribution the model was fit on. Returns None rather than
+    substituting a league average -- the caller decides, and A-007's rule is
+    that a fabricated input manufactures edge and gets selected into the bet
+    list.
+    """
+    if statcast_df.empty or not team:
+        return None
+    completed = statcast_df[statcast_df["events"].notna()]
+    if completed.empty:
+        return None
+    # The batting side is whichever half-inning the team is not fielding.
+    is_home_bat = (completed.get("home_team") == team) & (
+        completed.get("inning_topbot") == "Bot")
+    is_away_bat = (completed.get("away_team") == team) & (
+        completed.get("inning_topbot") == "Top")
+    pa = completed[is_home_bat | is_away_bat]
+    if pa.empty:
+        return None
+    ks = pa["events"].isin(["strikeout", "strikeout_double_play"]).sum()
+    return shrink_rate(float(ks), float(len(pa)), BATTER_K_PSEUDO_BF)
+
+
 def _write_json_atomic(path: Path, payload: dict) -> None:
     """Atomic JSON write: tempfile + fsync + os.replace (repo rule)."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -577,7 +618,21 @@ def run_daily(
             lineup_k_pcts = _compute_batter_k_rates(statcast_df, lineup)
             lineup_source = entry.get("lineup_source", "confirmed")
         else:
-            lineup_k_pcts = [LEAGUE_K_RATE] * 9
+            # No lineup posted yet. Use the opponent TEAM's as-of K% rather
+            # than a league constant: it recovers 57-77% of a confirmed
+            # lineup's value out-of-sample in all three temporal directions,
+            # where the constant recovers none by construction (zero
+            # variance). See _compute_team_k_rate.
+            team_k = _compute_team_k_rate(statcast_df, entry.get("opponent_team"))
+            if team_k is None:
+                # Refuse rather than fabricate. A league average here is an
+                # invented input, and the edge filter selects invented inputs
+                # into the bet list precisely because they flatter the
+                # projection (AUDIT A-007).
+                print(f"    {pitcher_name}: SKIP — no lineup and no opponent "
+                      f"batting history for {entry.get('opponent_team')}")
+                continue
+            lineup_k_pcts = [team_k] * 9
             lineup_source = "projected"
 
         n_rookies = 0.0

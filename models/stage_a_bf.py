@@ -81,17 +81,31 @@ class StageA:
 
     def _build_X(self, df: pd.DataFrame) -> np.ndarray:
         """Build design matrix from game-level DataFrame."""
+        # has_pitch_limit and bp_heavy were REMOVED 2026-08-10 after a
+        # three-way screen over 13,170 starts.
+        #
+        # has_pitch_limit fitted to exactly +0.00000 and always would:
+        # prepare_training_data hardcodes it False on every training row
+        # (data/manual_pitch_limits.csv has never held a data row), so the
+        # column carried no variance. It could not move a price in either
+        # direction. Announced limits still bind at serve time through the
+        # direct BF cap in predict_bf_distribution -- that is a different
+        # mechanism and it stays.
+        #
+        # bp_heavy fails Gate 2 outright on total K: dRMSE -0.023 / -0.035 /
+        # -0.006 with t -0.51 / +1.33 / +0.64, and it is null on batters
+        # faced too (t +0.34 / +1.06 / +0.97). The same term measured for the
+        # outs target flipped sign by season. A feature that helps in only
+        # one temporal direction is rejected by CLAUDE.md; this one helps in
+        # none.
         X = np.column_stack([
             np.ones(len(df)),
             df["prior_bf_mean"].values,
             df["season_k_pct"].values,
             df["il_return"].astype(float).values,
-            df["has_pitch_limit"].astype(float).values,
-            df["bp_heavy"].astype(float).values,
         ])
         self.feature_names = [
-            "intercept", "prior_bf_mean", "season_k_pct",
-            "il_return", "has_pitch_limit", "bp_heavy",
+            "intercept", "prior_bf_mean", "season_k_pct", "il_return",
         ]
         return X
 
@@ -170,11 +184,13 @@ class StageA:
             )
 
         il_return = float(features.get("c10_il_return", False))
+        # c11_pitch_limit is still read -- it binds below as a hard BF cap,
+        # which is a serve-time mechanism, not a fitted term. c12_bp_heavy is
+        # no longer consumed at all; see _design_matrix for why both left the
+        # design.
         pitch_limit = features.get("c11_pitch_limit")
-        has_limit = float(pitch_limit is not None)
-        bp_heavy = float(features.get("c12_bp_heavy", False))
 
-        x = np.array([1.0, prior_bf, k_pct, il_return, has_limit, bp_heavy])
+        x = np.array([1.0, prior_bf, k_pct, il_return])
 
         if self.coefficients is not None:
             mu = float(np.exp(np.clip(x @ self.coefficients, -5, 5)))

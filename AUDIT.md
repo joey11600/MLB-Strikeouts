@@ -245,6 +245,48 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-032: two dead inputs, and a lineup fallback with zero variance
+- **Filed/Resolved:** 2026-08-10 (found by a 68-factor screen answering
+  "which factors are wrong")
+- **`has_pitch_limit` = +0.00000, and could never be anything else.**
+  `prepare_training_data` hardcodes it False on every training row because
+  `data/manual_pitch_limits.csv` has never held a data row. Zero variance,
+  zero fitted weight, zero effect on any price. **Removed from the design.**
+  The serve-time BF cap in `predict_bf_distribution` is a separate
+  mechanism and stays.
+- **`bp_heavy` fails Gate 2 in all three directions** on total K
+  (dRMSE -0.023 / -0.035 / -0.006; t -0.51 / +1.33 / +0.64) and is null on
+  batters faced. Measured for the outs target it flipped sign by season.
+  **Removed.**
+- **The pre-lineup fallback fabricated the opponent.** `[LEAGUE_K_RATE]*9`
+  fired on **31.7%** of the logged board (40 of 126) — a constant with
+  **sd exactly 0.0000** standing in for the single largest opponent term.
+  Replaced with the opponent team's as-of shrunk K%, which recovers
+  **68.5% / 76.8% / 57.0%** of a confirmed lineup out-of-sample. Verified
+  live: 30 teams, 0.183 (AZ) to 0.254 (CIN), sd 0.0169 — ~1.6 strikeouts
+  of spread at 22 BF that the model could not previously see. With no team
+  history the pipeline now **skips rather than substitutes** (A-007's rule:
+  an invented input is selected INTO the bet list because it flatters the
+  projection).
+- **Regression check:** cross-season backtest **+3.9% / +4.9% / +3.2%**
+  after (was +3.8% / +4.8% / +3.2%). Both directions positive, decision
+  split positive. Stage A is now 4 coefficients; calibrator refit.
+- **Does NOT close the edge question.** w* = -0.775 (5/5 slates negative,
+  permutation p = 0.040) is not caused by an inverted factor: the model
+  prices the same three variables as the line at nearly the same weights,
+  so its disagreement is largely estimation noise on shared inputs.
+  16-18% of the line's variance is outside everything this repo can
+  compute and predicts actual K at t = +2.62 — the largest |t| on the
+  board, belonging to the market. The 68-factor screen (0/50 random
+  controls, 0/3,200 shuffled-label refits) establishes it is not in the
+  pitch-level cache.
+- **Correction recorded:** `logit_batter_k` is NOT worthless. A reading
+  ported from the outs research was wrong — for outs a strikeout and a
+  groundout are both one out, so opponent K% carries nothing there. For
+  strikeouts it is the most valuable term (dropping it costs
+  +1.85/+2.84/+1.08% OOS RMSE) and the shipped +1.06479 is ~12% light
+  against refits of +1.213 to +1.223. Reweighting is open work.
+
 ### A-031: the shadow tool declared a money decision ready on the wrong count
 - **Filed/Resolved:** 2026-08-09
 - **Description:** `tools/shadow.py` computed
