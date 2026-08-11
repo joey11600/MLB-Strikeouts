@@ -1,6 +1,53 @@
 
 # Changelog
 
+## 2026-08-11 - The worker overwrote CI's correct board with its own blank one
+
+A-035 predicted that 2026-08-10's strikeout totals would fill in at the
+09:00 ET run. A watcher was armed to confirm it. They did not, and the
+watcher said so at 09:28 — which is the only reason this was found
+rather than assumed fixed.
+
+The morning job HAD run. Today's board was built, 23 pitchers. The
+evidence table `data/model_log.csv` had all 18 rows for 08-10 with
+`actual_k` populated, committed by the worker itself at 09:05. The join
+to the slate is sound — 18/18 pitcher_id overlap, 0 game_pk mismatches.
+The numbers were sitting on the worker's own disk.
+
+The renderer was reading the wrong source. `_actual_k_lookup` read the
+Statcast cache and nothing else, and that cache is a ~90 MB per-season
+tree each host tops up on its own schedule. Same commit, four minutes
+apart:
+
+    chore(ci): 09:01 ET   2026-08-10 -> 18/18 actual K totals
+    worker,    09:05 ET   2026-08-10 ->  1/18
+
+CI restores the cache every run. The worker refreshes it at boot and on
+the 03:00 job, both of which land before Statcast publishes the previous
+day — so the worker sits a day behind.
+
+Two mechanisms turned that into a wrong site. The dashboard *prefers*
+the worker's payload over the committed one, so the blank board is what
+you see; and the worker commits `data.json` every five minutes, so it
+overwrote CI's correct 09:01 build within four. The good artifact
+existed, was published, and was destroyed on a timer.
+
+**Fixed** by having the lookup fall back to `model_log.csv` for any key
+the Statcast cache does not supply. Statcast still wins wherever it
+answers — it stays the graded truth — but the evidence table carries the
+same numbers, rides the ledger reconcile so every host agrees within one
+publish pass, and is never-delete-rows by policy. A blank `actual_k` is
+skipped rather than read as zero; a fabricated zero is worse than a
+blank.
+
+This does not fix the cache lag itself, which still degrades the leash
+inputs `refresh_cache` exists to keep current. That is a separate item
+on the roadmap.
+
+Six regression tests, negative-controlled: the old lookup returns
+nothing on the worker's exact condition where the new one returns
+everything.
+
 ## 2026-08-11 - Yesterday's results vanished at midnight, every night
 
 The operator reported the results disappearing, was told the ledger was

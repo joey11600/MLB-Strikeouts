@@ -168,6 +168,20 @@
   has NO remote named `origin`, found only because the retry now logs
   its failures. Fixed and reproduced locally with `git remote remove
   origin` + a 25-commit gap
+- [x] Stop the worker serving a blank board from a stale Statcast cache
+  (A-036) — `_actual_k_lookup` falls back to `model_log.csv`, which every
+  host shares. CI built 08-10 at 18/18 and the worker overwrote it with
+  1/18 four minutes later
+- [ ] **Fix the cache lag itself, not just the display.** `refresh_cache()`
+  runs at boot and on the 03:00 job, both before Statcast publishes the
+  previous day (A-022). Bullpen fatigue reads yesterday's relief usage,
+  so the leash inputs are silently degraded on the worker even now that
+  the board reads correctly. Add a top-up on the 09:00 job, or gate the
+  refresh on the data actually being there
+- [ ] Reconsider whether the worker should commit `dashboard/public/data.json`
+  at all — it overwrote CI's better copy every 5 minutes and the site
+  prefers the worker's live payload anyway, so the committed artifact is
+  a fallback that the worker can only make worse
 - [x] Keep yesterday's results on the board overnight (A-035) — the live
   watcher archives per date and the dashboard looks up by slate date, so
   the midnight-to-09:00 blank window is closed. 2026-08-10 served 1/18

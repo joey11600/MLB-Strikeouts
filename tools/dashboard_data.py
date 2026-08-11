@@ -109,10 +109,57 @@ def _pick_payload(row: dict) -> dict:
     }
 
 
+def _actual_k_from_model_log(dates: set[str]) -> dict:
+    """Actual strikeouts per (game_pk, pitcher_id) from the evidence table.
+
+    `model_log.csv` is the durable record of exactly this number: it is
+    derived from Statcast once, then never dropped (CLAUDE.md's
+    never-delete-rows, hardened by A-030's union-by-key rebuild). Unlike
+    the Statcast cache it is a small CSV that rides the ledger reconcile,
+    so every host has the same copy within one publish pass.
+    """
+    lookup = {}
+    if not dates or not MODEL_LOG_PATH.exists():
+        return lookup
+    try:
+        with open(MODEL_LOG_PATH, encoding="utf-8", newline="") as f:
+            for r in csv.DictReader(f):
+                if (r.get("date") or "").strip() not in dates:
+                    continue
+                k = _safe_int(r.get("actual_k"))
+                if k is None:
+                    continue
+                gp = _safe_int(r.get("game_pk"))
+                pid = _safe_int(r.get("pitcher_id"))
+                if gp is None or pid is None:
+                    continue
+                lookup[(gp, pid)] = k
+    except (OSError, ValueError) as exc:
+        print(f"  (model-log actual-K lookup skipped: {exc})")
+    return lookup
+
+
 def _actual_k_lookup(dates: set[str]) -> dict:
     """Actual strikeouts per (game_pk, pitcher_id) for slate dates.
 
-    Degrades gracefully when the Statcast cache is unavailable.
+    Two sources, because one of them is host-local and the other is not.
+
+    The Statcast cache is authoritative and is tried first, but it is a
+    ~90 MB per-season tree that each host tops up on its own schedule.
+    The Railway worker refreshes it at boot and on the 03:00 job -- both
+    of which land BEFORE Statcast publishes the previous day (A-022) --
+    so the worker can sit a full day behind CI, which restores the cache
+    on every run. That is not hypothetical: on 2026-08-11 the 09:01 CI
+    build served 2026-08-10 at 18/18 actual K totals and the worker's
+    build four minutes later served the same date at 1/18, from the same
+    commit. The dashboard PREFERS the worker's payload, and the worker
+    then committed its worse copy over CI's good one every five minutes
+    (A-036).
+
+    So fall back to the evidence table, which carries the same numbers,
+    is small enough to sync with the ledger, and cannot be stale on one
+    host and fresh on another. Statcast still wins wherever it answers --
+    this only fills keys the cache did not supply.
     """
     lookup = {}
     if not dates:
@@ -124,17 +171,25 @@ def _actual_k_lookup(dates: set[str]) -> dict:
         lo = min(_date.fromisoformat(d) for d in dates)
         hi = max(_date.fromisoformat(d) for d in dates)
         df = load_cached(lo, hi)
-        if df.empty:
-            return lookup
-        completed = df[df["events"].notna()]
-        ks = completed[completed["events"].isin(
-            ["strikeout", "strikeout_double_play"])]
-        counts = ks.groupby(["game_pk", "pitcher"]).size()
-        bf = completed.groupby(["game_pk", "pitcher"]).size()
-        for key, n_bf in bf.items():
-            lookup[(int(key[0]), int(key[1]))] = int(counts.get(key, 0))
+        if not df.empty:
+            completed = df[df["events"].notna()]
+            ks = completed[completed["events"].isin(
+                ["strikeout", "strikeout_double_play"])]
+            counts = ks.groupby(["game_pk", "pitcher"]).size()
+            bf = completed.groupby(["game_pk", "pitcher"]).size()
+            for key, n_bf in bf.items():
+                lookup[(int(key[0]), int(key[1]))] = int(counts.get(key, 0))
     except Exception as exc:
         print(f"  (actual-K lookup skipped: {exc})")
+    backfill = _actual_k_from_model_log(dates)
+    added = 0
+    for key, k in backfill.items():
+        if key not in lookup:
+            lookup[key] = k
+            added += 1
+    if added:
+        print(f"  (actual-K: {added} filled from model_log, "
+              f"{len(lookup) - added} from the Statcast cache)")
     return lookup
 
 

@@ -245,6 +245,57 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-036: the worker overwrote CI's good board with its own stale one
+- **Filed/Resolved:** 2026-08-11 (found by watching for the 09:00 backfill
+  that A-035 predicted, and seeing it not arrive)
+- **Description:** the board's per-pitcher actual-K totals came from
+  `_actual_k_lookup`, which read the Statcast cache **and nothing else**.
+  That cache is a ~90 MB per-season tree each host tops up on its own
+  schedule, so the same commit produces different boards on different
+  machines.
+- **Measured, same commit, four minutes apart:**
+
+      chore(ci): 2026-08-11 09:01 ET   2026-08-10 -> 18/18 actual K totals
+      worker,    2026-08-11 09:05 ET   2026-08-10 ->  1/18
+
+  CI restores and tops up the cache on every run (the A-014 fix). The
+  Railway worker calls `refresh_cache()` at boot and on the 03:00 job —
+  both of which land BEFORE Statcast publishes the previous day (A-022
+  measured 0 pitches at 03:21, 3,530 by 08:59). So the worker can sit a
+  full day behind, and did.
+- **Two mechanisms turned a stale cache into a wrong site.**
+  `dashboard/lib/data-context.tsx` PREFERS the worker's `/data.json` over
+  the committed copy, so the blank board is what the operator sees. And
+  the worker commits `dashboard/public/data.json` every five minutes, so
+  it overwrote CI's correct 09:01 build with its own within four
+  minutes — the good artifact existed, was published, and was destroyed.
+- **The numbers were on the worker's own disk the whole time.**
+  `data/model_log.csv` had all 18 rows for 2026-08-10 with `actual_k`
+  populated, and the worker itself committed them at 09:05. Verified the
+  join is sound: 18/18 pitcher_id overlap with the slate and 0 game_pk
+  mismatches. Nothing was missing — the renderer was reading the one
+  source that happened to be host-local.
+- **Resolution:** `_actual_k_lookup` still tries the Statcast cache
+  first and still lets it win, then fills any key the cache did not
+  supply from `model_log.csv`. The evidence table carries the same
+  numbers, is a small CSV that rides the ledger reconcile (so every host
+  agrees within one publish pass), and is never-delete-rows by policy
+  (A-030). A blank `actual_k` is skipped rather than coerced to 0 — a
+  fabricated zero is worse than a blank.
+- **Not a substitute for fixing the cache lag**, which still degrades
+  the leash inputs `refresh_cache` exists to keep current (bullpen
+  fatigue reads yesterday's relief usage). This makes the DISPLAY
+  correct on any host; the refresh schedule is a separate item.
+- **Locked with tests:** `tests/test_actual_k_fallback.py`, six cases —
+  the date filter, the wrong-date leak, the blank-not-zero rule, the
+  empty cache, a cache that raises, and Statcast precedence where both
+  sources answer. Negative-controlled: the old lookup returns `{}` on
+  the worker's exact condition where the new one returns all three.
+- **Generalises to:** any artifact rendered on two hosts from a source
+  only one of them keeps current. Either make the source shared, or read
+  the shared copy — and be suspicious when the same commit produces
+  different output in two places.
+
 ### A-035: yesterday's results vanished at midnight and came back at 09:00
 - **Filed/Resolved:** 2026-08-11 (operator report, twice: "the results
   disappeared… they were all there last night, now they are gone", then

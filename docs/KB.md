@@ -745,3 +745,13 @@ reach the dashboard but not git.
     the per-pitcher K totals on the board, which were genuinely gone.
     When a report of missing data meets an intact table, locate the view
     they are actually reading before concluding the report is wrong.
+16. **Two hosts rendering the same artifact must read the same source.**
+    `_actual_k_lookup` read the Statcast cache, a ~90 MB tree each host
+    tops up on its own schedule, so the same commit produced 18/18 on CI
+    and 1/18 on the worker four minutes later — and since the dashboard
+    prefers the worker's payload and the worker commits `data.json`
+    every 5 minutes, the worse copy won twice (A-036). When output
+    differs between hosts from one commit, suspect a host-local input
+    before suspecting the code. Prefer the small shared record
+    (`model_log.csv`, which rides the ledger reconcile) over the large
+    host-local one, and skip a blank rather than coercing it to zero.
