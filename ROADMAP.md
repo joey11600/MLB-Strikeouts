@@ -182,10 +182,25 @@
   latest_date, per-day bytes for the last 5 days, last_refresh) — the
   A-037 diagnosis needed deploy logs and the Railway session expired
   part-way through
+- [x] **Stop losing a pitcher to the book's own disambiguation tag
+  (A-038).** DK writes `Ryan Johnson (LAA)` when two players share a
+  name; the normalizer stripped accents and Jr./III but not the
+  parenthetical, so he matched nothing and was dropped from both slates
+  DK ever listed him on. The tag is now stripped for matching AND used to
+  break ties, and an ambiguous name is refused rather than guessed —
+  candidates were previously a dict keyed by name, so two same-named
+  probables would have overwritten each other. 30/30 matched, 0 unmatched
 - [ ] Confirm A-037 in production — after the redeploy, `/health`
   `statcast_cache.last_refresh.at` should advance at each scheduled
   window (15:00 / 16:45 / 18:15 ET), not only at boot, and
   `recent_bytes` for yesterday should be a real size rather than null
+- [ ] **A-038 follow-up: alert on unmatched props rather than printing
+  them.** The tag bug survived two slates because the only signal was one
+  stdout line on a scheduled run. A DK prop that matches no probable is a
+  measurable daily number and belongs on `/health` next to
+  `statcast_cache`, with the same treatment for a probable that no prop
+  covers. Related: the name join is a third-party display string in both
+  directions and has no test against real captured DK names
 - [ ] **A-016 follow-up:** `backfill_statcast` skips any day >2 days old
   and >20 KB, so a file written mid-games is large-but-incomplete and
   freezes that way. Check completeness against the MLB schedule

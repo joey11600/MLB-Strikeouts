@@ -245,6 +245,44 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-038: the book's disambiguation tag made a pitcher unmatchable
+- **Filed/Resolved:** 2026-08-11 (operator noticed the board was short and
+  asked where a specific pitcher was)
+- **Description:** DraftKings appends the team to a name when two players
+  share it — `Ryan Johnson (LAA)`. `_normalize_name` stripped accents and
+  Jr./III but not the parenthetical, so the key never matched
+  (`ryan johnson (laa)` != `ryan johnson`). The last-name fallback then
+  read his surname as `(laa)` and missed too. He was dropped from every
+  slate DK listed him on — 2026-08-06 and 2026-08-11 — while carrying a
+  live posted line, and never reached the board or the ledger.
+- **Why it went unseen:** a dropped pitcher leaves no row anywhere. There
+  is no zero, no null, no VOID — the board just looks like a short slate,
+  which is indistinguishable from a light day. The single `Unmatched DK
+  pitchers:` line went to stdout on a scheduled run nobody reads. Same
+  shape as A-024a: a path whose failure output is *absence*.
+- **Second bug found underneath it.** `mlb_pitchers` was a dict keyed by
+  normalized name, built by assignment. Two probables sharing a name
+  would have silently overwritten each other, and the last-name fallback
+  took the first candidate it happened to iterate onto. The tag DK
+  supplies is exactly the signal needed to disambiguate, and it was being
+  thrown away rather than used.
+- **Fixed** in `tools/daily_pipeline.py`: the tag is stripped for matching
+  and parsed by `_team_tag` for tie-breaking; candidates are collected as
+  a list and resolved by `_resolve_probable`, which **refuses** when the
+  name is ambiguous and the tag cannot settle it. Attaching a line to the
+  wrong arm is worse than dropping the row — it prices one pitcher's
+  projection against another's number, and the edge filter selects
+  hardest on exactly that mismatch. The tag is also stripped from the
+  display name so it never reaches the board, ledger, or grader; no other
+  part of the book's spelling is touched, because those joins are
+  historical. Covered by `tests/test_dk_name_matching.py` (12 tests).
+- **Measured after:** 30 DK props -> 30 matched, 0 unmatched (was 29/1).
+  Board went 23 -> 26 pitchers; the other 4 are correct role-gate refusals.
+- **Generalises to:** any join on a third party's display string. The
+  vendor formats for humans and will decorate a name the moment it is
+  ambiguous — and the decoration arrives precisely on the rows where
+  guessing is most dangerous.
+
 ### A-037: dispatching the task outsourced the cache refresh with it
 - **Filed/Resolved:** 2026-08-11 (the cause under A-036, fixed on the
   operator's instruction to fix the lag itself and not just the display)

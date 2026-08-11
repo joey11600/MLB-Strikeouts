@@ -1,6 +1,62 @@
 
 # Changelog
 
+## 2026-08-11 - A pitcher the book had to disambiguate was unmatchable
+
+The operator asked why the board was short and where one specific
+starter had gone. Two different answers, and only one of them a bug.
+
+**Not a bug.** Blake Snell has thrown one game all season — 2026-05-09,
+18 batters faced. The `total_bf < 50` gate refuses him, which is the
+A-007 rule working: a thin-history arm gets filled in with optimistic
+assumptions and the edge filter then hunts for exactly those. Same for
+Cody Bradford (20 BF). Drew Anderson and Mason Barnett are refused by
+the role gate — typical recent outing 5 and 12 BF against a 15 minimum.
+Four correct refusals.
+
+**A bug.** DraftKings appends the team to a name when two players share
+one: `Ryan Johnson (LAA)`. `_normalize_name` stripped accents and
+Jr./III but not the parenthetical, so `ryan johnson (laa)` never matched
+`ryan johnson`, and the last-name fallback then compared `(laa)` against
+`johnson` and missed too. Dropped from both slates DK ever listed him on
+— 2026-08-06 and 2026-08-11 — while carrying a live posted line.
+
+It went unseen because a dropped pitcher leaves no row anywhere. No
+zero, no null, no VOID; the board just looks like a light day. The one
+`Unmatched DK pitchers:` line goes to stdout on a scheduled run.
+
+Underneath it, a second bug that had never fired: `mlb_pitchers` was a
+dict keyed by normalized name and built by assignment, so two probables
+sharing a name would have silently overwritten each other, and the
+last-name fallback took whichever candidate iteration reached first. The
+tag DK supplies is precisely the disambiguator — and it was being thrown
+away instead of used.
+
+**Fixed** in `tools/daily_pipeline.py`. The tag is stripped for matching
+and parsed by `_team_tag` for tie-breaking. Candidates are collected as a
+list and resolved by `_resolve_probable`, which refuses when the name is
+ambiguous and the tag cannot settle it: attaching a line to the wrong arm
+prices one pitcher's projection against another's number, and the edge
+filter selects hardest on that mismatch. The tag is stripped from the
+display name too, so it never reaches the board, ledger, or grader —
+nothing else about the book's spelling is touched, since those joins are
+historical.
+
+Measured: 30 props -> 30 matched, 0 unmatched (was 29/1). Ryan Johnson
+prices at E[K]=3.6 against a 4.5 line, +4.1% UNDER, NO_PLAY — he would
+not have been a bet today, but he was never given the chance to be one.
+
+Also refreshed the Statcast cache, which stopped at 2026-08-06 (A-037
+fixed the worker's schedule; these four days predate the fix). Checked
+what it actually cost: **nothing on today's starters** — all 30 last
+pitched 08-04..08-06, inside the old cache. What it did kill was the
+bullpen-fatigue input, which reads *yesterday's* relief usage and so
+returned "no" for every team regardless of truth.
+
+`tests/test_dk_name_matching.py` — 12 tests covering the tag, the
+tie-break, both refusal paths, and that untagged names keep the book's
+exact spelling. Suite 114 passed.
+
 ## 2026-08-11 - Dispatching the task outsourced the cache refresh with it
 
 A-036 fixed the display against a stale cache. This fixes the cache.

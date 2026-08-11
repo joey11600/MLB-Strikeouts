@@ -21,6 +21,7 @@ import csv
 import json
 import math
 import os
+import re
 import sys
 import tempfile
 import unicodedata
@@ -70,9 +71,19 @@ SLATES_DIR = DATA_STATE_DIR / "slates"
 
 
 def _normalize_name(name: str) -> str:
-    """Lowercase, strip accents, strip suffixes like Jr./III, collapse whitespace."""
+    """Lowercase, strip accents, drop a book's team tag, strip suffixes like
+    Jr./III, collapse whitespace."""
     n = unicodedata.normalize("NFD", name)
     n = "".join(c for c in n if unicodedata.category(c) != "Mn")
+    # A book disambiguates two players sharing a name by appending the
+    # team — "Ryan Johnson (LAA)". That tag is real information (see
+    # _team_tag, which uses it to break ties) but it is not part of the
+    # name, and leaving it attached made the key unmatchable:
+    # "ryan johnson (laa)" never equals "ryan johnson", and the last-name
+    # fallback then compared "(laa)" against "johnson" and missed too. He
+    # was dropped from every slate DK listed him on — 2026-08-06 and
+    # 2026-08-11 — with only a line in the pipeline log to show for it.
+    n = re.sub(r"\s*\([^)]*\)", " ", n)
     n = n.strip().lower()
     for suffix in [" jr.", " jr", " sr.", " sr", " ii", " iii", " iv"]:
         if n.endswith(suffix):
@@ -80,9 +91,45 @@ def _normalize_name(name: str) -> str:
     return " ".join(n.split())
 
 
+def _team_tag(name: str) -> str | None:
+    """Return the team abbreviation a book appended to a name, if any.
+
+    "Ryan Johnson (LAA)" -> "LAA". Only a bare 2-4 letter token counts, so
+    a parenthetical that is not a team ("(prospect)") yields None rather
+    than a bogus tie-breaker.
+    """
+    m = re.search(r"\(\s*([A-Za-z]{2,4})\s*\)\s*$", name or "")
+    return m.group(1).upper() if m else None
+
+
+def _resolve_probable(candidates: list[dict], team_tag: str | None) -> dict | None:
+    """Pick one MLB probable from name-match candidates, or None.
+
+    Returns None when the name is ambiguous and the team tag cannot break
+    the tie. Attaching a line to the wrong arm is worse than dropping the
+    row: it would price one pitcher's projection against another's number
+    and the edge filter selects hardest on exactly that kind of mismatch.
+    """
+    if not candidates:
+        return None
+    if team_tag:
+        on_team = [c for c in candidates
+                   if (c.get("pitcher_team") or "").upper() == team_tag]
+        if on_team:
+            candidates = on_team
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def _match_dk_to_mlb(dk_props: list[dict], mlb_games: list[dict]) -> list[dict]:
-    """Match DK pitcher props to MLB API probable pitchers."""
-    mlb_pitchers = {}
+    """Match DK pitcher props to MLB API probable pitchers.
+
+    Full normalized name first, then last name. Either step can turn up
+    more than one probable — two pitchers genuinely share a name, or two
+    share a surname on the same slate — so candidates are collected as a
+    list and resolved by _resolve_probable rather than by taking whichever
+    one the dict happened to hold last.
+    """
+    mlb_pitchers: dict[str, list[dict]] = {}
     for game in mlb_games:
         game_pk = game.get("game_pk")
         for side in ["home", "away"]:
@@ -94,7 +141,9 @@ def _match_dk_to_mlb(dk_props: list[dict], mlb_games: list[dict]) -> list[dict]:
 
             if pid and pname:
                 key = _normalize_name(pname)
-                mlb_pitchers[key] = {
+                if not key:
+                    continue
+                mlb_pitchers.setdefault(key, []).append({
                     "pitcher_id": pid,
                     "pitcher_name": pname,
                     "pitcher_team": team_abbr,
@@ -104,29 +153,42 @@ def _match_dk_to_mlb(dk_props: list[dict], mlb_games: list[dict]) -> list[dict]:
                     "venue": game.get("venue_name") or "",
                     "lineup": game.get(f"{opp_side}_lineup") or [],
                     "lineup_source": game.get("lineup_source") or "none",
-                }
+                })
 
     matched = []
     unmatched_dk = []
 
     for prop in dk_props:
-        dk_name = _normalize_name(prop.get("pitcher_name", ""))
-        if dk_name in mlb_pitchers:
-            entry = {**mlb_pitchers[dk_name], **prop}
-            matched.append(entry)
+        raw_name = prop.get("pitcher_name", "")
+        dk_name = _normalize_name(raw_name)
+        team_tag = _team_tag(raw_name)
+
+        candidates = mlb_pitchers.get(dk_name, [])
+        if not candidates:
+            dk_last = dk_name.split()[-1] if dk_name else ""
+            if dk_last:
+                candidates = [info
+                              for key, infos in mlb_pitchers.items()
+                              if key.split()[-1] == dk_last
+                              for info in infos]
+
+        info = _resolve_probable(candidates, team_tag)
+        if info is None:
+            why = ("ambiguous, no team tag to break the tie" if candidates
+                   else "no MLB probable with that name")
+            unmatched_dk.append(f"{raw_name or '???'} [{why}]")
             continue
 
-        dk_last = dk_name.split()[-1] if dk_name else ""
-        found = False
-        for key, info in mlb_pitchers.items():
-            if key.split()[-1] == dk_last and not found:
-                entry = {**info, **prop}
-                matched.append(entry)
-                found = True
-                break
-
-        if not found:
-            unmatched_dk.append(prop.get("pitcher_name", "???"))
+        entry = {**info, **prop}
+        # The book's name wins the merge, and it may still carry the
+        # disambiguation tag. The tag has done its job in matching; drop it
+        # so "Ryan Johnson (LAA)" never reaches the board, the ledger or
+        # the grader. Only the tag is removed — the rest of the book's
+        # spelling is left alone, because the ledger and grader join on it.
+        if team_tag:
+            entry["pitcher_name"] = re.sub(
+                r"\s*\([^)]*\)\s*$", "", raw_name).strip()
+        matched.append(entry)
 
     if unmatched_dk:
         print(f"  Unmatched DK pitchers: {', '.join(unmatched_dk)}")
