@@ -50,6 +50,39 @@ Failures are logged too — they're as important as successes.
 | f3_days_in_tz | PASS | FAIL A:+0.38% B:-0.06% | — | — | — | REJECTED | 2026-08-04 |
 | f4_consec_road | PASS | FAIL A:-0.20% B:-0.00% | — | — | — | REJECTED | 2026-08-04 |
 
+### History window (not a feature — changes which pitchers are priced)
+
+| Change | Gate 1 | Gate 2 | Gate 3 | Gate 4 | Gate 5 | Result | Date |
+|---|---|---|---|---|---|---|---|
+| prior_season_window | PASS | PASS fit:+0.63% holdout:+0.44% | PASS W=0.60 fitted, 0.5 shipped | PASS (no feature added) | PASS fit:+9.93% holdout:+4.83% Brier | **SHADOW** | 2026-08-11 |
+
+Not a T2 feature — it does not add a column, it widens the sample behind
+`a3_season_k_pct_shrunk` and `c1_bf_mean`. Logged here anyway because it
+changes **which pitchers get priced at all**, which is a larger decision
+than any single coefficient. `USE_PRIOR_SEASON` stays False until the
+two-week shadow completes. Design and full numbers:
+`docs/PRIOR_SEASON_SCOPE.md`.
+
+**Gate 2 ran a substitute, on the operator's decision (2026-08-11).** The
+standard bar is both temporal directions; running this one backwards
+means using 2025 as the "prior season" for 2024 games, which feeds the
+model future data — a Gate-1 violation by construction. "Last season" is
+not symmetric in time and the rule was written for things that are.
+Substitute: two independent **forward** validations, 2024→2025 (used to
+fit W) and 2025→2026 (untouched holdout), both required to help.
+
+Gate 5 measured on the recovered starts only. Pooling over a full slate
+would drown it — 88% of starts are untouched by this change and would
+average the difference to nothing, which reads as "no harm" when it
+actually means "not measured".
+
+**Two caveats carried into the shadow.** (1) On the holdout, the 0.8–1.0
+prediction band came in 9.0 points high (n=66 line-evaluations); every
+other band is within 3. That band is where confident OVER bets come from.
+(2) Season debuts — a third of the recovered starts — have no production
+baseline to compare against at all, and are measurably harder (Brier
+0.190–0.198 vs 0.179–0.182 paired).
+
 ## Noise floor calibration
 
 Ran 20 independent random features through Gate 2's add-one logistic

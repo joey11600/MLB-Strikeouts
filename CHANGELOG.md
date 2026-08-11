@@ -1,6 +1,64 @@
 
 # Changelog
 
+## 2026-08-11 - Prior-season history window: built, gated, not shipped
+
+Operator answered the three §7 decisions: two forward validations in
+place of both temporal directions, **one** prior season, and the 263
+starts with no usable prior stay refused. Built on that basis.
+
+`USE_PRIOR_SEASON` is **False**. All five gates pass; CLAUDE.md requires
+a two-week shadow before promotion and this has had none.
+
+**What it does.** `tools/build_prior_season.py` writes a per-pitcher
+summary of a completed season to `data/prior_season/<year>.parquet` —
+rate, start count, and the distribution of starter outings. The pipeline
+loads that summary, not a second season of pitches: the worker prices six
+times a day and another ~750K rows per run is not affordable.
+
+The rate blend widens the sample before shrinking rather than shrinking a
+thin current season all the way to the league mean. Fitted W=0.60 by
+binomial log-loss on 2024->2025; shipped 0.5, because the loss curve is
+flat from 0.25 to 1.00 (0.52288 vs 0.52306) and 0.60 implies precision
+that is not there.
+
+**The scope doc was wrong about workload and the build corrected it.**
+It specified prior p25 everywhere, which was asserted, never compared
+against what production actually does (`game_bf.mean()`). Measured — and
+a season TOTAL is not a workload estimate, it has to be divided by
+outings — p25 wins outright only on season debuts. With 1-2 outings
+already this season a 50/50 blend beats BOTH sources on average error and
+on the upper tail, in both year pairs. Shipped: 3+ starter games ->
+current season alone; 1-2 -> blend; 0 -> prior p25.
+
+**Gates.** 1 leakage PASS (sidecar refuses an unfinished season; as-of
+totals exclude the start being judged; "start" = threw the first pitch,
+not "faced 15+ BF", which is post-hoc and drops the pitcher yanked after
+eight). 2 PASS, +0.63% rate log-loss on the fit and +0.44% on the
+untouched 2025->2026 holdout. 3 PASS. 4 PASS — no feature is added.
+5 PASS, Brier on P(K >= line) +9.93% and +4.83%, measured on the
+recovered starts only because pooling would average it away.
+
+**Two caveats into the shadow.** The holdout's 0.8-1.0 prediction band
+came in 9.0 points high (n=66 line-evaluations) where every other band is
+within 3 — that band is where confident OVER bets come from. And season
+debuts, a third of the recovered starts, have no production baseline to
+be compared against at all.
+
+**The first live example is the reason to shadow rather than ship.** With
+the flag on for 2026-08-11, Snell prices at E[K]=4.8 against a 5.5 line:
+an 11.3% edge to the UNDER on his second start back from a 94-day
+layoff. It did not book — but the threshold was 11.8% only because no
+lineup had posted, 5 points of which is the A-008 penalty. With a lineup
+posted it clears at 6.8% and books as a LEAN. The existing thresholds
+blocked this by four tenths of a point, for a reason that has nothing to
+do with the feature.
+
+`tests/test_prior_season.py` — 13 tests. The load-bearing one is that the
+flag OFF is a byte-for-byte no-op even when a prior row is passed; a
+feature that perturbs production while "disabled" is not disabled.
+Suite 127 passed.
+
 ## 2026-08-11 - A pitcher the book had to disambiguate was unmatchable
 
 The operator asked why the board was short and where one specific

@@ -194,18 +194,28 @@
   `statcast_cache.last_refresh.at` should advance at each scheduled
   window (15:00 / 16:45 / 18:15 ET), not only at boot, and
   `recent_bytes` for yesterday should be a real size rather than null
-- [ ] **Widen the pitcher history window to prior seasons — SCOPED, not
-  built.** See `docs/PRIOR_SEASON_SCOPE.md`. The 50-BF gate refuses
-  18.8% of 2026 starts; 11.5% of all starts (409, ~2.9/day) belong to
-  pitchers with 200+ BF and 10+ starts in 2025 sitting unused in the
-  cache. Prior-season K rate is portable (r=0.68–0.73 season to season,
-  unbiased on the recovered starts); prior-season workload is not
-  (r=0.40–0.51, and the naive mean overstates by 5+ BF on 8.6% of starts
-  ≈ a 14-point phantom OVER edge). Design splits them: prior seasons
-  inform the rate, workload uses the pitcher's own prior p25. Blocked on
-  three operator decisions in §7 — chiefly that Gate 2's "both temporal
-  directions" is incoherent for a last-season feature and needs a
-  substitute
+- [x] **Widen the pitcher history window to prior seasons — BUILT, flag
+  OFF, all five gates passed.** `docs/PRIOR_SEASON_SCOPE.md`,
+  `docs/GATES.md`. Recovers 11.5% of starts (409, ~2.9/day) that the
+  50-BF gate refuses over history already on disk. Rate blends across
+  seasons (W=0.5); workload does not — 3+ starter games uses the current
+  season alone, 1–2 blends 50/50 with the pitcher's prior p25, 0 uses
+  p25. Gate 2 +0.44% and Gate 5 +4.83% Brier on the untouched holdout
+- [ ] **Shadow the prior-season window for two weeks, then decide.** The
+  gates are green and that is not sufficient here: with the flag on for
+  2026-08-11, Snell showed an 11.3% UNDER edge on his second start back
+  from a 94-day layoff and was blocked by four tenths of a point — by the
+  A-008 unposted-lineup penalty, which has nothing to do with this
+  feature. Once a lineup posts, the same edge books as a LEAN. Watch
+  specifically: (a) the 0.8–1.0 prediction band, 9.0 points high on the
+  holdout where every other band is within 3; (b) season debuts, a third
+  of recovered starts, which have no production baseline at all and are
+  measurably harder (Brier 0.190–0.198 vs 0.179–0.182)
+- [ ] **Rebuild the prior-season sidecar each offseason.** `python
+  tools/build_prior_season.py <year>` once the season closes. Nothing
+  schedules this yet, and a missing sidecar degrades silently to
+  current-season-only — the pipeline prints a warning and prices on, so
+  the board would just quietly get shorter again
 - [ ] **A-038 follow-up: alert on unmatched props rather than printing
   them.** The tag bug survived two slates because the only signal was one
   stdout line on a scheduled run. A DK prop that matches no probable is a

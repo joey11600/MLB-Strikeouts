@@ -65,6 +65,30 @@ ROLE_LOOKBACK_GAMES = 8
 STARTER_TYPICAL_BF = 15.0
 MIN_APPEARANCES_TO_PRICE = 3
 
+# --- Prior-season history (docs/PRIOR_SEASON_SCOPE.md) ---------------
+# OFF until the gauntlet clears. Flipping this on changes which pitchers
+# are priced at all, so it is a promotion decision, not a config tweak.
+USE_PRIOR_SEASON = False
+
+# What a batter faced LAST season is worth against one faced this season,
+# for the K-rate estimate only. Fitted 0.60 by binomial log-loss on the
+# 401 starts the feature recovers in 2025 (prior 2024); the loss curve is
+# flat from 0.25 to 1.00 (0.52288 vs 0.52306), so the parameter is weakly
+# identified and 0.5 is used rather than implying precision at 0.60.
+PRIOR_SEASON_WEIGHT = 0.5
+
+# Weight on CURRENT-season workload when the pitcher has 1-2 outings and
+# a usable prior season; the remainder goes to his prior-season p25.
+# Measured on both year pairs, this blend beats either source alone on
+# both average error and the dangerous upper tail. With zero current
+# outings the weight is necessarily 0 and the estimate is pure prior p25.
+PRIOR_WORKLOAD_BLEND = 0.5
+
+# A prior season only counts if it is substantial enough to establish
+# both a rate and a role. Below this the pitcher stays refused.
+MIN_PRIOR_BF = 200
+MIN_PRIOR_STARTS = 10
+
 from tracker import DATA_STATE_DIR
 
 SLATES_DIR = DATA_STATE_DIR / "slates"
@@ -210,24 +234,62 @@ def _group_alt_lines_by_pitcher(alt_lines: list[dict]) -> dict:
     return grouped
 
 
+def _prior_is_usable(prior: dict | None) -> bool:
+    """Is this prior-season row substantial enough to lean on?
+
+    Both bars matter and they do different jobs: MIN_PRIOR_BF says the
+    RATE is estimated from enough plate appearances, MIN_PRIOR_STARTS says
+    the pitcher was actually a STARTER. A reliever with 250 BF across 60
+    relief appearances clears the first and fails the second, which is the
+    point — prior-season volume must never launder a reliever into a
+    starter (AUDIT A-007).
+    """
+    if not USE_PRIOR_SEASON or not prior:
+        return False
+    return (float(prior.get("prior_bf") or 0) >= MIN_PRIOR_BF
+            and int(prior.get("prior_starts") or 0) >= MIN_PRIOR_STARTS)
+
+
 def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
                            home_team: str | None = None,
-                           target_date: date | None = None) -> dict:
-    """Compute season K% and BF stats for a pitcher from Statcast data."""
+                           target_date: date | None = None,
+                           prior: dict | None = None) -> dict:
+    """Compute season K% and BF stats for a pitcher from Statcast data.
+
+    `prior` is that pitcher's row from the previous season's sidecar
+    (tools/build_prior_season.py), or None. It widens the history window
+    for the RATE and, when the current season is too thin to say, for the
+    workload — see docs/PRIOR_SEASON_SCOPE.md. It never relaxes the role
+    gate's verdict on a pitcher whose current usage says reliever.
+    """
     completed = statcast_df[statcast_df["events"].notna()]
     p = completed[completed["pitcher"] == pitcher_id]
+    use_prior = _prior_is_usable(prior)
 
-    if p.empty:
+    if p.empty and not use_prior:
         return {"season_k_pct": None, "bf_mean": None, "total_bf": 0,
-                "is_startable": False,
+                "eff_bf": 0.0, "is_startable": False,
                 "skip_reason": "no Statcast history"}
 
     total_bf = len(p)
-    ks = p["events"].isin(["strikeout", "strikeout_double_play"]).sum()
-    raw_k_pct = ks / total_bf if total_bf > 0 else LEAGUE_K_RATE
+    ks = int(p["events"].isin(["strikeout", "strikeout_double_play"]).sum())
 
-    shrunk_k_pct = (total_bf * raw_k_pct + SHRINKAGE_BF * LEAGUE_K_RATE) / (
-        total_bf + SHRINKAGE_BF
+    # Widen the sample before shrinking, rather than shrinking a thin
+    # current season all the way to the league mean. K rate is the part of
+    # a pitcher's line that survives the offseason: r = 0.73 (2024->2025)
+    # and 0.68 (2025->2026), and on the recovered starts prior-season rate
+    # is unbiased -- 0.226 predicted against 0.226 actual. Workload is not
+    # (r = 0.40 / 0.51) and is handled separately below.
+    eff_bf = float(total_bf)
+    eff_ks = float(ks)
+    if use_prior:
+        eff_bf += PRIOR_SEASON_WEIGHT * float(prior["prior_bf"])
+        eff_ks += PRIOR_SEASON_WEIGHT * float(prior["prior_ks"])
+
+    raw_k_pct = eff_ks / eff_bf if eff_bf > 0 else LEAGUE_K_RATE
+
+    shrunk_k_pct = (eff_bf * raw_k_pct + SHRINKAGE_BF * LEAGUE_K_RATE) / (
+        eff_bf + SHRINKAGE_BF
     )
 
     # --- Workload / role (see AUDIT A-007) ---------------------------
@@ -262,9 +324,42 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
             f"{recent_typical_bf:.0f} BF (< {STARTER_TYPICAL_BF} needed)"
         )
 
+    # A prior season can establish the ROLE the current one is too short
+    # to show -- but only when the current season does not contradict it.
+    # Relief-length recent outings veto regardless of last year: that is
+    # exactly the A-007 case, and prior volume must not be able to
+    # overturn what this season is plainly showing.
+    if not is_startable and use_prior:
+        contradicts = (n_appearances > 0
+                       and recent_typical_bf < STARTER_TYPICAL_BF)
+        if not contradicts:
+            is_startable = True
+            skip_reason = None
+
     # Real history only. No league default, ever.
+    #
+    # Workload does NOT travel across seasons the way rate does, so the
+    # prior season is used here far more cautiously: his own p25 outing,
+    # not his mean. Measured on the recovered starts, the prior mean
+    # overstates batters faced by 5+ on 6.5-8.9% of them, and at ~2.45
+    # points of P(over) per batter that is a 13-16 point phantom OVER
+    # edge -- A-007 magnitude, landing precisely where the edge filter
+    # looks hardest. The p25 cuts that to 2.1-2.9% on season debuts.
+    #
+    # With 1-2 outings already this season, blending the two beats either
+    # alone on BOTH average error and that upper tail, in both year pairs
+    # tested. Not p10: under-projecting by 3 BF manufactures phantom
+    # UNDER edges just as surely. A-007 ran OVER by accident of that
+    # particular bug, not by law.
     if len(starter_games) >= 3:
         bf_mean = float(starter_games.mean())
+    elif use_prior:
+        prior_p25 = float(prior["prior_bf_p25"])
+        if n_appearances > 0:
+            bf_mean = (PRIOR_WORKLOAD_BLEND * float(game_bf.mean())
+                       + (1.0 - PRIOR_WORKLOAD_BLEND) * prior_p25)
+        else:
+            bf_mean = prior_p25
     else:
         bf_mean = float(game_bf.mean())
 
@@ -303,6 +398,11 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
         "season_k_pct_raw": float(raw_k_pct),
         "bf_mean": bf_mean,
         "total_bf": int(total_bf),
+        # The sample the rate was actually estimated from. Equals total_bf
+        # when no prior season is used, and it -- not total_bf -- is what
+        # the caller's data-sufficiency gate must read.
+        "eff_bf": float(eff_bf),
+        "used_prior_season": bool(use_prior),
         "n_starts": int(len(starter_games)),
         "n_appearances": n_appearances,
         "recent_typical_bf": recent_typical_bf,
@@ -627,6 +727,21 @@ def run_daily(
         print("  Falling back to league-average features.")
         statcast_df = pd.DataFrame()
 
+    # Prior-season sidecar, keyed by pitcher id. A precomputed summary,
+    # not a second season of pitches: the worker prices six times a day
+    # and loading another ~750K rows per run is not affordable.
+    prior_by_id = {}
+    if USE_PRIOR_SEASON:
+        from tools.build_prior_season import load_prior_season
+        prior_df = load_prior_season(d.year - 1)
+        if prior_df.empty:
+            print(f"  !! prior-season sidecar for {d.year - 1} is missing; "
+                  f"every pitcher falls back to current-season-only")
+        else:
+            prior_by_id = {int(r["pitcher"]): r
+                           for r in prior_df.to_dict("records")}
+            print(f"  prior season {d.year - 1}: {len(prior_by_id)} pitchers")
+
     # Leash-input context: operator pitch limits for today, and each
     # team's relief usage yesterday (both feed Stage A's leash).
     pitch_limits = _load_pitch_limits(game_date)
@@ -659,13 +774,22 @@ def run_daily(
         if not statcast_df.empty and pitcher_id:
             stats = _compute_pitcher_stats(
                 statcast_df, pitcher_id, home_team=home_team, target_date=d,
+                prior=prior_by_id.get(int(pitcher_id)),
             )
         else:
             stats = {"season_k_pct": None, "bf_mean": None, "total_bf": 0,
-                     "is_startable": False, "skip_reason": "no Statcast data loaded"}
+                     "eff_bf": 0.0, "is_startable": False,
+                     "skip_reason": "no Statcast data loaded"}
 
-        if stats["season_k_pct"] is None or stats["total_bf"] < 50:
-            print(f"    {pitcher_name}: insufficient data ({stats['total_bf']} BF), skipping")
+        # Gate on the sample the rate was actually estimated from. Without
+        # a prior season eff_bf IS total_bf, so this is unchanged from the
+        # original 50-BF rule; with one, a pitcher two starts into the
+        # season is no longer refused over history sitting on disk.
+        if stats["season_k_pct"] is None or stats.get("eff_bf", 0) < 50:
+            detail = f"{stats['total_bf']} BF"
+            if stats.get("used_prior_season"):
+                detail += f", {stats.get('eff_bf', 0):.0f} effective"
+            print(f"    {pitcher_name}: insufficient data ({detail}), skipping")
             continue
 
         # Role gate: never price a pitcher whose workload we can't
