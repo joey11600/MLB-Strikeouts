@@ -1,0 +1,216 @@
+# Scope: widening the pitcher history window to prior seasons
+
+**Status:** scoped, not built. Awaiting operator decision on §7.
+**Filed:** 2026-08-11
+**Prompted by:** A-038 investigation — Blake Snell refused with 18 BF in
+2026 while 799 BF and a 0.320 K rate from 2024–2025 sat unused in the
+cache.
+
+---
+
+## 1. The problem
+
+`tools/daily_pipeline.py` loads Statcast for the **current season only**:
+
+```python
+season_start = date(d.year, 3, 26)
+statcast_df = load_cached(season_start, d)
+```
+
+Every pitcher feature derives from that frame, so the 50-BF gate at
+`_compute_pitcher_stats` refuses anyone light on *this* season regardless
+of how much history exists a few months earlier on the same disk.
+
+### Measured size of the prize
+
+Over 2026 through 08-10, defining a start as *threw the game's first
+pitch for his side* (knowable pre-game, so Gate-1 clean — an earlier cut
+of this used "faced 15+ batters", which conditions on the outcome and
+silently drops the pitcher yanked after eight):
+
+| | starts | share |
+|---|---|---|
+| 2026 true starts | 3,570 | — |
+| refused by the 50-BF gate | 672 | 18.8% |
+| **of those, with 200+ BF and 10+ starts in 2025** | **409** | **11.5%** |
+| no usable prior history (stay refused) | 263 | 7.4% |
+
+**~2.9 recoverable starts per day.** About one start in nine is currently
+refused despite a full prior season being available. This is not an
+edge case about one ace returning from injury.
+
+---
+
+## 2. The central finding: rate and workload do not travel together
+
+The projection needs two things from history — how often he strikes
+batters out (**rate**) and how many batters he will face (**workload**).
+They are not equally portable across seasons.
+
+Pitchers with 10+ starts in both years:
+
+| transition | K rate | workload |
+|---|---|---|
+| 2024 → 2025 (n=135) | r = 0.730 | r = 0.402 |
+| 2025 → 2026 (n=131) | r = 0.677 | r = 0.507 |
+
+On the 409 recoverable starts specifically, prior-season **rate** is
+essentially unbiased:
+
+- actual K rate 0.226 vs 2025 K rate 0.226 (BF-weighted)
+- r = 0.313 against the individual start — reasonable given ~22 BF of
+  binomial noise per start
+
+Prior-season **workload** is unbiased in the mean and dangerous in the
+tail, which is the combination that matters here.
+
+**Design consequence: prior seasons may inform the rate. Workload needs
+its own treatment (§3).**
+
+---
+
+## 3. Choosing the workload estimator
+
+Mean bias is the wrong test. The edge filter selects on *large* edges, so
+what matters is how often the estimator overstates batters faced by
+enough to manufacture a phantom OVER edge. The repo's own measurement
+(`tests/test_stage_a_pitch_limit.py`) puts P(over) movement at **~2.45
+points per batter faced**, so +5 BF ≈ 12 points — the A-007 magnitude.
+
+Over the 409 recoverable starts, error = estimate − actual:
+
+| estimator | bias (BF) | P(over by 5+) | P(over by 3+) | 95th pct | phantom edge at 95th |
+|---|---|---|---|---|---|
+| prior-season mean | +0.67 | 8.6% | 20.0% | +5.8 | +14.1 pts |
+| prior-season median | +0.91 | 11.0% | 27.9% | +6.0 | +14.7 pts |
+| **prior-season p25** | **−0.95** | **4.4%** | **12.0%** | **+4.0** | **+9.8 pts** |
+| mean − 2.0 | −1.33 | 2.9% | 8.6% | +3.8 | +9.2 pts |
+| prior-season p10 | −2.98 | 2.7% | 4.9% | +2.9 | +7.0 pts |
+
+**Recommendation: p25** — the 25th percentile of his own prior-season
+starter outings. It roughly halves the dangerous tail versus the mean
+while staying near-unbiased, and it adapts to the pitcher: a metronome
+with consistent 25-BF starts gets a tighter estimate than a volatile one,
+which a fixed haircut cannot do.
+
+**Do not simply pick the most conservative option.** p10 under-projects
+by 3.0 BF ≈ 7 points of P(over), which manufactures phantom **UNDER**
+edges just as surely as the mean manufactures phantom OVERs. A-007 ran in
+the OVER direction by accident of that particular bug, not by law. Near-
+zero bias with a small tail beats maximum conservatism.
+
+### Surprising: the IL-gap flag does not find the danger
+
+The obvious guard — distrust prior workload after a long layoff — does
+not work. Splitting the 409 starts by days since previous appearance:
+
+| bucket | n | actual BF | bias | P(over by 5+) |
+|---|---|---|---|---|
+| normal rest (≤7d) | 256 | 22.1 | +0.34 | **9.4%** |
+| 8–20 day gap | 9 | 22.2 | −1.38 | 0.0% |
+| 21+ day gap (IL) | 4 | 20.5 | +2.67 | 0.0% |
+| season debut (no prior 2026 game) | 140 | 21.1 | +1.36 | 7.9% |
+
+The heaviest tail sits in **ordinary rest**, not in returns. The IL
+buckets are too small to conclude anything (n=9, n=4), but they give no
+support for gating on the gap. Protection must come from the estimator
+itself, not from a layoff rule. `c10_il_return` stays as a leash input;
+it does not become a gate.
+
+---
+
+## 4. Implementation shape
+
+**Do not load a second season in the pipeline.** The worker runs six
+times a day; an extra full season is ~750 K rows per run. Precompute a
+sidecar instead.
+
+1. **`tools/build_prior_season.py`** → `data/prior_season/<year>.parquet`,
+   one row per pitcher: `prior_bf`, `prior_ks`, `prior_k_pct`,
+   `prior_starts`, and outing quantiles `p10/p25/median/mean`. Built from
+   completed seasons only, so it is static and cacheable. Atomic write
+   per the data-integrity rule.
+2. **`_compute_pitcher_stats`** takes an optional `prior` row.
+   - *Rate:* blend current and prior BF with a recency weight `W`, then
+     shrink to league as today.
+     `eff_bf = cur_bf + W * prior_bf`, rate blended on the same weights.
+   - *Gate:* refuse on `eff_bf < 50` rather than `cur_bf < 50`.
+   - *Workload:* unchanged when current-season starter games ≥ 3.
+     Otherwise `prior_p25`, and refuse if prior starts < 10.
+   - *Role gate:* unchanged. A reliever stays refused — prior-season
+     history must not launder Drew Anderson into a starter. Require
+     `prior_starts >= 10` **and** current-season usage consistent with
+     starting.
+3. **Pipeline** loads the sidecar once and passes rows through.
+
+`W` is **fitted, not guessed** (§5). Everything else in the pipeline —
+batter K rates, team K rates, relief usage — stays current-season.
+
+---
+
+## 5. The five gates
+
+| Gate | Requirement | Status |
+|---|---|---|
+| 1 — Leakage | prior season is fully complete before the current one starts; sidecar built from closed seasons only | **clean by construction** — but the harness must confirm the sidecar is never rebuilt mid-season |
+| 2 — Out-of-sample | see wrinkle below | **not run** |
+| 3 — Effect size | fitted `W` must land in a plausible range; a fitted `W` near 1.0 (prior season as good as current) or near 0 (no signal) both indicate a bug | **not run** — §2 correlations are supporting evidence, not the fit |
+| 4 — Collinearity | `prior_k_pct` vs `a3_season_k_pct_shrunk` are the same quantity in different windows; the blend replaces rather than adds a feature, so no new pair enters the model. `prior_bf_mean` ↔ `c1_bf_mean` likewise | **low risk, must be confirmed** |
+| 5 — Calibration | Brier + calibration curve on P(K ≥ line), measured **on the 409 recovered starts specifically**, not the whole slate — the change is invisible in a pooled average | **not run** |
+
+### Gate 2 wrinkle — needs an operator decision
+
+CLAUDE.md requires both temporal directions: train 2024 → test 2025 and
+train 2025 → test 2024. **The backwards direction is incoherent for this
+feature.** Using 2025 as the "prior season" for 2024 games means feeding
+the model future data — a Gate-1 leakage violation by construction. The
+rule was written for features that are symmetric in time; "last season"
+is not.
+
+Proposed substitute, by analogy to the regime-scoped clause already in
+CLAUDE.md: **two independent forward validations** — 2024→2025 and
+2025→2026 — held to a higher bar, i.e. must help in both, with the
+2025→2026 result reserved as the true holdout and never used to tune `W`.
+
+That is a genuine relaxation of a stated rule and it is the operator's
+call, not mine.
+
+---
+
+## 6. Effort and sequencing
+
+1. Sidecar builder + tests — small, self-contained.
+2. `_compute_pitcher_stats` change behind a flag defaulting **off**.
+3. Fit `W` on 2024→2025 only.
+4. Gauntlet gates 2–5 via `tools/gauntlet.py`, holdout 2025→2026.
+5. Shadow two weeks against production (`tools/shadow.py`), comparing on
+   recovered starts specifically.
+6. Promote or reject; log the row in `docs/GATES.md` either way.
+
+Steps 1–3 are a session. Step 5 is the calendar cost and cannot be
+compressed.
+
+---
+
+## 7. Decisions needed before building
+
+1. **Gate 2 substitute (§5).** Accept two forward validations in place of
+   both temporal directions? Without this the feature cannot be validated
+   under the rules as written.
+2. **How far back.** 2025 only, or 2024+2025 with decay? The measurement
+   above used 2025 only. Two seasons recovers more pitchers but 2024 is
+   pre-ABS and CLAUDE.md already treats the regime boundary as material.
+3. **The 263 starts with no usable prior history stay refused.** Confirm
+   that is acceptable — this change does not make the board complete, it
+   moves refusals from 18.8% to 7.4% of starts.
+
+---
+
+## 8. Explicitly out of scope
+
+- Changing the 50-BF or 15-BF thresholds themselves. This widens the
+  *window*, not the bar.
+- The role gate. Relievers stay refused.
+- Batter, team, and bullpen inputs — all stay current-season.
+- Anything that would let a pitcher be *bet* without also passing the
+  existing edge threshold and stake caps.

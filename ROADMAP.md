@@ -194,6 +194,18 @@
   `statcast_cache.last_refresh.at` should advance at each scheduled
   window (15:00 / 16:45 / 18:15 ET), not only at boot, and
   `recent_bytes` for yesterday should be a real size rather than null
+- [ ] **Widen the pitcher history window to prior seasons — SCOPED, not
+  built.** See `docs/PRIOR_SEASON_SCOPE.md`. The 50-BF gate refuses
+  18.8% of 2026 starts; 11.5% of all starts (409, ~2.9/day) belong to
+  pitchers with 200+ BF and 10+ starts in 2025 sitting unused in the
+  cache. Prior-season K rate is portable (r=0.68–0.73 season to season,
+  unbiased on the recovered starts); prior-season workload is not
+  (r=0.40–0.51, and the naive mean overstates by 5+ BF on 8.6% of starts
+  ≈ a 14-point phantom OVER edge). Design splits them: prior seasons
+  inform the rate, workload uses the pitcher's own prior p25. Blocked on
+  three operator decisions in §7 — chiefly that Gate 2's "both temporal
+  directions" is incoherent for a last-season feature and needs a
+  substitute
 - [ ] **A-038 follow-up: alert on unmatched props rather than printing
   them.** The tag bug survived two slates because the only signal was one
   stdout line on a scheduled run. A DK prop that matches no probable is a
