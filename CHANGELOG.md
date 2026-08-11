@@ -46,8 +46,17 @@ name after a successful dispatch and then called `TASKS[""]`, raising
 `KeyError('')` into a handler that logged `BOOT TASK ERROR : ''` on the
 one path that had worked. Reproduced before deleting.
 
-Five regression tests, negative-controlled: the old loop body refreshes
+Nine regression tests, negative-controlled: the old loop body refreshes
 zero times on a dispatched task where the new one refreshes once.
+
+**Also made it observable.** `/health` now reports `statcast_cache` —
+the latest cached date, how many days are held, the byte size of each of
+the last five days (`null` = absent, 636 = schema-only, ~450 KB = a real
+light slate) and `last_refresh` with its timestamp, ok flag and window.
+Answering "is 2026-08-10 actually in the cache?" needed container-log
+access during this investigation, and the Railway session expired
+mid-diagnosis — which is exactly when a health field earns its keep. The
+same invariant as A-029: report the operation, not the configuration.
 
 Not closed: `backfill_statcast` skips any day over 2 days old and over
 20 KB, so a file written mid-games is large-but-incomplete and can

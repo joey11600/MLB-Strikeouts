@@ -291,11 +291,23 @@ Tracks open items, resolved items, and known risks.
   raising `KeyError('')` into a handler that logged
   `BOOT TASK ERROR : ''` — on the one path that had actually worked.
   Reproduced in the negative control before deleting it.
-- **Locked with tests:** `tests/test_worker_cache_refresh.py`, five cases
+- **Made observable, so the next one is not a log excavation.**
+  `/health` now carries `statcast_cache`: `latest_date`, `n_days`,
+  the byte size of each of the last five days (`null` = absent, 636
+  = schema-only, ~450 KB = a real light slate), and `last_refresh`
+  with its timestamp, ok flag and window. Answering "is 2026-08-10
+  actually in there?" required container-log access during this
+  investigation, and the Railway session expired mid-diagnosis --
+  which is precisely when a health field earns its keep. Same
+  lesson as invariant 11.
+- **Locked with tests:** `tests/test_worker_cache_refresh.py`, nine cases
   — refresh on dispatch, no local double-run, no double refresh on the
-  local path, a raising task contained, an unknown task contained.
-  Negative-controlled: the old loop body calls `refresh_cache` zero
-  times on a successful dispatch where the new one calls it once.
+  local path, a raising task contained, an unknown task contained, plus
+  four on the health surface: absent vs empty vs real day, a missing
+  cache directory, the refresh timestamp recorded, and a FAILED refresh
+  recorded as failed rather than ok. Negative-controlled: the old loop
+  body calls `refresh_cache` zero times on a successful dispatch where
+  the new one calls it once.
 - **Still open:** `backfill_statcast` skips a day once it is >2 days old
   AND >20 KB, so a file written mid-games is large-but-incomplete and
   freezes that way if no refresh lands on the following day. This fix

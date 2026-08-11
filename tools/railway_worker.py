@@ -220,6 +220,13 @@ class DataHandler(BaseHTTPRequestHandler):
                 "now_et": datetime.now(ET).isoformat(),
                 "jobs_run_today": _load_state(),
                 "cache_months": sorted(p.name for p in CACHE_DIR.glob("*")) if CACHE_DIR.exists() else [],
+                # WHAT the cache holds and WHEN it was last topped up, not
+                # merely that a directory exists. `cache_months` said
+                # "2026-08 is present" all through A-036/A-037 -- true,
+                # useless, and answering "is 2026-08-10 actually in there?"
+                # took container-log access nobody has in a hurry. Same
+                # lesson as invariant 11: report the operation.
+                "statcast_cache": _cache_status(),
                 "data_json_present": DASHBOARD_JSON.exists(),
                 "last_reconcile": LAST_RECONCILE,
                 # The board this container SERVES, and when it last pulled
@@ -909,12 +916,53 @@ def refresh_cache() -> None:
     start = SEASON_START if not has_data else today - timedelta(days=4)
     if not has_data:
         log(f"cold volume — seeding Statcast cache from {SEASON_START}")
-    _run(
+    ok = _run(
         "statcast-backfill",
         [PYTHON, "data/backfill_statcast.py",
          "--start", start.isoformat(), "--end", today.isoformat()],
         timeout=7200 if not has_data else 1800,
     )
+    # Published on /health. "When did this container last top up its own
+    # cache?" was unanswerable without deploy-log access, which is how
+    # A-037 -- one refresh per BOOT, because dispatch had quietly taken
+    # the scheduled ones away -- stayed invisible.
+    LAST_CACHE_REFRESH.update(
+        at=datetime.now(ET).isoformat(timespec="seconds"),
+        ok=ok,
+        window=f"{start.isoformat()}..{today.isoformat()}",
+    )
+
+
+LAST_CACHE_REFRESH: dict = {"at": None, "ok": None, "window": None}
+
+
+def _cache_status() -> dict:
+    """What the Statcast cache actually contains right now.
+
+    `recent_bytes` is the load-bearing field: a schema-only parquet is
+    636 bytes, so a day that is present-but-empty is visibly different
+    from a real one (a light slate is ~450 KB) without needing to open
+    the file. `null` means the file is absent entirely.
+    """
+    if not CACHE_DIR.exists():
+        return {"latest_date": None, "n_days": 0, "recent_bytes": {},
+                "last_refresh": LAST_CACHE_REFRESH}
+    today = datetime.now(ET).date()
+    recent = {}
+    for i in range(5):
+        d = today - timedelta(days=i)
+        p = CACHE_DIR / f"{d:%Y-%m}" / f"{d.isoformat()}.parquet"
+        try:
+            recent[d.isoformat()] = p.stat().st_size if p.exists() else None
+        except OSError:
+            recent[d.isoformat()] = None
+    dates = sorted(p.stem for p in CACHE_DIR.glob("*/*.parquet"))
+    return {
+        "latest_date": dates[-1] if dates else None,
+        "n_days": len(dates),
+        "recent_bytes": recent,
+        "last_refresh": LAST_CACHE_REFRESH,
+    }
 
 
 def deploy_dashboard() -> None:

@@ -178,9 +178,14 @@
   since dispatch started succeeding — so the worker refreshed once per
   BOOT. `_run_or_dispatch` now refreshes here on the dispatch path.
   Third bug of that shape after A-025 and A-036
-- [ ] Confirm A-037 in production — the worker's cache should now gain a
-  day within one scheduled window rather than waiting for a deploy;
-  check that 2026-08-11 renders complete on the worker without a restart
+- [x] Make cache freshness answerable from `/health` (`statcast_cache`:
+  latest_date, per-day bytes for the last 5 days, last_refresh) — the
+  A-037 diagnosis needed deploy logs and the Railway session expired
+  part-way through
+- [ ] Confirm A-037 in production — after the redeploy, `/health`
+  `statcast_cache.last_refresh.at` should advance at each scheduled
+  window (15:00 / 16:45 / 18:15 ET), not only at boot, and
+  `recent_bytes` for yesterday should be a real size rather than null
 - [ ] **A-016 follow-up:** `backfill_statcast` skips any day >2 days old
   and >20 KB, so a file written mid-games is large-but-incomplete and
   freezes that way. Check completeness against the MLB schedule
