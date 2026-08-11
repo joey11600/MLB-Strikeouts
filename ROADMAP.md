@@ -172,12 +172,20 @@
   (A-036) — `_actual_k_lookup` falls back to `model_log.csv`, which every
   host shares. CI built 08-10 at 18/18 and the worker overwrote it with
   1/18 four minutes later
-- [ ] **Fix the cache lag itself, not just the display.** `refresh_cache()`
-  runs at boot and on the 03:00 job, both before Statcast publishes the
-  previous day (A-022). Bullpen fatigue reads yesterday's relief usage,
-  so the leash inputs are silently degraded on the worker even now that
-  the board reads correctly. Add a top-up on the 09:00 job, or gate the
-  refresh on the data actually being there
+- [x] **Fix the cache lag itself, not just the display (A-037).** The
+  real cause was worse than "runs at 03:00": the refresh lives inside
+  `_log_evidence`, which lives inside the task, which has run on CI ever
+  since dispatch started succeeding — so the worker refreshed once per
+  BOOT. `_run_or_dispatch` now refreshes here on the dispatch path.
+  Third bug of that shape after A-025 and A-036
+- [ ] Confirm A-037 in production — the worker's cache should now gain a
+  day within one scheduled window rather than waiting for a deploy;
+  check that 2026-08-11 renders complete on the worker without a restart
+- [ ] **A-016 follow-up:** `backfill_statcast` skips any day >2 days old
+  and >20 KB, so a file written mid-games is large-but-incomplete and
+  freezes that way. Check completeness against the MLB schedule
+  (expected games vs distinct `game_pk` in the file) rather than size
+  alone. Overlaps the off-day re-fetch item
 - [ ] Reconsider whether the worker should commit `dashboard/public/data.json`
   at all — it overwrote CI's better copy every 5 minutes and the site
   prefers the worker's live payload anyway, so the committed artifact is

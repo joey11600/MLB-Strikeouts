@@ -245,6 +245,64 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-037: dispatching the task outsourced the cache refresh with it
+- **Filed/Resolved:** 2026-08-11 (the cause under A-036, fixed on the
+  operator's instruction to fix the lag itself and not just the display)
+- **Description:** the worker's Statcast cache was refreshed **once per
+  boot** and never on a schedule, so it ran arbitrarily far behind CI.
+- **The mechanism that was supposed to prevent this had been disabled by
+  success.** `_log_evidence()` calls `refresh_cache()` first, six times a
+  day, and its docstring explains at length that this is what stopped
+  the 2026-08-07 evidence loss (A-022). But `_log_evidence` runs inside
+  the TASK, and the scheduler reads
+
+      if not dispatch_github(name):
+          TASKS[name]()
+
+  so once a GitHub token existed and dispatch began succeeding every
+  time, the task ran on CI and this container stopped executing that
+  path at all. The refresh went with it. Nothing failed; the log said
+  the window ran, and it had — elsewhere.
+- **Measured:** the container booted 2026-08-10 18:41 ET, mid-games, and
+  again 2026-08-11 07:58 ET, before Baseball Savant had published the
+  previous day (A-022: 0 pitches at 03:21, 3,530 by 08:59). Nothing
+  topped it up between. Result on 2026-08-11, same commit, four minutes
+  apart: CI rendered 2026-08-10 at 18/18 actual K totals, the worker at
+  1/18 (A-036).
+- **Third bug of this exact shape.** A mechanism that worked while the
+  fallback path was the normal path, and stopped the day the primary
+  path started succeeding: A-025 (Railway became the clock and stopped
+  being the publisher), A-036 (the renderer read a host-local cache),
+  and this one. The publish_pass docstring already says it outright —
+  "The bug only became reachable once the GitHub token was added and
+  dispatch began succeeding every time." It was written about a
+  different symptom of the same cause and nobody generalised it.
+- **Beyond the display.** A-036 made the BOARD correct on a stale cache.
+  This is the input side: bullpen fatigue reads yesterday's relief usage,
+  so a stale cache silently degrades the leash inputs on any locally-run
+  pricing — the fallback path that runs whenever dispatch fails, i.e.
+  exactly when the container is already having a bad day.
+- **Resolution:** `_run_or_dispatch(name)` — dispatch, and on success
+  still run `refresh_cache()` here; on failure run the task locally,
+  where `_log_evidence` refreshes as before (no double fetch). Both the
+  scheduler loop and the `RUN_TASK_ON_BOOT` hatch go through it.
+- **Latent bug removed on the way past.** The boot hatch blanked the task
+  name after a successful dispatch and then called `TASKS[""]` anyway,
+  raising `KeyError('')` into a handler that logged
+  `BOOT TASK ERROR : ''` — on the one path that had actually worked.
+  Reproduced in the negative control before deleting it.
+- **Locked with tests:** `tests/test_worker_cache_refresh.py`, five cases
+  — refresh on dispatch, no local double-run, no double refresh on the
+  local path, a raising task contained, an unknown task contained.
+  Negative-controlled: the old loop body calls `refresh_cache` zero
+  times on a successful dispatch where the new one calls it once.
+- **Still open:** `backfill_statcast` skips a day once it is >2 days old
+  AND >20 KB, so a file written mid-games is large-but-incomplete and
+  freezes that way if no refresh lands on the following day. This fix
+  makes that far less likely (six refreshes a day rather than one per
+  deploy) but does not make it impossible; completeness is not checked
+  against the schedule. Same family as A-016.
+
 ### A-036: the worker overwrote CI's good board with its own stale one
 - **Filed/Resolved:** 2026-08-11 (found by watching for the 09:00 backfill
   that A-035 predicted, and seeing it not arrive)

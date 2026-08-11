@@ -1058,6 +1058,45 @@ TASKS = {
 }
 
 
+def _run_or_dispatch(name: str) -> str:
+    """Hand a task to CI when we can, and keep OUR cache current either way.
+
+    Returns "dispatched", "local" or "error".
+
+    The refresh on the dispatch path is the whole reason this is a
+    function (A-037). `_log_evidence()` calls `refresh_cache()` first,
+    six times a day, and its docstring explains at length that this is
+    what stopped the 2026-08-07 evidence loss. But `_log_evidence` runs
+    inside the TASK -- and once a GitHub token existed, dispatch began
+    succeeding every time, so the task ran on CI and this container
+    stopped executing that code path entirely. Its cache was left with
+    one refresh per BOOT, at whatever arbitrary moment a deploy happened.
+
+    Measured: the container booted 2026-08-10 18:41 ET, mid-games, and
+    again 2026-08-11 07:58 ET, before Baseball Savant had published the
+    previous day (A-022: 0 pitches at 03:21, 3,530 by 08:59). Between
+    those two moments nothing topped it up, so on 2026-08-11 the worker
+    rendered 2026-08-10 with 1 of 18 actual strikeout totals while CI --
+    which restores the cache on every run -- rendered 18 of 18 from the
+    same commit (A-036).
+
+    This is the third bug of that exact shape: a mechanism that worked
+    while the fallback path was the normal path, and quietly stopped the
+    day the primary path started succeeding (A-025 for publishing, A-036
+    for rendering, this for the cache). Dispatching work does not
+    outsource this container's own inputs.
+    """
+    if dispatch_github(name):
+        refresh_cache()
+        return "dispatched"
+    try:
+        TASKS[name]()
+        return "local"
+    except Exception as exc:
+        log(f"TASK ERROR {name}: {exc}")
+        return "error"
+
+
 def main() -> None:
     log("=== Strikeouts Railway worker starting ===")
     log(f"cache: {CACHE_DIR}  state: {STATE_PATH}")
@@ -1102,14 +1141,14 @@ def main() -> None:
         # Same dispatch-first path the scheduler uses, so this escape
         # hatch also serves as an end-to-end proof that Railway can
         # drive GitHub Actions.
-        if dispatch_github(boot_task):
-            log(f"--- {boot_task} dispatched to GitHub Actions ---")
-            boot_task = ""
-        try:
-            TASKS[boot_task]()
-        except Exception as exc:
-            log(f"BOOT TASK ERROR {boot_task}: {exc}")
-        log(f"--- boot task {boot_task} finished ---")
+        #
+        # This used to blank `boot_task` on a successful dispatch and
+        # then call TASKS[""] anyway, which raised KeyError into the
+        # handler below and logged `BOOT TASK ERROR : ''` on the one
+        # path that had actually WORKED. Routing through
+        # _run_or_dispatch removes the second call entirely.
+        outcome = _run_or_dispatch(boot_task)
+        log(f"--- boot task {boot_task} finished ({outcome}) ---")
     elif boot_task:
         log(f"RUN_TASK_ON_BOOT={boot_task!r} is not a known task {list(TASKS)}")
 
@@ -1153,15 +1192,13 @@ def main() -> None:
                 # in the 6.5 hours after the workflow was created, while
                 # every one of these six windows hit on time. Falls back
                 # to running here when there is no token, which still
-                # grades, logs and rebuilds the dashboard.
-                if not dispatch_github(name):
-                    try:
-                        TASKS[name]()
-                    except Exception as exc:
-                        log(f"TASK ERROR {key}: {exc}")
+                # grades, logs and rebuilds the dashboard. Either way the
+                # Statcast cache on THIS volume is topped up -- see
+                # _run_or_dispatch (A-037).
+                outcome = _run_or_dispatch(name)
                 state[key] = today
                 _save_state(state)
-                log(f"--- finished {key} ---")
+                log(f"--- finished {key} ({outcome}) ---")
 
         except Exception as exc:
             log(f"LOOP ERROR: {exc}")

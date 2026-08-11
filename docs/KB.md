@@ -755,3 +755,13 @@ reach the dashboard but not git.
     before suspecting the code. Prefer the small shared record
     (`model_log.csv`, which rides the ledger reconcile) over the large
     host-local one, and skip a blank rather than coercing it to zero.
+17. **Delegating work does not delegate your own inputs.** The Statcast
+    refresh lived inside `_log_evidence`, inside the task; the scheduler
+    ran the task only when `dispatch_github()` FAILED. So the day
+    dispatch started succeeding, the worker stopped refreshing its own
+    cache and fell back to once per deploy (A-037). Whenever a primary
+    path is added in front of a fallback, ask what the fallback was
+    doing for you besides the obvious job — this is the third instance
+    of that exact shape (A-025 publishing, A-036 rendering, A-037 the
+    cache), and each time the log kept saying the window ran, because it
+    had, elsewhere.

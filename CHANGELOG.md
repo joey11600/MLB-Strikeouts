@@ -1,6 +1,59 @@
 
 # Changelog
 
+## 2026-08-11 - Dispatching the task outsourced the cache refresh with it
+
+A-036 fixed the display against a stale cache. This fixes the cache.
+
+The worker's Statcast cache was refreshed **once per boot** and never on
+a schedule. Not because nobody thought of it — `_log_evidence()` calls
+`refresh_cache()` first, six times a day, and its docstring explains
+that this is precisely what stopped the 2026-08-07 evidence loss.
+
+But `_log_evidence` runs inside the task, and the scheduler reads:
+
+    if not dispatch_github(name):
+        TASKS[name]()
+
+Once a GitHub token existed and dispatch started succeeding every time,
+the task ran on CI and this container stopped executing that path at
+all. The cache refresh went with it. Nothing failed. The log said the
+window ran — and it had, on another machine.
+
+Measured: booted 2026-08-10 18:41 ET mid-games, and 2026-08-11 07:58 ET
+before Savant had published the previous day. Nothing in between. Hence
+CI at 18/18 and the worker at 1/18 for the same date, from the same
+commit, four minutes apart.
+
+This is the third bug of the shape *"a mechanism that worked while the
+fallback was the normal path, and stopped the day the primary path
+started succeeding"* — A-025 for publishing, A-036 for rendering, this
+for the cache. The publish_pass docstring already stated the general
+lesson about a different symptom; it was never generalised.
+
+It matters beyond the board: bullpen fatigue reads yesterday's relief
+usage, so a stale cache degrades the leash inputs on any locally-run
+pricing — which happens exactly when dispatch fails, i.e. when the
+container is already having a bad day.
+
+**Fixed** with `_run_or_dispatch(name)`: dispatch, and on success still
+refresh the cache here; on failure run the task locally where
+`_log_evidence` refreshes as before, so no double fetch. Both the
+scheduler and the RUN_TASK_ON_BOOT hatch go through it.
+
+Removed a latent bug on the way past: the boot hatch blanked the task
+name after a successful dispatch and then called `TASKS[""]`, raising
+`KeyError('')` into a handler that logged `BOOT TASK ERROR : ''` on the
+one path that had worked. Reproduced before deleting.
+
+Five regression tests, negative-controlled: the old loop body refreshes
+zero times on a dispatched task where the new one refreshes once.
+
+Not closed: `backfill_statcast` skips any day over 2 days old and over
+20 KB, so a file written mid-games is large-but-incomplete and can
+freeze that way. Six refreshes a day makes it far less likely; it does
+not make it impossible. Filed as an A-016 follow-up.
+
 ## 2026-08-11 - The worker overwrote CI's correct board with its own blank one
 
 A-035 predicted that 2026-08-10's strikeout totals would fill in at the
