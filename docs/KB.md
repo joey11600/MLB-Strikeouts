@@ -730,3 +730,18 @@ reach the dashboard but not git.
     commit while HEAD is detached — `git push origin master` names the
     branch, so those commits are unreachable and the push fails
     non-fast-forward for a reason that looks nothing like the cause.
+14. **A cache keyed to "today" loses yesterday at midnight.** The live
+    watcher wrote one `live_state.json` stamped `today_et()` and the
+    board discarded it unless the stamp matched today, so the previous
+    day's results blanked at midnight and refilled when Statcast landed
+    at ~09:00 (A-035). Anything that answers "what happened on date D"
+    must be stored and looked up **by D**, not by the current clock. Keep
+    the date check when you add the key — rows keyed only by
+    `pitcher_id` would otherwise attach one night's result to another
+    night's start, and a fabricated result is worse than a blank one.
+15. **"Missing data" means the table the operator is looking at.** The
+    first pass at A-035 verified the bet ledger across five copies,
+    found it perfect, and said nothing was missing. The operator meant
+    the per-pitcher K totals on the board, which were genuinely gone.
+    When a report of missing data meets an intact table, locate the view
+    they are actually reading before concluding the report is wrong.

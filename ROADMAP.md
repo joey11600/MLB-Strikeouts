@@ -168,6 +168,14 @@
   has NO remote named `origin`, found only because the retry now logs
   its failures. Fixed and reproduced locally with `git remote remove
   origin` + a 25-commit gap
+- [x] Keep yesterday's results on the board overnight (A-035) — the live
+  watcher archives per date and the dashboard looks up by slate date, so
+  the midnight-to-09:00 blank window is closed. 2026-08-10 served 1/18
+  actual K totals when found
+- [ ] Confirm A-035 on the morning of 2026-08-12 — the 08-11 board should
+  read complete before 09:00 ET, not 1-of-N
+- [ ] Consider surfacing `result_source` on the board so an overnight
+  live figure is visibly distinct from a Statcast-confirmed one
 - [x] Stop the worker wedging itself on a halted rebase (A-034) —
   `sync_repo` resets to `origin/master` instead of rebasing onto it,
   because the files in conflict are regenerated from the volume in the

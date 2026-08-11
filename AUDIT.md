@@ -245,6 +245,68 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-035: yesterday's results vanished at midnight and came back at 09:00
+- **Filed/Resolved:** 2026-08-11 (operator report, twice: "the results
+  disappeared… they were all there last night, now they are gone", then
+  "the results are still missing from yesterday august 10th")
+- **Description:** every night, the previous day's board went blank for
+  every starter who was not a graded bet, and refilled mid-morning.
+  **Measured 2026-08-11 07:48 ET:** the 2026-08-10 slate served **1 of
+  18** pitchers with an actual strikeout total, against 26/26, 28/28,
+  20/20, 25/25, 27/27 and 27/28 on every other date in the same payload.
+- **Two sources, and a window where neither answers.** A board-wide K
+  total can come from Statcast (via `data/model_log.csv`) or from the
+  MLB Stats API watcher (A-020). Statcast does not publish yesterday's
+  games until ~09:00 ET (A-022 measured 0 pitches at 03:21, 3,530 by
+  08:59), so overnight the watcher is the only source — and the watcher
+  threw its own data away at midnight:
+  - `workers/live_strikeouts.py` wrote ONE `live_state.json`, overwritten
+    every 30s with `today_et()`. At midnight it rolled to the new date
+    with `pitchers: []`, and yesterday's finals ceased to exist.
+  - `dashboard_data._load_live_state()` then discarded the file entirely
+    unless its date equalled today's.
+  Confirmed live at 07:43 ET: `/live.json` served
+  `{"date":"2026-08-11","n_tracked":0,"pitchers":[]}`.
+- **`git log` on `data/model_log.csv` dates the refill precisely** — each
+  day's actuals first appear in the 09:00 ET run the NEXT morning:
+  2026-08-09's at 09:02, 08-08's at 09:05, 08-07's at 09:01. So the hole
+  is midnight to ~09:00, nightly, and had been there since the watcher
+  shipped on 2026-08-06.
+- **Nothing was ever lost from the ledger**, which is why this survived
+  three separate looks: bets, P&L, `available_dates` and the graded
+  record were correct throughout, in all five copies. Only the
+  DISPLAY of un-bet starters' results went missing, and only in a window
+  the operator happens to be awake for and the pipeline is not.
+- **Diagnostic lesson, recorded because it cost a cycle.** The first
+  investigation checked the ledger, found 11/11 rows stable across 200
+  commits, and reported nothing missing. The operator's word "results"
+  meant the per-pitcher K totals on the board, not the bet ledger. When
+  a report says data is missing and the obvious table is intact, find
+  the table they are actually looking at before concluding they are
+  wrong — the second report was needed to get there.
+- **Resolution:** the watcher archives each poll under the date the
+  payload is ABOUT (`data/live/<date>.json`, atomic write), and
+  `dashboard_data` looks up live rows **per slate date** rather than
+  "today". The date guard is kept, not dropped: these rows are keyed by
+  `pitcher_id` alone and a starter appears on many dates, so a payload
+  applied to the wrong slate would attach one night's strikeouts to
+  another night's start — a fabricated result, worse than a blank one.
+  An empty poll can never overwrite a date that already has finals, or
+  the hole would reopen at the exact moment it matters (the first poll
+  after midnight, and every poll on a day with no slate).
+- **Provenance unchanged.** Live figures still only fill a gap, never
+  overwrite a Statcast or ledger value, and still carry
+  `result_source: "live"`. This is a display fix; the graded ledger and
+  the evidence table are untouched.
+- **Does not retroactively restore 2026-08-10** — that day's live rows
+  were overwritten before the archive existed. Statcast filled them at
+  09:00 ET as usual. The fix takes effect from 2026-08-11 forward.
+- **Locked with tests:** `tests/test_live_results_persist.py`, five
+  cases — the rollover survival, the wrong-date leak, the legacy
+  single-file fallback, the empty-poll erase, and the filing date.
+  Negative-controlled: the old `_load_live_state` returns `{}` on the
+  same fixture where the new one returns both pitchers.
+
 ### A-034: a lost push race halted a rebase, and the container never recovered
 - **Filed/Resolved:** 2026-08-11 (found underneath the operator's report
   that "the results disappeared" — which was a different, benign thing:

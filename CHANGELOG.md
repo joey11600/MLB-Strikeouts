@@ -1,6 +1,52 @@
 
 # Changelog
 
+## 2026-08-11 - Yesterday's results vanished at midnight, every night
+
+The operator reported the results disappearing, was told the ledger was
+intact, and reported it again: "the results are still missing from
+yesterday august 10th." They were right, and the first answer was
+looking at the wrong table.
+
+The bet ledger *was* intact — 11 rows, -7.05u, verified in five places.
+What had gone missing was the per-pitcher strikeout total shown for
+every starter on the board, bet or not. Measured at 07:48 ET: the
+2026-08-10 slate served **1 of 18** pitchers with an actual K total,
+against 26/26, 28/28, 20/20, 25/25, 27/27 and 27/28 on every other date
+in the same payload.
+
+Two sources can supply that number, and there is a window each night
+where neither does. Statcast doesn't publish yesterday's games until
+around 09:00 ET, so overnight the MLB Stats API watcher is the only
+source — and the watcher was throwing its own data away. It wrote a
+single `live_state.json`, overwritten every 30 seconds with today's
+date; at midnight it rolled over to `pitchers: []` and yesterday's
+finals stopped existing. The dashboard then discarded the file anyway
+unless its date matched today's.
+
+So results that were on screen all evening went blank overnight and
+returned mid-morning. `git log` on `data/model_log.csv` dates the refill
+exactly: each day's actuals first land in the 09:00 ET run the next
+morning — 09:02, 09:05, 09:01 on the three prior days. The hole had been
+there since the watcher shipped on 08-06.
+
+**Fixed** by archiving each poll under the date it is *about*
+(`data/live/<date>.json`) and looking up live rows per slate date
+instead of "today". The date guard is kept rather than dropped — these
+rows are keyed by pitcher_id alone and a starter appears on many dates,
+so applying a payload to the wrong slate would attach one night's
+strikeouts to another night's start, which is worse than a blank. An
+empty poll can never overwrite a date that already has finals.
+
+Provenance is unchanged: live figures still only fill a gap, never
+overwrite a Statcast or ledger value, and still carry
+`result_source: "live"`. This is a display fix; the graded ledger and
+evidence table are untouched. It does not retroactively restore
+2026-08-10, whose live rows were overwritten before the archive existed
+— Statcast filled those at 09:00 ET as usual.
+
+Five regression tests, negative-controlled against the old loader.
+
 ## 2026-08-11 - Four hours of grades committed to a detached HEAD
 
 The operator reported that the results had disappeared. They had not —

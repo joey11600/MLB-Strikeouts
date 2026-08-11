@@ -56,6 +56,15 @@ QUIET_S = int(os.environ.get("LIVE_QUIET_S", "600"))
 STATE_PATH = Path(os.environ.get("LIVE_STATE_PATH")
                   or (DATA_STATE_DIR / "live_state.json"))
 SLATES_DIR = DATA_STATE_DIR / "slates"
+# Per-date archive of the same payload. live_state.json is a SINGLE file
+# the poller overwrites, so at midnight ET it rolls to the new date and
+# yesterday's finals cease to exist -- while Statcast, the only other
+# source of a board-wide K total, does not publish them until ~09:00 ET
+# (A-022). That left the previous day's board blank for every starter who
+# was not a graded bet, from midnight to 09:00, every single night
+# (A-035). Keyed by date so the board can ask for the date it is
+# rendering instead of hoping it is still "today".
+LIVE_DIR = DATA_STATE_DIR / "live"
 
 TERMINAL = {"Final", "Game Over", "Completed Early"}
 
@@ -208,19 +217,44 @@ def poll_once() -> dict:
     }
 
 
-def write_state(state: dict) -> None:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(STATE_PATH.parent), suffix=".tmp")
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(state, f, separators=(",", ":"))
+            json.dump(payload, f, separators=(",", ":"))
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, str(STATE_PATH))
+        os.replace(tmp, str(path))
     except BaseException:
         if os.path.exists(tmp):
             os.unlink(tmp)
         raise
+
+
+def write_state(state: dict) -> None:
+    _write_json_atomic(STATE_PATH, state)
+    # Archive under the date the payload is ABOUT, not the date it was
+    # written, so a poll straddling midnight files itself correctly.
+    iso = state.get("date")
+    if not iso:
+        return
+    # Never let an empty rollover poll erase a day that already has
+    # finals. The first poll after midnight reports the NEW date with
+    # zero pitchers, and on a day with no slate every poll does -- if
+    # that overwrote the archive the hole this closes would reopen at
+    # exactly the moment it matters. Only ever grow a date's record.
+    archived = read_archived_state(iso)
+    if archived.get("pitchers") and not state.get("pitchers"):
+        return
+    _write_json_atomic(LIVE_DIR / f"{iso}.json", state)
+
+
+def read_archived_state(iso: str) -> dict:
+    try:
+        return json.loads((LIVE_DIR / f"{iso}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
 
 def main() -> int:

@@ -138,16 +138,46 @@ def _actual_k_lookup(dates: set[str]) -> dict:
     return lookup
 
 
-def _load_live_state() -> dict:
-    """{pitcher_id: live line} from the MLB-API watcher, today only."""
-    path = DATA_STATE_DIR / "live_state.json"
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    if payload.get("date") != datetime.now(ET).strftime("%Y-%m-%d"):
+def _live_rows_for(iso: str) -> dict:
+    """{pitcher_id: live line} from the MLB-API watcher, for ONE date.
+
+    Was "today only", against a single live_state.json the poller
+    overwrites. Two things went wrong with that (A-035). The file rolls
+    to the new date at midnight ET and drops yesterday's finals, and the
+    today-guard then discarded whatever was left -- so between midnight
+    and the ~09:00 Statcast publish (A-022) the previous day's board
+    showed a blank K total for every starter who was not a graded bet.
+    Results that had been on screen all evening vanished overnight and
+    came back mid-morning, which is exactly how the operator described
+    it, twice.
+
+    The guard itself was load-bearing and is not simply dropped: these
+    rows are keyed only by pitcher_id, and a starter appears on many
+    dates, so a payload applied to the wrong slate would attach one
+    night's strikeouts to another night's start. Hence per-date lookup
+    rather than a global one.
+    """
+    payload = {}
+    path = DATA_STATE_DIR / "live" / f"{iso}.json"
+    if path.exists():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+    if not payload:
+        # Fall back to the current-day file for the window before the
+        # first archive write, and for any deployment still running the
+        # old poller. Same date check as before -- it must match the
+        # slate being rendered, not merely exist.
+        legacy = DATA_STATE_DIR / "live_state.json"
+        try:
+            candidate = json.loads(legacy.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        if candidate.get("date") != iso:
+            return {}
+        payload = candidate
+    if payload.get("date") != iso:
         return {}
     return {int(r["pitcher_id"]): r for r in payload.get("pitchers", [])
             if r.get("pitcher_id") is not None}
@@ -155,7 +185,8 @@ def _load_live_state() -> dict:
 
 def _build_slates(picks: list[dict]) -> tuple[dict, list[str]]:
     """Merge slate sidecars with the picks ledger, keyed by date."""
-    live_rows = _load_live_state()
+    # Read once per date, not once per pitcher.
+    live_by_date: dict[str, dict] = {}
     slates = {}
     pick_index = {}
     for row in picks:
@@ -208,7 +239,9 @@ def _build_slates(picks: list[dict]) -> tuple[dict, list[str]]:
                 # results that were already decided. Only fills a gap --
                 # never overwrites a Statcast or ledger figure, which
                 # stay the graded truth.
-                lv = live_rows.get(int(p.get("pitcher_id") or 0))
+                if d not in live_by_date:
+                    live_by_date[d] = _live_rows_for(d)
+                lv = live_by_date[d].get(int(p.get("pitcher_id") or 0))
                 if lv:
                     if entry["actual_strikeouts"] is None:
                         entry["actual_strikeouts"] = lv.get("strikeouts")
