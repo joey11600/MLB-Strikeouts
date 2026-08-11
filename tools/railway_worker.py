@@ -265,7 +265,7 @@ GIT_STATUS: dict = {"is_repo": None, "shallow": None, "remote": None,
 
 # Whether the worker is actually RECEIVING CI's work. Declared up here
 # because the boot-time bootstrap sets it before sync_repo ever runs.
-LAST_PULL: dict = {"at": None, "ok": None, "error": None}
+LAST_PULL: dict = {"at": None, "ok": None, "error": None, "head": None}
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
@@ -419,23 +419,83 @@ def configure_git() -> None:
     log(f"git remote configured for {GITHUB_REPO}")
 
 
-def sync_repo() -> None:
-    """Pull, then merge the pulled ledger into the volume the jobs use.
+def _head_state() -> dict:
+    """What HEAD is doing right now — attached, detached, mid-rebase.
 
-    No token gate on the pull: the repo is public, so an anonymous pull
-    works. The old GITHUB_TOKEN check meant the container silently never
-    pulled, which is how it ended up running against whatever ledger
-    happened to be baked into the image. A pull failure is logged and
-    tolerated -- working from a slightly old checkout beats refusing to
-    run at all.
+    Published on /health. A-034 ran for four hours with every symptom
+    visible in the deploy log and nothing on /health saying which of the
+    three states the container was in.
+    """
+    branch = _git("symbolic-ref", "--quiet", "--short", "HEAD")
+    rebase_dir = (_git("rev-parse", "--git-path", "rebase-merge").stdout or "").strip()
+    apply_dir = (_git("rev-parse", "--git-path", "rebase-apply").stdout or "").strip()
+    mid_rebase = any(
+        d and (REPO / d).exists() for d in (rebase_dir, apply_dir)
+    )
+    return {
+        "branch": (branch.stdout or "").strip() if branch.returncode == 0 else None,
+        "detached": branch.returncode != 0,
+        "rebase_in_progress": mid_rebase,
+    }
+
+
+def sync_repo() -> None:
+    """Take CI's copy wholesale, then merge it into the volume.
+
+    RESET, not pull. `git pull --rebase` was wrong here in a way that
+    took four hours of stranded grades to show (A-034): it tries to
+    reconcile two edits to `dashboard/public/data.json`, and there is
+    nothing to reconcile. That file is DERIVED -- regenerated from the
+    volume a few lines later in every publish pass -- so a conflict in
+    it has no correct resolution, only a halted rebase. Which is what
+    happened: the rebase stopped, left `.git/rebase-merge` behind and
+    HEAD detached, and every later pull died on
+    `fatal: It seems that there is already a rebase-merge directory`.
+    Nothing self-healed, because nothing was watching for it.
+
+    It is also what makes the pull/push race survivable. CI pushes on
+    its own schedule, so between this container's fetch and its push
+    the remote can move -- measured at 03:01:23 ET on 2026-08-11, one
+    second apart. Rebasing turns that race into wedged state; resetting
+    turns it into "next pass picks it up", because the losing pass's
+    commit held nothing the volume cannot regenerate.
+
+    Discarding the checkout is safe for exactly the reasons
+    _bootstrap_repo already sets out: no symlinks reach the volume,
+    nothing tracked is excluded from the image, and `reset --hard`
+    leaves untracked and ignored paths (the Statcast cache) alone. The
+    volume is the source of truth; /app is scratch.
 
     The reconcile is the load-bearing half. The jobs read and write
-    DATA_STATE_DIR (the volume); `git pull` only touches the /app
-    checkout. Without a merge those are two independent ledgers: the PC
-    writes picks to git, the container grades a volume copy that never
-    sees them, and its /data.json -- which the dashboard PREFERS over
-    the bundled copy -- silently reports a record missing the picks.
+    DATA_STATE_DIR (the volume); git only touches the /app checkout.
+    Without a merge those are two independent ledgers: the PC writes
+    picks to git, the container grades a volume copy that never sees
+    them, and its /data.json -- which the dashboard PREFERS over the
+    bundled copy -- silently reports a record missing the picks.
     """
+    # Unconditional, and failure-tolerant on purpose: `git rebase
+    # --abort` exits non-zero when no rebase is in progress, which is
+    # the normal case. Running it every pass is what makes the recovery
+    # automatic instead of waiting for a human with a shell.
+    before = _head_state()
+    if before["rebase_in_progress"] or before["detached"]:
+        log(f"git: recovering wedged checkout {before} — aborting any rebase "
+            f"and resetting to origin/master")
+        _git("rebase", "--abort")
+        # Reattach BEFORE the network is involved. If the fetch below
+        # fails (Railway egress blip, GitHub 5xx) the container must
+        # still end this call on a branch, or the next commit lands on a
+        # detached HEAD again and the push keeps pointing at a master
+        # that never moves. Anchoring to HEAD keeps this pass's history;
+        # the next successful fetch discards it, which costs nothing
+        # because every byte of it is regenerated from the volume.
+        if _head_state()["detached"]:
+            _run("git-reattach", ["git", "checkout", "-B", "master", "HEAD"], 60)
+    # Drop working-tree edits from the previous pass's mirror. They are
+    # regenerated from the volume immediately after this returns, and
+    # leaving them makes `checkout -B` fail on a dirty tree.
+    _git("reset", "--hard")
+
     # Recorded as a FIRST-CLASS signal, not inferred from publish_pass.
     # `_run` returns False on failure and never raises, and publish_pass
     # wraps the whole pass in try/except and sets last_publish ok=True
@@ -443,12 +503,26 @@ def sync_repo() -> None:
     # `last_publish: {ok: true}` while every git command was failing with
     # exit 128. Anything downstream that wants to know "is this worker
     # actually receiving CI's work?" must read THIS, not last_publish.
-    ok = _run("git-pull", ["git", "pull", "--rebase", "--autostash",
-                           "origin", "master"], 180)
+    #
+    # No token gate: the repo is public, so an anonymous fetch works. The
+    # old GITHUB_TOKEN check meant the container silently never pulled,
+    # which is how it ended up running against whatever ledger happened
+    # to be baked into the image.
+    ok = _run("git-fetch", ["git", "fetch", "--no-tags", "origin", "master"], 180)
+    if ok:
+        # `checkout -B` does both halves in one shot: moves master to the
+        # fetched tip AND reattaches HEAD to it. A bare `reset --hard`
+        # would move whatever HEAD currently is -- and when HEAD is
+        # detached that leaves master behind, which is precisely the
+        # state that made every push fail non-fast-forward while the
+        # commits themselves succeeded.
+        ok = _run("git-reset-to-origin",
+                  ["git", "checkout", "-B", "master", "FETCH_HEAD"], 120)
     LAST_PULL.update(
         at=datetime.now(ET).isoformat(timespec="seconds"),
         ok=ok,
-        error=None if ok else "git pull failed — see the job log for the exit code",
+        error=None if ok else "git fetch/reset failed — see the job log for the exit code",
+        head=_head_state(),
     )
     reconcile_ledger()
 
@@ -866,6 +940,18 @@ def commit_and_push(context: str) -> None:
     if not os.environ.get("GITHUB_TOKEN"):
         log("git mirror skipped (no GITHUB_TOKEN) — volume holds the ledger, "
             "dashboard reads it live over HTTP")
+        return
+    # A detached HEAD is not a place to put commits. The push below names
+    # the BRANCH (`origin master`), so a commit made while detached is
+    # unreachable from master: git-commit reports OK, git-push reports
+    # non-fast-forward, and the pair reads as a push problem when the
+    # real fault is three steps upstream. That is A-034 exactly. Refuse
+    # loudly; sync_repo reattaches on the next pass and nothing is lost
+    # because the volume regenerates the content.
+    head = _head_state()
+    if head["detached"] or head["rebase_in_progress"]:
+        log(f"git mirror skipped — checkout is not on a branch ({head}); "
+            f"sync_repo resets it next pass, volume still holds the ledger")
         return
     subprocess.run(
         # model_log.csv rides along: it is the evidence table the /model

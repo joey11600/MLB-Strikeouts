@@ -245,6 +245,84 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-034: a lost push race halted a rebase, and the container never recovered
+- **Filed/Resolved:** 2026-08-11 (found underneath the operator's report
+  that "the results disappeared" — which was a different, benign thing:
+  the morning board is built at 09:00 ET and they looked at 07:15)
+- **Description:** for four hours the worker committed live grades every
+  five minutes onto a **detached HEAD**, pushed none of them, and
+  reported `OK git-commit` every time. GitHub's last commit stood at
+  03:14 ET while the container went on grading. Nothing alarmed.
+- **The trigger is a race, caught exactly in the deploy log.** At
+  03:01:23 ET `git-pull` printed `Already up to date.` and returned OK;
+  one second later the push was rejected:
+
+      [master 4156452] chore(worker): live grades 2026-08-11 03:01 ET
+       ! [rejected]  master -> master (fetch first)
+      hint: the remote contains work that you do not have locally. This
+      hint: is usually caused by another repository pushing to the same ref.
+
+  CI's `chore(ci): 2026-08-11 03:01 ET automated run` landed inside that
+  one-second window. The container now held a commit the remote did not.
+- **The rebase is what turned a lost race into a permanent wedge.** The
+  next pass ran `git pull --rebase --autostash` and tried to replay the
+  container's `dashboard/public/data.json` commit onto CI's commit to
+  the same file. They conflict by construction — both processes rewrite
+  that file in full — so the rebase halted, left `.git/rebase-merge`
+  behind and HEAD detached. Every later pull died on
+
+      fatal: It seems that there is already a rebase-merge directory
+
+  exit 128, ~50 times, 03:16 through 07:22 ET and still going when found.
+- **Three failures stacked into one misleading signature.** `git-commit`
+  succeeded (onto nothing reachable), `git-push origin master` failed
+  non-fast-forward (because `master` is frozen at its pre-rebase position
+  while a rebase is in flight), and the log therefore read as a *push*
+  problem. The real fault was three steps upstream, and `/health`
+  reported only `last_pull: {ok: false}` with no word on which of
+  attached / detached / mid-rebase the container was in.
+- **Blast radius: nothing lost, and that is by design not by luck.** The
+  volume is the source of truth and `reconcile_ledger` never stopped
+  succeeding — `11 pick(s), 11 graded` on every wedged pass — so
+  `/data.json` served the correct board throughout and the dashboard,
+  which prefers the worker's copy, was never wrong. Only the git mirror
+  froze. Verified across all five copies of the ledger (local clone,
+  `origin/master` walked commit by commit, worker feed, deployed static
+  fallback, rendered site): 11 rows and `-7.0532` on every one, never
+  shrinking.
+- **Resolution: reset, not rebase.** `sync_repo` now aborts any halted
+  rebase, reattaches HEAD, `git fetch`es, and `git checkout -B master
+  FETCH_HEAD`. `data.json` and the mirrored ledger are DERIVED — both
+  are regenerated from the volume later in the same pass — so a conflict
+  in them has no correct resolution, only a halt. Taking CI's copy
+  wholesale is the correct merge, and it is the same reasoning
+  `_bootstrap_repo` already documents for its own `reset --hard`: no
+  symlinks reach the volume, nothing tracked is excluded from the image,
+  and `reset --hard` leaves untracked caches alone. This also makes the
+  race survivable rather than fatal — a lost race now costs one pass's
+  commit, which held nothing the volume cannot regenerate.
+- **Reattachment happens before the network is touched**, so an egress
+  blip while detached cannot extend the wedge past the outage that
+  caused it. `commit_and_push` refuses outright while detached or
+  mid-rebase rather than logging `OK git-commit` onto an unreachable
+  HEAD, and `/health` now publishes `head: {branch, detached,
+  rebase_in_progress}`.
+- **Locked with tests, negative-controlled:**
+  `tests/test_worker_git.py::test_halted_rebase_is_cleared_instead_of_wedging_forever`
+  builds a real conflicting rebase and halts it for real, rather than
+  faking the symptom; two siblings cover the failed-fetch reattach and
+  the detached-commit refusal. Confirmed the harness reproduces a
+  genuine wedge and that the OLD command cannot clear it: exit 128,
+  `detached: True, rebase_in_progress: True` before and after. (The
+  old code's first stderr line differs by path — `unmerged files` here
+  versus `already a rebase-merge directory` in production, because
+  production runs `git checkout -- data.json` first each pass — same
+  exit code, same permanent wedge.)
+- **Generalises to:** any long-lived process that git-merges a file it
+  regenerates itself. If a conflict in an artifact has no meaningful
+  resolution, do not ask a three-way merge to find one; decide which
+  side is authoritative and take it whole.
+
 ### A-033: the A-023 build-skip half-worked, and every surviving build compiled numpy
 - **Filed/Resolved:** 2026-08-10 (found from the operator's Vercel usage
   chart: 91 CPU-hours on `mlb-strikeouts` for Aug 7-10, 96.4% of all

@@ -1,6 +1,56 @@
 
 # Changelog
 
+## 2026-08-11 - Four hours of grades committed to a detached HEAD
+
+The operator reported that the results had disappeared. They had not —
+every one of the 11 bets and the -7.05u P&L was intact in all five
+places it lives, and the missing piece was simply today's board, which
+is built at 09:00 ET and was looked for at 07:15. That part needed no
+fix beyond saying so.
+
+Underneath it was a real fault, four hours old and silent.
+
+**A lost push race.** At 03:01:23 ET the worker's `git pull` printed
+`Already up to date.`; one second later its push was rejected with
+`! [rejected] master -> master (fetch first)` — GitHub Actions had
+pushed its own `03:01 ET` commit inside that one-second window.
+
+**A rebase turned the lost race into a permanent wedge.** The next pass
+ran `git pull --rebase --autostash`, which tried to replay the
+container's `dashboard/public/data.json` commit onto CI's commit to the
+same file. Both processes rewrite that file in full, so they conflict by
+construction. The rebase halted, left `.git/rebase-merge` behind and
+HEAD detached, and every subsequent pull died on
+`fatal: It seems that there is already a rebase-merge directory` — exit
+128, roughly fifty times, 03:16 through 07:22 ET.
+
+The signature was misleading in a specific way: `git-commit` reported OK
+every five minutes (onto a HEAD reachable from no branch), and
+`git-push origin master` failed non-fast-forward (because `master` sits
+frozen at its pre-rebase position while a rebase is in flight). It read
+as a push problem. It was not one.
+
+Nothing was lost, and by design rather than luck: the volume is the
+source of truth, `reconcile_ledger` kept succeeding on every wedged pass
+(`11 pick(s), 11 graded`), and the served board stayed correct
+throughout. Only the git mirror froze.
+
+**Fixed by resetting instead of rebasing.** `data.json` and the mirrored
+ledger are derived — regenerated from the volume later in the same pass
+— so a conflict in them has no correct resolution, only a halt.
+`sync_repo` now aborts any halted rebase, reattaches HEAD *before* it
+touches the network, fetches, and `git checkout -B master FETCH_HEAD`.
+A lost race now costs one pass's commit and self-heals on the next.
+`commit_and_push` refuses to commit while detached instead of reporting
+success, and `/health` publishes `head: {branch, detached,
+rebase_in_progress}` so the next occurrence is one field away rather
+than four hours of deploy log.
+
+Three regression tests build a genuine halted rebase rather than faking
+the symptom; the negative control confirms the old command leaves it
+wedged (exit 128, detached before and after).
+
 ## 2026-08-10 - 91 CPU-hours of builds: the skip half-worked, and every build compiled numpy
 
 The operator's Vercel usage for Aug 7-10 read 91 CPU-hours on

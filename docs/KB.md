@@ -718,3 +718,15 @@ reach the dashboard but not git.
     "git remote configured" unconditionally after four unchecked
     `subprocess.run(..., capture_output=True)` calls. Never log success
     from a code path that cannot observe failure (A-029).
+13. **The container's checkout is derived; never merge into it.**
+    `/app` is scratch — the volume is the ledger, and
+    `dashboard/public/data.json` plus the mirrored CSVs are rebuilt
+    from it every publish pass. So `sync_repo` takes `origin/master`
+    wholesale (`fetch` + `checkout -B master FETCH_HEAD`) and never
+    rebases or merges. A three-way merge on a file both sides
+    regenerate in full has no correct resolution: on 2026-08-11 one
+    halted mid-rebase, detached HEAD, and cost four hours of pushes
+    while every `git-commit` reported OK (A-034). Corollary: never
+    commit while HEAD is detached — `git push origin master` names the
+    branch, so those commits are unreachable and the push fails
+    non-fast-forward for a reason that looks nothing like the cause.

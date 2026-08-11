@@ -168,6 +168,14 @@
   has NO remote named `origin`, found only because the retry now logs
   its failures. Fixed and reproduced locally with `git remote remove
   origin` + a 25-commit gap
+- [x] Stop the worker wedging itself on a halted rebase (A-034) —
+  `sync_repo` resets to `origin/master` instead of rebasing onto it,
+  because the files in conflict are regenerated from the volume in the
+  same pass. Four hours of grades had been committed to a detached HEAD
+  and never pushed
+- [ ] Confirm A-034 in production — after the redeploy, `/health` should
+  show `last_pull.ok: true` with `head.detached: false`, and commits
+  should resume at 5-minute intervals
 - [ ] Re-read the Vercel usage chart after a full slate day and confirm
   the number actually landed near ~1-2 CPU-hours/day
 - [ ] Apply the same build-skip to the NRFI project (99 CPU-hours,

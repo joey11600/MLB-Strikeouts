@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -198,6 +199,151 @@ def test_can_push_reports_capability_not_configuration(monkeypatch):
     )
     assert can_push is False, (
         "can_push_to_git must not be satisfied by the presence of a token"
+    )
+
+
+# --------------------------------------------------------------------
+# A-034: a halted rebase wedged the checkout and nothing self-healed.
+# --------------------------------------------------------------------
+
+def _git_in(path: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=path, capture_output=True,
+                          text=True)
+
+
+def _wedged_checkout(tmp_path: Path) -> tuple[Path, Path]:
+    """Reproduce A-034 exactly: a rebase halted on a conflict.
+
+    Not a simulation of the symptom -- the real sequence. CI and the
+    container both rewrite dashboard/public/data.json, so their commits
+    conflict on content; `git pull --rebase` stops mid-replay, leaves
+    .git/rebase-merge behind and HEAD detached, and every later pull
+    dies on "there is already a rebase-merge directory".
+    """
+    remote, work = tmp_path / "remote", tmp_path / "work"
+    remote.mkdir()
+    _git_in(remote, "init", "-b", "master")
+    _git_in(remote, "config", "user.email", "ci@example.com")
+    _git_in(remote, "config", "user.name", "CI")
+    (remote / "data.json").write_text("base\n", encoding="utf-8")
+    _git_in(remote, "add", "-A")
+    _git_in(remote, "commit", "-m", "base")
+
+    _git_in(tmp_path, "clone", str(remote), str(work))
+    _git_in(work, "config", "user.email", "worker@example.com")
+    _git_in(work, "config", "user.name", "Worker")
+
+    # CI pushes first.
+    (remote / "data.json").write_text("ci\n", encoding="utf-8")
+    _git_in(remote, "commit", "-am", "chore(ci): automated run")
+
+    # The container commits its own copy of the same derived file.
+    (work / "data.json").write_text("worker\n", encoding="utf-8")
+    _git_in(work, "commit", "-am", "chore(worker): live grades")
+
+    # The old sync_repo. Conflicts, halts, and leaves the mess behind.
+    _git_in(work, "pull", "--rebase", "--autostash", "origin", "master")
+    return remote, work
+
+
+def test_halted_rebase_is_cleared_instead_of_wedging_forever(tmp_path, monkeypatch):
+    """The operative fix for A-034.
+
+    On 2026-08-11 this state persisted from 03:16 to 07:22 ET and would
+    have persisted indefinitely: four hours of live grades committed onto
+    a detached HEAD, none of them reachable from master, none pushed.
+    """
+    import tools.railway_worker as w
+
+    remote, work = _wedged_checkout(tmp_path)
+    monkeypatch.setattr(w, "REPO", work)
+    monkeypatch.setattr(w, "log", lambda m: None)
+    monkeypatch.setattr(w, "reconcile_ledger", lambda: None)
+
+    # Precondition: the harness really did wedge it. Without this the
+    # test could pass against a checkout that was never broken.
+    before = w._head_state()
+    assert before["rebase_in_progress"] or before["detached"], (
+        f"harness did not reproduce the wedged state: {before}"
+    )
+
+    w.sync_repo()
+
+    after = w._head_state()
+    assert after["rebase_in_progress"] is False, "rebase directory survived"
+    assert after["detached"] is False, "HEAD still detached"
+    assert after["branch"] == "master", f"not back on master: {after}"
+    assert w.LAST_PULL["ok"] is True, w.LAST_PULL["error"]
+
+    # CI's copy must win outright. The container's version of a DERIVED
+    # file has no claim -- it is regenerated from the volume moments
+    # later -- and preferring it is what the old --autostash pull did.
+    assert (work / "data.json").read_text(encoding="utf-8") == "ci\n"
+    head = _git_in(work, "rev-parse", "HEAD").stdout.strip()
+    tip = _git_in(remote, "rev-parse", "master").stdout.strip()
+    assert head == tip, "checkout did not land on origin's tip"
+
+    # And the recovery must be idempotent: a second pass on an already
+    # healthy checkout must not break it.
+    w.sync_repo()
+    assert w._head_state()["branch"] == "master"
+    assert w.LAST_PULL["ok"] is True
+
+
+def test_reattaches_even_when_the_fetch_fails(tmp_path, monkeypatch):
+    """Recovery must not depend on the network.
+
+    If reattachment only happened after a successful fetch, an egress
+    blip while detached would leave the container committing onto a
+    detached HEAD for another five minutes -- and pushing `master`,
+    which never moves. The wedge would outlive the outage that caused it.
+    """
+    import tools.railway_worker as w
+
+    _remote, work = _wedged_checkout(tmp_path)
+    monkeypatch.setattr(w, "REPO", work)
+    monkeypatch.setattr(w, "log", lambda m: None)
+    monkeypatch.setattr(w, "reconcile_ledger", lambda: None)
+    # Point the remote at nothing so the fetch cannot succeed.
+    _git_in(work, "remote", "set-url", "origin",
+            str(tmp_path / "does-not-exist"))
+
+    w.sync_repo()
+
+    after = w._head_state()
+    assert after["detached"] is False, "left detached after a failed fetch"
+    assert after["rebase_in_progress"] is False
+    assert after["branch"] == "master"
+    # The failure must still be reported honestly, not swallowed by the
+    # successful reattachment.
+    assert w.LAST_PULL["ok"] is False
+    assert w.LAST_PULL["error"]
+
+
+def test_commit_is_refused_while_detached(tmp_path, monkeypatch):
+    """git-commit reporting OK onto a detached HEAD is the trap.
+
+    Every 5 minutes for four hours the log read `OK git-commit` followed
+    by `FAILED git-push: non-fast-forward`, which reads as a push problem
+    and is not one. Refuse at the commit, name the real state.
+    """
+    import tools.railway_worker as w
+
+    _remote, work = _wedged_checkout(tmp_path)
+    _git_in(work, "rebase", "--abort")
+    _git_in(work, "checkout", "--detach")
+    monkeypatch.setattr(w, "REPO", work)
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_pretend")
+    lines: list[str] = []
+    monkeypatch.setattr(w, "log", lines.append)
+
+    before = _git_in(work, "rev-parse", "HEAD").stdout.strip()
+    w.commit_and_push("live grades")
+    after = _git_in(work, "rev-parse", "HEAD").stdout.strip()
+
+    assert after == before, "committed onto a detached HEAD"
+    assert any("not on a branch" in ln for ln in lines), (
+        f"the skip was silent; log said: {lines}"
     )
 
     w.GIT_STATUS.update(is_repo=True, remote="authenticated", error=None)
