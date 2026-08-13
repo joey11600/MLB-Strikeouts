@@ -26,10 +26,16 @@ finding rather than a silent overwrite. Live numbers are for watching
 picks resolve and for knowing hours early — not for booking money on a
 feed that can revise itself mid-inning.
 
+Polls TODAY, and finishes YESTERDAY before it starts. A poll asks for
+one date; a start that crosses midnight ET is still in progress when
+the date rolls, so watching only today abandoned it mid-game and the
+board showed a live pulse on a game that ended hours earlier (A-039).
+
 Env:
-    LIVE_POLL_S        seconds between polls while games are live (30)
-    LIVE_QUIET_S       seconds between polls otherwise (600)
-    LIVE_STATE_PATH    output file (defaults under DATA_STATE_DIR)
+    LIVE_POLL_S            seconds between polls while games are live (30)
+    LIVE_QUIET_S           seconds between polls otherwise (600)
+    LIVE_STATE_PATH        output file (defaults under DATA_STATE_DIR)
+    LIVE_CARRYOVER_UNTIL_H ET hour to stop chasing yesterday (12)
 """
 from __future__ import annotations
 
@@ -39,7 +45,7 @@ import sys
 import tempfile
 import time
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -53,6 +59,7 @@ API = "https://statsapi.mlb.com/api/v1"
 
 POLL_S = int(os.environ.get("LIVE_POLL_S", "30"))
 QUIET_S = int(os.environ.get("LIVE_QUIET_S", "600"))
+CARRYOVER_UNTIL_H = int(os.environ.get("LIVE_CARRYOVER_UNTIL_H", "12"))
 STATE_PATH = Path(os.environ.get("LIVE_STATE_PATH")
                   or (DATA_STATE_DIR / "live_state.json"))
 SLATES_DIR = DATA_STATE_DIR / "slates"
@@ -81,6 +88,38 @@ def _get(url: str, timeout: int = 25):
 
 def today_et() -> str:
     return datetime.now(ET).strftime("%Y-%m-%d")
+
+
+def yesterday_et(now: datetime | None = None) -> str:
+    return ((now or datetime.now(ET)) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def carryover_date(now: datetime | None = None) -> str | None:
+    """Yesterday, while it still holds a starter left mid-game.
+
+    poll_once() asks for ONE date and main() asks for today, so a start
+    that crosses midnight ET was simply abandoned: at 00:00 the poller
+    moved to the new date and never looked back. The archive kept
+    `status: in_game` forever, and because the board reads `live.final`
+    to decide whether a total can still move, those rows showed a
+    pulsing "IN GAME" next to a K count that had been settled for
+    hours. Measured on both days the archive has existed: 2026-08-11
+    left Nick Martinez (21:40 first pitch) stuck, 2026-08-12 left Eric
+    Lauer and George Klassen (both 22:10). No early game was ever hit,
+    which is the signature of a midnight cutoff rather than a bad feed.
+
+    Bounded twice so a game that never reaches a terminal state cannot
+    pin the poller to the past: it stops as soon as every tracked
+    starter is final, and it stops at CARRYOVER_UNTIL_H ET regardless.
+    A suspended game resumed days later is the grader's problem — this
+    file only ever reports.
+    """
+    now = now or datetime.now(ET)
+    if now.hour >= CARRYOVER_UNTIL_H:
+        return None
+    iso = yesterday_et(now)
+    rows = read_archived_state(iso).get("pitchers") or []
+    return iso if any(not r.get("final") for r in rows) else None
 
 
 def tracked_pitchers(iso_date: str) -> dict:
@@ -157,8 +196,9 @@ def _starter_line(box: dict, pid: int) -> dict | None:
     return None
 
 
-def poll_once() -> dict:
-    iso = today_et()
+def poll_once(iso: str) -> dict:
+    """Poll one date's tracked starters. The date is a parameter, not
+    today(), so main() can finish yesterday's late games."""
     tracked = tracked_pitchers(iso)
     sched = _get(f"{API}/schedule?sportId=1&date={iso}")
     games = [g for dt in sched.get("dates", []) for g in dt.get("games", [])]
@@ -232,22 +272,54 @@ def _write_json_atomic(path: Path, payload: dict) -> None:
         raise
 
 
-def write_state(state: dict) -> None:
-    _write_json_atomic(STATE_PATH, state)
+def _merge_rows(archived: dict, state: dict) -> dict:
+    """Fresh poll wins per pitcher; nobody already recorded is dropped.
+
+    Only ever grow a date's record. Two ways a cycle can report less
+    than the whole board: the first poll after midnight reports the NEW
+    date with zero pitchers (and on a day with no slate, every poll
+    does), and a single failed boxscore fetch `continue`s past that one
+    pitcher. Writing either straight through would blank a starter who
+    was already final -- the exact disappearing-results failure this
+    archive exists to prevent (A-035).
+
+    Rows are keyed by pitcher_id WITHIN one date's file, so this cannot
+    attach one night's strikeouts to another night's start.
+    """
+    if archived.get("date") != state.get("date"):
+        return state
+    prior = {r.get("pitcher_id"): r for r in archived.get("pitchers") or []}
+    if not prior:
+        return state
+    fresh = {r.get("pitcher_id"): r for r in state.get("pitchers") or []}
+    rows = sorted({**prior, **fresh}.values(),
+                  key=lambda r: (not r.get("final"),
+                                 r.get("pitcher_name") or ""))
+    return {**state,
+            "pitchers": rows,
+            "n_reported": len(rows),
+            "n_final": sum(1 for r in rows if r.get("final"))}
+
+
+def archive_state(state: dict) -> None:
+    """Update the per-date archive only, leaving live_state.json alone.
+
+    Split out of write_state so a carryover poll can finish yesterday's
+    record without overwriting the single-file view of what is happening
+    NOW, which is by definition about today.
+    """
     # Archive under the date the payload is ABOUT, not the date it was
     # written, so a poll straddling midnight files itself correctly.
     iso = state.get("date")
     if not iso:
         return
-    # Never let an empty rollover poll erase a day that already has
-    # finals. The first poll after midnight reports the NEW date with
-    # zero pitchers, and on a day with no slate every poll does -- if
-    # that overwrote the archive the hole this closes would reopen at
-    # exactly the moment it matters. Only ever grow a date's record.
-    archived = read_archived_state(iso)
-    if archived.get("pitchers") and not state.get("pitchers"):
-        return
-    _write_json_atomic(LIVE_DIR / f"{iso}.json", state)
+    _write_json_atomic(LIVE_DIR / f"{iso}.json",
+                       _merge_rows(read_archived_state(iso), state))
+
+
+def write_state(state: dict) -> None:
+    _write_json_atomic(STATE_PATH, state)
+    archive_state(state)
 
 
 def read_archived_state(iso: str) -> dict:
@@ -260,28 +332,48 @@ def read_archived_state(iso: str) -> dict:
 def main() -> int:
     once = "--once" in sys.argv
     log(f"starting (poll {POLL_S}s live / {QUIET_S}s quiet) -> {STATE_PATH}")
-    seen_final: set[int] = set()
+    # Keyed by (date, pitcher_id): a starter appears on many dates, and
+    # now that two dates are in flight at once a bare pitcher_id would
+    # swallow tonight's FINAL line because last night's already fired.
+    seen_final: set[tuple[str, int]] = set()
 
     while True:
         try:
-            state = poll_once()
+            state = poll_once(today_et())
             write_state(state)
-            for r in state["pitchers"]:
-                pid = r["pitcher_id"]
-                if r.get("final") and pid not in seen_final:
-                    seen_final.add(pid)
-                    k, line = r.get("strikeouts"), r.get("line")
-                    verdict = ""
-                    if k is not None and line is not None:
-                        verdict = (f" -> OVER {line} "
-                                   f"{'hits' if k > line else 'misses'}")
-                    log(f"FINAL {r['pitcher_name']}: {k} K in "
-                        f"{r.get('batters_faced')} BF{verdict}")
+            reports = [state]
+
+            # Finish yesterday before starting today. Archive only --
+            # live_state.json means "now", and now is today.
+            carry = carryover_date()
+            if carry:
+                carry_state = poll_once(carry)
+                archive_state(carry_state)
+                reports.append(carry_state)
+                log(f"carryover {carry}: {carry_state['n_final']}/"
+                    f"{carry_state['n_reported']} final, "
+                    f"live={carry_state['any_live']}")
+
+            any_live = any(s["any_live"] for s in reports)
+            for st in reports:
+                for r in st["pitchers"]:
+                    key = (st["date"], r["pitcher_id"])
+                    if r.get("final") and key not in seen_final:
+                        seen_final.add(key)
+                        k, line = r.get("strikeouts"), r.get("line")
+                        verdict = ""
+                        if k is not None and line is not None:
+                            verdict = (f" -> OVER {line} "
+                                       f"{'hits' if k > line else 'misses'}")
+                        log(f"FINAL {r['pitcher_name']}: {k} K in "
+                            f"{r.get('batters_faced')} BF{verdict}")
             log(f"{state['n_reported']} tracked, {state['n_final']} final, "
-                f"live={state['any_live']}")
+                f"live={any_live}")
             if once:
                 return 0
-            time.sleep(POLL_S if state["any_live"] else QUIET_S)
+            # Yesterday's late game is live even when today has not
+            # started, so the fast interval has to consider both.
+            time.sleep(POLL_S if any_live else QUIET_S)
         except KeyboardInterrupt:
             return 0
         except Exception as exc:

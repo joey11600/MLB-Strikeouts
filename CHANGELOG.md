@@ -1,6 +1,74 @@
 
 # Changelog
 
+## 2026-08-13 - The board sat on yesterday, late games stuck "IN GAME" (A-039)
+
+Operator: "the dashboard still has yesterdays games, and some of them
+still say in game." Three independent causes, each sufficient on its
+own. The data feed was never at fault — the worker was current
+throughout (`generated_at` 10:20 ET, today's slate present, CORS open),
+which is why this looked like a dead pipeline and was not one.
+
+**No money was affected.** All three frozen pitchers were no-bet rows,
+and the live watcher stays read-only with respect to the ledger.
+Statcast remained the graded source of truth, so P&L, record and
+grading were correct the whole time. This was a display fault.
+
+**1. The page loaded once and never again.** `DataProvider` fetched in a
+`useEffect` with `[]` deps — no interval, no visibility handler. A
+terminal left open overnight showed the date it was opened on
+indefinitely. Now re-fetches every 60s and on tab focus. A failed
+*refresh* keeps the board on screen; only the first load surfaces an
+error, because trading a good slate for an error page over one blip is
+strictly worse than showing a slightly old one.
+
+**2. A ~9-hour window every morning where the newest board IS
+yesterday.** A date enters `available_dates` only once its slate is
+written, and that is the 09:00 ET job (measured 09:19 ET today).
+`page.tsx` defaults to `dates[0]`, so from midnight until then it opened
+onto yesterday silently. It now says so, naming the date and the 9:00 ET
+build, and only when the date was defaulted rather than chosen.
+
+**3. Late starts frozen mid-game, permanently.** `poll_once()` computed
+`iso = today_et()` internally and `main()` only ever asked for today, so
+at 00:00 ET the poller moved to the new date and never looked back. Any
+starter still on the mound was archived `status: in_game` forever, and
+the board reads `live.final` to decide whether a total can still move.
+
+Every affected row is a late first pitch, and every date with an archive
+has one — 2 days out of 2, not occasionally:
+
+    2026-08-11  Nick Martinez                21:40 ET
+    2026-08-12  Eric Lauer, George Klassen   22:10 ET
+
+No early game was ever hit, which is the signature of a midnight cutoff
+rather than a bad feed.
+
+Fixed in two places, because they fail independently. `poll_once` takes
+the date as a parameter, and the loops finish yesterday before starting
+today — bounded by "every starter is final" AND by `CARRYOVER_UNTIL_H`
+(12:00 ET), so a suspended game cannot pin the poller to the past.
+`archive_state()` is split from `write_state()` so a carryover updates
+yesterday's record without overwriting the single-file view of *now*.
+Separately, `dashboard_data.py` treats a settled Statcast total as
+outranking a stopped poll — that is what clears the rows already frozen
+on disk, which no future poll will revisit — and flags them
+`stale_poll` rather than silently rewriting the observed counts.
+
+**Second bug found underneath it.** The archive's "only ever grow a
+date's record" guard caught a *fully* empty payload, but one failed
+boxscore fetch `continue`s past that pitcher, so a partial cycle could
+still blank a starter who was already final — A-035 reopened through a
+different door. `_merge_rows` now merges per pitcher.
+
+**Measured after.** Re-polling 2026-08-12 through the carryover path
+returned both stuck starters Final — Lauer 6 K in 27 BF, Klassen 5 K in
+24 BF. Lauer's 6 matches the Statcast total his card was already
+showing, so the fix agrees with the graded source rather than merely
+flipping a flag. `tests/test_live_carryover.py` (7 tests); full suite
+134 passed; dashboard typecheck clean; banner and 60s refresh verified
+in a browser against a simulated pre-09:00 payload.
+
 ## 2026-08-11 - Prior-season history window: built, gated, not shipped
 
 Operator answered the three §7 decisions: two forward validations in

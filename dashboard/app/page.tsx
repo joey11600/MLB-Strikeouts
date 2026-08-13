@@ -65,6 +65,12 @@ function SlateView() {
   const current =
     urlDate && dates.includes(urlDate) ? urlDate : dates[0] ?? data.today_et;
   const slate = data.slates[current];
+  // A date only exists once its slate is written, and that job runs at
+  // 09:00 ET — so from midnight until then the newest board IS
+  // yesterday and the dashboard opened straight onto it with nothing
+  // said, which reads as "stuck on yesterday" (A-039). Only when the
+  // date was defaulted, never when the operator picked it.
+  const defaultedToPastSlate = !urlDate && current !== data.today_et;
 
   const setDate = (d: string) => {
     const url = new URL(window.location.href);
@@ -139,6 +145,17 @@ function SlateView() {
         />
         <FilterBar filters={filters} onChange={updateFilters} />
       </div>
+
+      {defaultedToPastSlate && (
+        <p className="rounded-card border border-line bg-surface px-4 py-2.5 text-xs leading-relaxed text-ink-secondary">
+          <span className="font-semibold text-ink">
+            Nothing published for {data.today_et} yet.
+          </span>{" "}
+          The day&rsquo;s board is priced at 9:00 AM ET, once lineups and
+          opening lines are in. Showing {current} — the most recent board —
+          until then.
+        </p>
+      )}
 
       {slate?.reconstructed && (
         <p className="rounded-card border border-accent/20 bg-accent-dim px-4 py-2.5 text-xs leading-relaxed text-ink-secondary">

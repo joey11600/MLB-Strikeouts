@@ -245,6 +245,74 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-039: the board sat on yesterday, with late games stuck "IN GAME"
+- **Filed/Resolved:** 2026-08-13 (operator: "the dashboard still has
+  yesterdays games, and some of them still say in game")
+- **Description:** three independent causes, each of which produces the
+  reported symptom on its own. The feed was never at fault — the worker
+  was current the whole time (`generated_at` 10:20 ET, today's slate
+  present, `access-control-allow-origin: *`).
+  1. **The page loaded once and never again.** `DataProvider` fetched in
+     a `useEffect` with `[]` deps and had no interval, no visibility
+     handler, nothing. A terminal left open overnight — the normal way
+     this is used — showed the date it was opened on indefinitely,
+     including any game that was live at load time.
+  2. **A ~9-hour window every morning where the newest board IS
+     yesterday.** `available_dates` only contains dates with a slate,
+     and the slate is written by the 09:00 ET job (measured: 09:19 ET on
+     2026-08-13). `page.tsx` defaults to `dates[0]`, so from midnight
+     until then it opened onto yesterday with nothing said.
+  3. **Late starts frozen mid-game forever.** `poll_once()` computed
+     `iso = today_et()` internally and `main()` only ever asked for
+     today, so at 00:00 ET the poller moved to the new date and never
+     looked back. A starter still on the mound at that moment kept
+     `status: in_game` permanently, and the board reads `live.final` to
+     decide whether a total can still move.
+- **Why it went unseen:** the frozen row still shows the *correct* K
+  count — the card takes the number from Statcast and only the badge
+  from the live record — so it reads as a live game rather than as
+  corrupt data. Nothing errors, nothing is absent, and the two sources
+  disagree silently. Same family as A-024a/A-038: the failure output is
+  not a failure.
+- **Measured before:** every affected row is a late start, and every
+  date with an archive has one — 2 days out of 2, not occasionally.
+  2026-08-11 Nick Martinez (21:40 ET first pitch); 2026-08-12 Eric Lauer
+  and George Klassen (both 22:10 ET). No early game was ever hit, which
+  is the signature of a midnight cutoff rather than a bad feed.
+- **No money was affected.** All three were no-bet pitchers, and the
+  live worker stays read-only with respect to the ledger — Statcast
+  remained the graded source of truth throughout. P&L, record and
+  grading were never wrong.
+- **Fixed** in three places, because the causes fail independently:
+  `workers/live_strikeouts.py` takes the date as a parameter and
+  finishes yesterday before starting today, bounded both by "every
+  starter is final" and by `CARRYOVER_UNTIL_H` so a suspended game
+  cannot pin the poller to the past; `archive_state()` is split from
+  `write_state()` so a carryover updates yesterday's record without
+  overwriting the single-file view of *now*; `tools/dashboard_data.py`
+  treats a settled Statcast total as outranking a stopped poll, which is
+  what clears the rows already frozen on disk that no future poll will
+  revisit; and `dashboard/lib/data-context.tsx` refreshes every 60s and
+  on tab focus, keeping the board on screen when a refresh fails.
+  `page.tsx` now says so when it has defaulted to a past slate.
+- **Second bug found underneath it.** The archive's "only ever grow a
+  date's record" guard only caught a *fully* empty payload, but a single
+  failed boxscore fetch `continue`s past that one pitcher — so a partial
+  cycle could still blank a starter who was already final, reopening
+  A-035 through a different door. `_merge_rows` now merges per pitcher.
+- **Measured after:** re-polling 2026-08-12 through the carryover path
+  returned both stuck starters Final — Lauer 6 K in 27 BF, Klassen 5 K
+  in 24 BF — and Lauer's 6 matches the Statcast total his card was
+  already showing, so the fix agrees with the graded source rather than
+  merely flipping a flag. Covered by `tests/test_live_carryover.py`
+  (7 tests); full suite 134 passed.
+- **Generalises to:** any poller scoped to "today". The rollover
+  boundary is not a quiet moment — it is exactly when the longest-running
+  work is still in flight, so a date-scoped worker abandons precisely the
+  events most likely to matter. And any display that reads freshness from
+  one source and values from another: make the settled source win, or
+  the two will disagree in public.
+
 ### A-038: the book's disambiguation tag made a pitcher unmatchable
 - **Filed/Resolved:** 2026-08-11 (operator noticed the board was short and
   asked where a specific pitcher was)

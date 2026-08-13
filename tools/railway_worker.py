@@ -1280,27 +1280,53 @@ def start_live_watcher() -> None:
         from workers import live_strikeouts as lw
         lw.STATE_PATH = LIVE_STATE
         lw.SLATES_DIR = VOLUME_STATE / "slates"
-        seen: set[int] = set()
+        # (date, pitcher_id): the carryover keeps two dates in flight at
+        # once and a starter appears on many dates, so a bare id would
+        # swallow tonight's finish because last night's already fired.
+        seen: set[tuple[str, int]] = set()
         while True:
             try:
-                state = lw.poll_once()
+                state = lw.poll_once(lw.today_et())
                 lw.write_state(state)
-                fresh = {r["pitcher_id"] for r in state["pitchers"]
-                         if r.get("final")} - seen
-                if fresh:
+                reports = [state]
+
+                # Finish yesterday's late games before starting today.
+                # Archive only -- live_state.json means "now", and now is
+                # today. Without this a start crossing midnight ET was
+                # abandoned in progress and stayed "IN GAME" forever
+                # (A-039).
+                carry = lw.carryover_date()
+                if carry:
+                    carry_state = lw.poll_once(carry)
+                    lw.archive_state(carry_state)
+                    reports.append(carry_state)
+
+                rebuild = False
+                for st in reports:
+                    fresh = {(st["date"], r["pitcher_id"])
+                             for r in st["pitchers"] if r.get("final")} - seen
+                    if not fresh:
+                        continue
                     seen |= fresh
-                    names = [r["pitcher_name"] for r in state["pitchers"]
-                             if r["pitcher_id"] in fresh]
-                    log(f"live: {len(fresh)} starter(s) finished "
-                        f"({', '.join(n for n in names if n)}) — grading")
+                    ids = {pid for _, pid in fresh}
+                    names = [r["pitcher_name"] for r in st["pitchers"]
+                             if r["pitcher_id"] in ids]
+                    log(f"live: {len(fresh)} starter(s) finished on "
+                        f"{st['date']} ({', '.join(n for n in names if n)})"
+                        " — grading")
                     # Their totals can no longer change, so grade now
                     # rather than at 03:00. run.py grade is idempotent
                     # and honours the locked-pick rules; Statcast
                     # reconciles overnight via tools/watchdog.py.
+                    # Grade the date the starter actually pitched on, not
+                    # today's, or a carryover finish would be filed
+                    # against the wrong slate.
                     _run("grade-live", [PYTHON, "run.py", "grade",
-                                        state["date"]], 900)
+                                        st["date"]], 900)
+                    rebuild = True
+                if rebuild:
                     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
-                time.sleep(30 if state.get("any_live") else 600)
+                time.sleep(30 if any(s.get("any_live") for s in reports) else 600)
             except Exception as exc:
                 log(f"live watcher error ({type(exc).__name__}: {exc})")
                 time.sleep(600)

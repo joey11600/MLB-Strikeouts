@@ -444,6 +444,20 @@ back to the snapshot bundled in the Vercel build if the worker is
 unreachable. Picks therefore appear the instant the pipeline writes
 them — no rebuild latency — and nothing needs a token.
 
+It re-fetches **every 60s and whenever the tab regains focus**. That is
+not cosmetic. The provider used to fetch once on mount and never again,
+so a terminal left open overnight — the normal way this is used — showed
+the date it was opened on indefinitely, with any game that happened to
+be live at load time still pulsing (A-039). A failed *refresh* keeps the
+board that is already on screen; only the first load can surface an
+error, because replacing a good slate with an error page over one blip
+against the worker is strictly worse than showing a slightly old one.
+
+The board also says so when it has defaulted to a past slate. A date
+only enters `available_dates` once its slate is written, and that is the
+09:00 ET job, so between midnight and ~09:20 the newest board genuinely
+IS yesterday and `page.tsx` lands on it.
+
 Optional Railway variables: `GITHUB_TOKEN` (+ `GITHUB_REPO`) turns on
 a git mirror of the ledger for offsite backup; `VERCEL_DEPLOY_HOOK`
 refreshes the fallback snapshot. Both are pure backup: the volume is
@@ -765,3 +779,24 @@ reach the dashboard but not git.
     of that exact shape (A-025 publishing, A-036 rendering, A-037 the
     cache), and each time the log kept saying the window ran, because it
     had, elsewhere.
+18. **A poller scoped to "today" abandons whatever is still running at
+    the rollover.** This is the companion to invariant 14, and a
+    different bug: storing by date fixed *where yesterday's results
+    live*, not *who finishes them*. `poll_once()` computed
+    `iso = today_et()` internally, so at 00:00 ET the watcher moved to
+    the new date and never returned — and midnight is not a quiet
+    moment, it is exactly when the longest-running work is still in
+    flight. Every affected row was a 21:40-or-later first pitch; no
+    early game was ever hit (A-039). Pass the date in, finish the prior
+    one before starting the new one, and bound the chase both ways
+    (all-done, and a wall-clock cutoff) so a suspended game cannot pin
+    the worker to the past.
+19. **When freshness and value come from different sources, the settled
+    one must win.** The frozen rows still showed the *correct* strikeout
+    count — the card reads the number from Statcast and only the badge
+    from the live record — so a stale poll rendered as a live game
+    rather than as broken data, and nothing errored (A-039). Any view
+    that mixes a "can this still change?" flag from one source with the
+    value from another needs an explicit rule for disagreement, or the
+    two will contradict each other in public and look plausible doing
+    it.

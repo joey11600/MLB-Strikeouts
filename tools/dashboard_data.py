@@ -296,19 +296,38 @@ def _build_slates(picks: list[dict]) -> tuple[dict, list[str]]:
                 # stay the graded truth.
                 if d not in live_by_date:
                     live_by_date[d] = _live_rows_for(d)
+                # Whether a SETTLED source already has this start, read
+                # before the live fallback can fill the same field in.
+                graded_k = entry["actual_strikeouts"] is not None
                 lv = live_by_date[d].get(int(p.get("pitcher_id") or 0))
                 if lv:
                     if entry["actual_strikeouts"] is None:
                         entry["actual_strikeouts"] = lv.get("strikeouts")
                         entry["result_source"] = "live"
+                    # A settled total outranks a stopped poll. The board
+                    # asks live.final "can this number still move?", so
+                    # a poll that stopped mid-game left a pulsing IN GAME
+                    # next to a K count that had been final for hours --
+                    # the poller watched one date, so a start crossing
+                    # midnight ET was abandoned in progress (A-039).
+                    # The worker fix stops new ones; this also clears the
+                    # rows already frozen in the archive, which no
+                    # future poll will revisit. Statcast is the graded
+                    # source of truth per CLAUDE.md, so it wins here by
+                    # construction rather than by preference.
+                    stale = graded_k and not lv.get("final")
                     entry["live"] = {
                         "strikeouts": lv.get("strikeouts"),
                         "batters_faced": lv.get("batters_faced"),
                         "pitches": lv.get("pitches"),
                         "innings": lv.get("innings"),
-                        "final": bool(lv.get("final")),
+                        "final": True if stale else bool(lv.get("final")),
                         "game_state": lv.get("game_state"),
-                        "status": lv.get("status"),
+                        "status": "final" if stale else lv.get("status"),
+                        # Flagged, not silently rewritten: the numbers
+                        # above are the last in-game observation and can
+                        # legitimately disagree with the settled total.
+                        **({"stale_poll": True} if stale else {}),
                     }
                 pitchers.append(entry)
 

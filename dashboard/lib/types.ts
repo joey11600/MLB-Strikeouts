@@ -71,6 +71,12 @@ export interface SlatePitcher {
     final: boolean;
     game_state?: string;
     status?: string;
+    /**
+     * The poll stopped mid-game but a settled total exists, so `final`
+     * was forced true. The counts above are the last in-game
+     * observation and may trail `actual_strikeouts`.
+     */
+    stale_poll?: boolean;
   };
   /** "live" when actual_strikeouts came from the watcher, not Statcast. */
   result_source?: string;

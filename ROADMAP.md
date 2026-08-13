@@ -194,6 +194,27 @@
   `statcast_cache.last_refresh.at` should advance at each scheduled
   window (15:00 / 16:45 / 18:15 ET), not only at boot, and
   `recent_bytes` for yesterday should be a real size rather than null
+- [x] **Stop the board sitting on yesterday with late games stuck "IN
+  GAME" (A-039).** Three independent causes: the dashboard fetched once
+  on mount and never again, so an open tab never moved; a date only
+  enters `available_dates` once the 09:00 ET job writes its slate, so
+  midnight–09:20 defaults to yesterday with nothing said; and
+  `poll_once()` was scoped to `today_et()`, so a start crossing midnight
+  was abandoned mid-game and archived `in_game` forever. Now: 60s +
+  on-focus refresh that survives a failed poll, an explicit "nothing
+  published for <today> yet" note, a bounded carryover that finishes
+  yesterday first, and a settled Statcast total that outranks a stopped
+  poll. No money affected — all three frozen rows were no-bet pitchers
+- [ ] Confirm A-039 in production — on the morning of 2026-08-14 the
+  2026-08-13 board should show **0 in game** with every late start
+  Final, and the 22:10 ET starters are the ones to check first. If any
+  row is still stuck, the carryover is not running: check the worker log
+  for a `carryover 2026-08-13:` line shortly after midnight ET
+- [ ] **A-039 follow-up: alert when a settled total meets a non-final
+  poll.** `stale_poll` is now set on exactly that disagreement, so the
+  condition is detectable — but nothing watches it, and this class of
+  fault renders as a plausible live game rather than as an error.
+  `tools/watchdog.py` is the natural home
 - [x] **Widen the pitcher history window to prior seasons — BUILT, flag
   OFF, all five gates passed.** `docs/PRIOR_SEASON_SCOPE.md`,
   `docs/GATES.md`. Recovers 11.5% of starts (409, ~2.9/day) that the
