@@ -800,3 +800,24 @@ reach the dashboard but not git.
     value from another needs an explicit rule for disagreement, or the
     two will contradict each other in public and look plausible doing
     it.
+20. **Recording a failure is not handling it.** `sync_repo()` noted a
+    failed fetch and moved on, so the FIRST failure was terminal for the
+    life of the container — 27 hours serving a board from the previous
+    morning, recoverable only by a human redeploy (A-040). A long-lived
+    worker needs a path back from its own failures, not just a path
+    past them. "The operator will redeploy" is not a recovery strategy
+    when nothing tells the operator.
+21. **An alarm nobody receives is not monitoring.** The watchdog
+    diagnosed A-040 exactly right and exits 1, and the CI step has no
+    `continue-on-error` — so every run for 27 hours was red while the
+    operator watched a dashboard that looked merely stale. Before
+    building a new check, ask who is woken by the ones already there.
+22. **Calibrate the quantity you BET, not the one you predict.** The
+    strikeout point estimate is unbiased (+0.02 K) and the model is
+    still dangerous, because money rides on P(clears the line) — a tail
+    of the distribution, not its mean. The top confidence bin inverted
+    (stated 65.4% OVER, actual 33.3%) while the mean stayed honest, and
+    the edge filter selects from precisely that bin (A-041, A-007's
+    shape). A mean-unbiased model with a mis-shaped tail is worse than
+    an obviously bad one, because it passes every summary statistic on
+    the way to the bet list.

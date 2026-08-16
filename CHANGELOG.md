@@ -1,6 +1,60 @@
 
 # Changelog
 
+## 2026-08-16 - Worker wedged 27h (A-040); model's confident OVERs are inverted (A-041)
+
+Operator: "theres been so many failed runs and issues. picks arent being
+graded. i think the model itself is wrong." Three claims, three
+different answers.
+
+**Failed runs — true, one cause.** The Railway worker stopped pulling at
+2026-08-15 12:32 ET and served a board generated 08-15 09:33 ET for 27
+hours. `sync_repo()` recorded a failed fetch and moved on; nothing
+retried and nothing cleared the wedge, so the first failure was terminal
+for the life of the container. CI was healthy the whole time (12
+commits/day, correct boards for both days) — the worker could not
+RECEIVE the work. Worker commits: 285 (08-14) -> 89 (08-15) -> 0 (08-16).
+
+Ruled out by measuring rather than guessing: disk 1.21 GB and growing,
+repo 38 MB, token valid 23 more days.
+
+A failed pull now clears abandoned git lock files and retries once,
+recording `last_pull.recovered` so a limping container is
+distinguishable from a healthy one. Lock removal is age-gated at 600s —
+deleting a lock a live git still holds turns a stall into corruption.
+The exact wedge is unconfirmed (Railway keeps logs only for the latest
+deployment, and all of them are SKIPPED by `watchPatterns` design), so
+the fix targets any transient failure, not one guessed cause.
+
+**The alarm fired; nobody was told.** `tools/watchdog.py` caught this
+precisely and exits 1, and the CI step has no `continue-on-error` —
+every CI run since 08-15 was RED. Monitoring was not the gap. Also
+`/health` reported `can_push_to_git: true` throughout, because that is
+computed once at boot; `git.checked` still read 2026-08-13.
+
+**Picks not being graded — no.** 12 of 12 graded, 0 pending, and the
+worker's own reconcile agrees. No NEW picks since 08-14 because nothing
+clears the vig gate: best edge 8.8/10.2/10.4/9.0% against a ~13%
+threshold on 08-13..08-16. A frozen dashboard plus no new picks reads
+exactly like broken grading.
+
+**The model — the record is noise, the calibration is not.** 4W-8L on 12
+bets proves nothing (~19% on a fair coin). But across 264 scored starts
+the top confidence bin is inverted: stated 65.4% OVER, actual 33.3%
+(11/33, z = -3.9). Live Brier excess +0.0225 vs backtest -0.0006, band
++/-0.0136, positive on 9 of 11 days. That is the bin the edge filter
+selects from — A-007's shape — and the bets show it: OVER 2W-6L, UNDER
+2W-2L, every OVER from the 0.62-0.94 range.
+
+Mechanism is workload, not strikeout skill: the K estimate is unbiased
+(+0.02 K) but only 61.4% of starts land within 3 batters faced and 5.3%
+come in badly short (Davis Martin 23.1 projected, 6.0 actual). An early
+hook kills an OVER and never an UNDER. The backtest already showed
+positive excess at lines 5.5+ and it was read past.
+
+Filed as **A-041, open**. No bets until the calibrator is refit — which
+the edge gate is already enforcing on its own.
+
 ## 2026-08-13 - The board sat on yesterday, late games stuck "IN GAME" (A-039)
 
 Operator: "the dashboard still has yesterdays games, and some of them

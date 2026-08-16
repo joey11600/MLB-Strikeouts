@@ -272,7 +272,8 @@ GIT_STATUS: dict = {"is_repo": None, "shallow": None, "remote": None,
 
 # Whether the worker is actually RECEIVING CI's work. Declared up here
 # because the boot-time bootstrap sets it before sync_repo ever runs.
-LAST_PULL: dict = {"at": None, "ok": None, "error": None, "head": None}
+LAST_PULL: dict = {"at": None, "ok": None, "error": None, "head": None,
+                   "recovered": None}
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
@@ -426,6 +427,38 @@ def configure_git() -> None:
     log(f"git remote configured for {GITHUB_REPO}")
 
 
+# Lock files a killed or timed-out git leaves behind. NOTHING clears
+# these: every later git command in the container fails identically
+# until a human redeploys. That is how the worker spent 27 hours on
+# 2026-08-15/16 serving a board from the previous morning while
+# /health reported the credential as fine (A-040).
+GIT_LOCKS = ("index.lock", "shallow.lock", "FETCH_HEAD.lock",
+             "HEAD.lock", "config.lock", "packed-refs.lock")
+
+# A lock younger than this may belong to a git process that is still
+# running, and deleting one out from under a live command turns a
+# wedged checkout into a corrupted one. Only the publish loop runs git
+# in this container and it runs sequentially, so anything older than a
+# full publish cycle is abandoned by definition.
+STALE_LOCK_S = 600
+
+
+def _clear_stale_git_locks() -> list[str]:
+    """Delete abandoned git lock files; return the names cleared."""
+    git_dir = REPO / ".git"
+    cleared = []
+    now = time.time()
+    for name in GIT_LOCKS:
+        path = git_dir / name
+        try:
+            if path.exists() and now - path.stat().st_mtime > STALE_LOCK_S:
+                path.unlink()
+                cleared.append(name)
+        except OSError as exc:
+            log(f"git: could not clear {name}: {type(exc).__name__}: {exc}")
+    return cleared
+
+
 def _head_state() -> dict:
     """What HEAD is doing right now — attached, detached, mid-rebase.
 
@@ -515,21 +548,46 @@ def sync_repo() -> None:
     # old GITHUB_TOKEN check meant the container silently never pulled,
     # which is how it ended up running against whatever ledger happened
     # to be baked into the image.
-    ok = _run("git-fetch", ["git", "fetch", "--no-tags", "origin", "master"], 180)
-    if ok:
-        # `checkout -B` does both halves in one shot: moves master to the
-        # fetched tip AND reattaches HEAD to it. A bare `reset --hard`
-        # would move whatever HEAD currently is -- and when HEAD is
-        # detached that leaves master behind, which is precisely the
-        # state that made every push fail non-fast-forward while the
-        # commits themselves succeeded.
-        ok = _run("git-reset-to-origin",
-                  ["git", "checkout", "-B", "master", "FETCH_HEAD"], 120)
+    def _pull(tag: str) -> bool:
+        got = _run(f"git-fetch{tag}",
+                   ["git", "fetch", "--no-tags", "origin", "master"], 180)
+        if got:
+            # `checkout -B` does both halves in one shot: moves master to
+            # the fetched tip AND reattaches HEAD to it. A bare `reset
+            # --hard` would move whatever HEAD currently is -- and when
+            # HEAD is detached that leaves master behind, which is
+            # precisely the state that made every push fail
+            # non-fast-forward while the commits themselves succeeded.
+            got = _run(f"git-reset-to-origin{tag}",
+                       ["git", "checkout", "-B", "master", "FETCH_HEAD"], 120)
+        return got
+
+    ok = _pull("")
+    recovered = None
+    if not ok:
+        # Try ONCE to unwedge, then pull again. Before this a failed
+        # fetch was terminal for the life of the container: nothing
+        # retried and nothing cleared the wedge, so the worker kept
+        # serving whatever board it already had and only a human
+        # redeploy brought it back (A-040). The retry is cheap and the
+        # failure it targets is the one that actually happened.
+        cleared = _clear_stale_git_locks()
+        if cleared:
+            log(f"git: cleared abandoned lock(s) {cleared} — retrying pull")
+        ok = _pull("-retry")
+        if ok:
+            recovered = f"recovered after clearing {cleared or 'nothing'}"
+            log(f"git: pull {recovered}")
+
     LAST_PULL.update(
         at=datetime.now(ET).isoformat(timespec="seconds"),
         ok=ok,
         error=None if ok else "git fetch/reset failed — see the job log for the exit code",
         head=_head_state(),
+        # Surfaced so a container that is limping (failing, then
+        # self-healing every pass) is distinguishable on /health from
+        # one that is genuinely healthy.
+        recovered=recovered,
     )
     reconcile_ledger()
 

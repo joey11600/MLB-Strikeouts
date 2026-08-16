@@ -210,6 +210,34 @@
   Final, and the 22:10 ET starters are the ones to check first. If any
   row is still stuck, the carryover is not running: check the worker log
   for a `carryover 2026-08-13:` line shortly after midnight ET
+- [x] **Give the worker a way back from a wedged checkout (A-040).** A
+  failed `git fetch` was terminal for the life of the container: it was
+  recorded and never retried, so the worker served a 27-hour-old board
+  until a human redeployed. Now clears abandoned lock files (age-gated
+  at 600s) and retries once, recording `last_pull.recovered`
+- [ ] **Surface a red CI run where the operator will see it.** This is
+  the real A-040 gap: `tools/watchdog.py` diagnosed the stall correctly
+  and exits 1, so every CI run for 27 hours was red and nothing said so.
+  Monitoring that only a maintainer reads is not monitoring. Needs an
+  operator decision on the channel (email / phone / Slack)
+- [ ] **Make `/health` git fields reflect NOW, not boot.**
+  `can_push_to_git` read `true` for all 27 hours because `GIT_STATUS` is
+  set once in `configure_git()`; `git.checked` still said 2026-08-13.
+  Either re-probe on request or publish the age next to the value
+- [ ] **A-041 — refit the calibrator on 2026 live rows. BLOCKS BETTING.**
+  The top confidence bin is inverted (stated 65.4% OVER, actual 33.3%,
+  n=33, z=-3.9) and that is the bin the edge filter draws from. Live
+  Brier excess +0.0225 vs backtest -0.0006 (band +/-0.0136). Do not
+  raise `MAX_STAKE_UNITS` or relax the edge threshold until the curve is
+  monotone
+- [ ] **A-041 — attack the early-hook tail in the workload model.** The
+  mechanism, not the symptom: 61.4% of starts within 3 BF, 5.3% badly
+  short (worst -17.1 BF). An early hook kills an OVER and never an
+  UNDER, which is the whole +5.0pp OVER bias
+- [ ] **A-041 — one bet per pitcher per slate.** Drew Anderson took 3 of
+  8 losses in one game (.69/.94/.81). The haircut keys on repeated
+  `game_pk`, not repeated pitcher — same fix already scoped under
+  Phase 10
 - [ ] **A-039 follow-up: alert when a settled total meets a non-final
   poll.** `stale_poll` is now set on exactly that disagreement, so the
   condition is detectable — but nothing watches it, and this class of

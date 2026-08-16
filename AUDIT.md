@@ -245,6 +245,108 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-041: the model is worst exactly where it is most confident — OPEN
+- **Filed:** 2026-08-16 (operator: "i think the model itself is wrong")
+- **Status:** confirmed, NOT fixed. No bets should be placed until it is.
+  The edge gate is already enforcing this by accident — see below.
+- **The betting record is NOT the evidence.** 4W-8L on 12 bets is noise:
+  going 4-8 or worse happens ~19% of the time on a fair coin. Anyone
+  concluding "the model is broken" from that number is reading variance.
+- **The calibration curve is the evidence**, on 264 scored starts —
+  every evaluated pitcher, not just the bets:
+
+      predicted P(OVER)   actual      n
+              0.319       0.333      33
+              0.386       0.576      33
+              0.439       0.424      33
+              0.459       0.394      33
+              0.497       0.455      33
+              0.546       0.485      33
+              0.581       0.485      33
+              0.654       0.333      33   <-- 11 of 33
+
+  The top bin is inverted: at a stated 65.4% the model hits 33.3%,
+  11/33 against an expected 21.6 (z = -3.9, p < 0.0001). Live Brier
+  excess +0.0225 against a backtest excess of -0.0006, band +/-0.0136 —
+  roughly 3.4 SE outside, and positive on 9 of 11 days since 2026-08-05.
+- **Why that bin is the worst possible one to be wrong in:** the edge
+  filter selects from it. This is A-007's shape again — a bad input
+  does not merely add noise, it gets chosen. The placed bets show it
+  cleanly: **OVER 2W-6L, UNDER 2W-2L**, and every OVER bet came from
+  the 0.62–0.94 range.
+- **Mechanism is workload, not strikeout skill.** The K point estimate
+  is unbiased (mean error +0.02 K). But only 61.4% of starts land
+  within 3 batters faced, and 5.3% come in badly short — Davis Martin
+  projected 23.1 BF, faced 6.0. An early hook kills an OVER and can
+  never kill an UNDER, and that asymmetry is exactly the +5.0pp OVER
+  bias (predicted 48.5% vs actual 43.6%).
+- **The backtest already said so and it was read past.** Per-line
+  `model_excess` was negative (good) at 3.5 and 4.5 but POSITIVE at
+  5.5 / 6.5 / 7.5 / 8.5 — the high-strikeout, confident-OVER end.
+  Live did not introduce this; it amplified it.
+- **Correlation compounds it:** Drew Anderson took 3 of the 8 losses on
+  one pitcher in one game (.69 / .94 / .81). The haircut keys on
+  repeated `game_pk`, not repeated pitcher — already a roadmap item.
+- **Next:** refit the calibrator on 2026 live rows; attack the early-hook
+  tail in the workload model; one bet per pitcher per slate. Do NOT
+  raise `MAX_STAKE_UNITS` or relax the edge threshold until the top bin
+  is monotone.
+- **Generalises to:** a model can be unbiased on its point estimate and
+  still be dangerous, because bets are placed on the tail of the
+  distribution, not the mean. Always calibrate the quantity you BET,
+  which is P(clears the line) — never settle for the quantity you
+  predict.
+
+### A-040: a wedged git checkout stalled the worker for 27 hours
+- **Filed/Resolved:** 2026-08-16 (operator: "theres been so many failed
+  runs and issues")
+- **Description:** the Railway worker stopped pulling at 2026-08-15
+  12:32 ET and served a payload generated 2026-08-15 09:33 ET for the
+  next 27 hours. `sync_repo()` fetched, and when the fetch failed it
+  recorded the failure and moved on — nothing retried, nothing cleared
+  the wedge. So the first failure was terminal for the life of the
+  container and only a human redeploy could recover it.
+- **CI was healthy throughout.** Worker commits went 285 (08-14) -> 89
+  (08-15, stopping 12:32) -> 0 (08-16), while CI kept its 12/day and had
+  already published correct boards for both days. The pipeline, the
+  model and the ledger were all fine; the worker simply could not
+  RECEIVE the work. This is why it presented as "everything is broken".
+- **Ruled out by measurement, not assumption:** volume disk 1.21 GB and
+  still growing (not full), repo 38 MB / 3.8 MiB pack (not bloated),
+  dispatch token valid 23 more days. Container had run 3 days without
+  restart.
+- **Why it went unseen — the alarm fired and nobody was told.**
+  `tools/watchdog.py` caught it exactly right ("worker is serving no
+  slate at all for 2026-08-16 ... last_pull ok=False") and exits 1, and
+  the CI step has no `continue-on-error` — so **every CI run since
+  2026-08-15 was red**. The monitoring was not the gap; surfacing it
+  was. Note `_worker_is_pulling()` reads `last_pull` and never
+  `last_publish`, which is what made the diagnosis instant once looked
+  at (A-029's lesson, still holding).
+- **/health lied in a familiar way.** `can_push_to_git: true` all 27
+  hours: it is derived from `GIT_STATUS`, which `configure_git()` sets
+  once at BOOT and never revisits (`git.checked` read 2026-08-13). The
+  same shape the file's own comments warn about — "a success line that
+  cannot fail is worse than no line" — reappearing one field over.
+- **Fixed** in `tools/railway_worker.py`: a failed pull now clears
+  abandoned lock files (`index.lock` and siblings) and retries once
+  before giving up, and `last_pull.recovered` records when it did — so a
+  container that limps is distinguishable from one that never failed.
+  Lock removal is age-gated at `STALE_LOCK_S` (600s) because deleting a
+  lock a live git still holds turns a stall into corruption, which is
+  strictly worse. Covered by `tests/test_git_lock_recovery.py` (5 tests).
+- **Exact wedge unconfirmed.** Railway retains deploy logs only for the
+  latest deployment and every deployment since is SKIPPED by design
+  (`watchPatterns` excludes `/data/**`), so the running container's log
+  was unreachable. The stale-lock hypothesis fits the signature —
+  worked, stopped at a precise instant, never self-healed — but is not
+  proven. The fix is deliberately broader than that one cause: any
+  transient failure now gets a retry.
+- **Generalises to:** every long-lived worker needs a path back from its
+  own failures, not just a path through them. Recording a failure is not
+  handling it, and "the operator will redeploy" is not a recovery
+  strategy when nothing tells the operator.
+
 ### A-039: the board sat on yesterday, with late games stuck "IN GAME"
 - **Filed/Resolved:** 2026-08-13 (operator: "the dashboard still has
   yesterdays games, and some of them still say in game")
