@@ -890,3 +890,22 @@ reach the dashboard but not git.
     the direction the edge filter then selects on. When auditing an
     error, ask which way it points before asking how big it is (A-042,
     the mechanism under A-041).
+31. **Print every fitted parameter next to its bound.** Stage A's
+    dispersion sat on its optimizer wall, the outs hazard's penalty sat
+    at the end of its search grid, and the calibrator's top knot sat at
+    1.0 — three artifacts, three walls, none of them flagged, because a
+    number on a bound is indistinguishable from a number that
+    converged and both survive review. Assert the estimate landed in the
+    interior, or print the bound beside it. For a hyper-parameter grid,
+    a selection at either END is a grid that was too short, not an
+    answer (A-043).
+32. **A probability of 0 or 1 is a bug, not a strong opinion.** The
+    calibrator served `model_prob == 1.0000` on 53 ladder rungs while
+    the raw model never passed 0.9959 — PAV gave an all-OVER bin its
+    mean and interpolation dragged the top segment to certainty. Five of
+    the 46 settled ones LOST. It made log-loss infinite and Kelly size
+    unbounded, and production survived only on MAX_STAKE_UNITS and the
+    market blend, neither of which exists for that purpose. Clamp
+    probability outputs away from the endpoints, and treat any model
+    that reaches them as reporting a defect rather than a conviction
+    (A-043).

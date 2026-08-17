@@ -16,6 +16,38 @@ import numpy as np
 
 CALIBRATOR_PATH = Path(__file__).parent / "calibrator.pkl"
 
+# No probability this model serves may be 0 or 1 (A-043).
+#
+# PAV assigns each bin its outcome mean, so a top bin whose starts all
+# went OVER becomes exactly 1.0 -- and the top knot of the shipped
+# calibrator IS 1.0, at raw x=0.9404. Interpolation then drags the whole
+# final segment toward certainty: measured across all 2026 slates, 53
+# ladder rungs were served at model_prob == 1.0000 while the RAW model
+# never exceeded 0.9959. The calibrator manufactured the certainty.
+#
+# Of the 46 of those with a settled outcome, **5 LOST** -- an 10.9%
+# failure rate on events priced as impossible to lose:
+#
+#     2026-08-04  Davis Martin    needed K>=2, got 1
+#     2026-08-05  Drew Anderson   needed K>=1, got 0
+#     2026-08-05  Drew Anderson   needed K>=2, got 0
+#     2026-08-05  Casey Mize      needed K>=2, got 1
+#     2026-08-09  Davis Martin    needed K>=2, got 1
+#
+# Every one is a low milestone killed by a short outing -- the same
+# early-hook tail Stage A cannot produce (A-042). The workload model
+# hides disaster starts, so the calibrator never sees them fail, so it
+# calls them certain.
+#
+# p=1.0 is not merely optimistic: it makes log-loss infinite and Kelly
+# size unbounded (survived here only because MAX_STAKE_UNITS caps the
+# stake and the 50/50 market blend held the served number to 0.9688).
+#
+# This is a GUARD, not a recalibration. It stops the model asserting the
+# impossible; it does NOT fix the top bin actually being miscalibrated,
+# which is A-041 and still open.
+PROB_EPS = 1e-3
+
 
 def pav_isotonic(values: list[float], weights: list[float], increasing: bool = True) -> list[float]:
     """Pool-Adjacent-Violators isotonic regression.
@@ -110,11 +142,18 @@ class IsotonicCalibrator:
         self._y_knots = np.array(calibrated)
 
     def predict(self, raw_prob: float) -> float:
-        """Return calibrated probability via linear interpolation."""
-        if self._x_knots is None:
-            return raw_prob
+        """Return calibrated probability via linear interpolation.
 
-        return float(np.interp(raw_prob, self._x_knots, self._y_knots))
+        Clamped away from {0, 1}: see PROB_EPS. Applied on the way OUT
+        rather than at fit time so an already-shipped calibrator.pkl is
+        made safe without a refit — the saturated knot is still in the
+        artifact, it just can no longer reach the board.
+        """
+        if self._x_knots is None:
+            return float(np.clip(raw_prob, PROB_EPS, 1.0 - PROB_EPS))
+
+        p = float(np.interp(raw_prob, self._x_knots, self._y_knots))
+        return float(np.clip(p, PROB_EPS, 1.0 - PROB_EPS))
 
     @property
     def is_fitted(self) -> bool:

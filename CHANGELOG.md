@@ -1,6 +1,52 @@
 
 # Changelog
 
+## 2026-08-16 - Bound-pinning sweep: the calibrator was serving certainty (A-043)
+
+Swept every fitted artifact after `alpha = exp(-5)` surfaced in A-042.
+Three findings, one of which was live on the board.
+
+    OPTIMIZER BOUND  stage_a_*.pkl   alpha = exactly exp(-5)   (A-042)
+    GRID EDGE        outs_hazard.pkl lambda = max(LAMBDA_GRID)
+    SATURATION       calibrator.pkl  top knot y = 1.0 @ raw 0.9404
+
+Stage B is clean — fit unbounded, no bound to sit on.
+
+**The calibrator was manufacturing certainty.** The RAW model never
+exceeded 0.9959 across any 2026 slate, yet **53 ladder rungs were served
+at model_prob == 1.0000**, produced by interpolating toward a saturated
+PAV knot. Of the 46 with settled outcomes, **5 LOST (10.9%)** — Drew
+Anderson needed K>=1 and recorded 0; Davis Martin needed K>=2 and
+recorded 1, twice.
+
+Every failure is a low milestone killed by a short outing, which is
+exactly the tail Stage A cannot produce (A-042). The workload model
+hides disaster starts, the calibrator never sees them fail, so it prices
+them as impossible. The two audit items are one disease from both ends.
+
+p=1.0 makes log-loss infinite and Kelly size unbounded. Production
+survived on two guards unrelated to probability hygiene: MAX_STAKE_UNITS
+capping the stake, and the 50/50 market blend holding the served number
+to 0.9688.
+
+Fixed with `PROB_EPS = 1e-3` clamping `IsotonicCalibrator.predict()`
+away from {0, 1}, applied on the way OUT so the shipped artifact is safe
+without a refit. Blast radius measured before shipping: 61 of 1001 raw
+values move at all, max change 0.00100, none above 0.01, mid-range
+bit-identical. A guard, not a recalibration — the top bin is still
+genuinely miscalibrated (A-041, open).
+
+NOT fixed: `outs_hazard` lambda sits at the top of its grid and the
+per-lambda CV scores are printed but never persisted, so the curve
+cannot be inspected after the fact. That model is a research artifact
+with Gate 5 unpassed and touches no bet today, so it is filed rather
+than rushed.
+
+New `tools/audit_param_bounds.py` (exit 1 on any finding) imports each
+bound from the module that declares it rather than copying it, and
+checks what the calibrator SERVES rather than what it stores. 8 tests in
+`tests/test_param_bounds.py`; 172 pass.
+
 ## 2026-08-16 - Workload model had the wrong shape: hook mixture, flag OFF (A-042)
 
 The mechanism under A-041's OVER bias, fixed at the source. Built,

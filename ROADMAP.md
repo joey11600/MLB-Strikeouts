@@ -274,11 +274,28 @@
   lucky; (b) the confident-OVER bin from A-041 (stated 65.4%, actual
   33.3%) should move toward its diagonal; (c) pitch-limited starts,
   where the normal arm's mean is floored
-- [ ] **A-042 — audit the other fitted parameters for bound-pinning.**
-  `alpha = exp(-5)` sat exactly on its bound in BOTH `stage_a_fitted.pkl`
-  and `stage_a_eval.pkl` and nothing flagged it. A parameter on its
-  bound is a fit that failed, not one that finished — check Stage B and
-  the outs hazard the same way
+- [x] **A-043 — bound-pinning sweep: DONE, 3 findings.** Stage A alpha
+  at its optimizer bound (A-042), outs-hazard lambda at the top of
+  `LAMBDA_GRID`, and the calibrator's top knot at exactly 1.0. Stage B
+  clean (fit unbounded). `tools/audit_param_bounds.py` + 8 tests
+- [x] **A-043 — stop the calibrator serving certainty.** 53 ladder rungs
+  were served at `model_prob == 1.0000` while the raw model never
+  exceeded 0.9959; 5 of the 46 with outcomes LOST. `PROB_EPS = 1e-3`
+  clamps `predict()` on the way out; blast radius 61/1001 values, max
+  change 0.00100
+- [ ] **A-043 — refit the outs hazard with an extended lambda grid.**
+  `lambda = 30.0` is `max(LAMBDA_GRID)`, chosen by `min(grid,
+  key=brier)`, so the curve may still have been improving — the model
+  may be under-regularised. Extend past 30 (100, 300, 1000) and confirm
+  the minimum is INTERIOR. Also persist the per-lambda scores into the
+  pkl: they are computed and printed today and then thrown away, which
+  is why this needs a refit to answer at all
+- [ ] **A-043 — smooth the calibrator's top bin rather than relying on
+  the clamp.** The guard stops the impossible assertion; it does not
+  make the top bin calibrated. Fold into the A-041 recalibration work
+  once the market-scored sample is large enough
+- [ ] **A-043 — wire the audit into CI.** It exits 1 today and nothing
+  runs it. Same gap as A-040: a check nobody receives is not a check
 - [ ] **A-041 — one bet per pitcher per slate.** Drew Anderson took 3 of
   8 losses in one game (.69/.94/.81). The haircut keys on repeated
   `game_pk`, not repeated pitcher — same fix already scoped under

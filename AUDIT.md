@@ -258,6 +258,74 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-043: three fitted parameters were sitting on their bounds
+- **Filed/Resolved (partly):** 2026-08-16 (operator asked for the sweep
+  after `alpha = exp(-5)` surfaced in A-042)
+- **Description:** a parameter at its bound is a fit that FAILED — the
+  optimizer wanted a value the search space did not contain and stopped
+  at the wall, so the estimate is an artifact of where the wall was put.
+  Swept every fitted artifact. Three faces of the same failure:
+
+      OPTIMIZER BOUND  stage_a_fitted.pkl / stage_a_eval.pkl
+                       alpha = 0.006737946999085467 = exactly exp(-5),
+                       the lower bound of log_alpha (A-042)
+      GRID EDGE        outs_hazard.pkl
+                       lambda = 30.0 = max(LAMBDA_GRID)
+      SATURATION       calibrator.pkl
+                       top knot y = 1.0 at raw x = 0.9404
+
+  Stage B is CLEAN: it is fit unbounded, so there is no bound to sit on.
+  Recorded as a result rather than skipped.
+- **The calibrator finding is the severe one, and it reached the board.**
+  PAV assigns each bin its outcome mean, so a top bin whose starts all
+  went OVER becomes exactly 1.0. Measured across every 2026 slate: the
+  RAW model never exceeded 0.9959, yet **53 ladder rungs were served at
+  `model_prob == 1.0000`** — the calibrator manufactured the certainty
+  by interpolating toward a saturated knot. Of the 46 with a settled
+  outcome, **5 LOST (10.9%)**:
+
+      2026-08-04  Davis Martin    needed K>=2, got 1
+      2026-08-05  Drew Anderson   needed K>=1, got 0
+      2026-08-05  Drew Anderson   needed K>=2, got 0
+      2026-08-05  Casey Mize      needed K>=2, got 1
+      2026-08-09  Davis Martin    needed K>=2, got 1
+
+  Every one is a LOW milestone killed by a short outing — precisely the
+  early-hook tail Stage A cannot produce (A-042). The workload model
+  hides disaster starts, so the calibrator never sees them fail, so it
+  prices them as impossible. A-042 and this are one disease seen from
+  both ends.
+- **Why nothing broke.** p=1.0 makes log-loss infinite and Kelly size
+  unbounded. Production survived on two guards that have nothing to do
+  with probabilities being well-formed: `MAX_STAKE_UNITS` caps the
+  stake, and the 50/50 market blend held the served number to 0.9688.
+  Neither was designed for this.
+- **Fixed** in `models/calibration.py`: `PROB_EPS = 1e-3` clamps
+  `predict()` away from {0, 1}. Applied on the way OUT, not at fit time,
+  so the shipped artifact is made safe without a refit. Blast radius
+  measured: 61 of 1001 raw values move at all, max change 0.00100, none
+  above 0.01, mid-range bit-identical. It is a GUARD, not a
+  recalibration — the top bin is still genuinely miscalibrated, which is
+  A-041 and open.
+- **NOT fixed: the outs-hazard penalty.** `lambda = 30.0` is the largest
+  entry in `LAMBDA_GRID = (0.3, 1.0, 3.0, 10.0, 30.0)` and selection is
+  `min(grid, key=brier)`, so the curve may still have been falling when
+  the grid ran out — the model may be under-regularised. The per-lambda
+  scores are computed and printed but never persisted, so the shape of
+  that curve cannot be recovered from the artifact. Needs a refit with
+  an extended grid; that model is a research artifact (Gate 5 unpassed)
+  and touches no bet today, so it is filed rather than rushed.
+- **Guarded by** `tools/audit_param_bounds.py` (exit 1 on any finding)
+  and `tests/test_param_bounds.py` (8 tests). The audit IMPORTS each
+  bound from the module that declares it rather than copying it, so a
+  changed bound cannot silently drift the audit green. It also checks
+  what the calibrator SERVES, not merely what it stores.
+- **Generalises to:** print every fitted parameter next to its bound, or
+  assert it landed in the interior. A number on a wall is
+  indistinguishable from a number that converged, and both survive code
+  review. The same applies to hyper-parameter grids: a selection at
+  either end is a grid that was too short, not an answer.
+
 ### A-042: the workload model has the wrong SHAPE — built, gated, flag OFF
 - **Filed:** 2026-08-16 (the mechanism under A-041, fixed on the
   operator's instruction to attack the early-hook tail)
