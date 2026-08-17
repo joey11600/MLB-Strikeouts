@@ -842,3 +842,27 @@ reach the dashboard but not git.
     disagreement with the price. A univariate p -> p calibrator cannot
     repair this by construction, so reaching for one is a sign the
     diagnosis has not landed yet (A-041).
+25. **You cannot backtest against a price you never recorded.** The
+    strikeouts backtest runs 2026-04-11..08-04; closing captures start
+    08-05. The overlap is ONE opening snapshot, so 18,798 rows are
+    permanently unscoreable against the market and the honest sample is
+    262 starts (A-002). Odds are not a derived artifact — they exist
+    only if someone captured them that day, and no amount of later work
+    recovers them. Start the capture on day one of any market-facing
+    model, before the model is good enough to care about, because the
+    day you need the history is the day it is too late to collect.
+26. **A de-vig that RAISES a probability is a bug, and it will look
+    like a result.** Normalising a truncated alt ladder's own implied
+    PMF produced a median overround of 0.946 — a book with negative vig
+    — and that single sign error flipped the verdict from "model
+    significantly worse" (z=+2.36) to "indistinguishable" (z=+0.03).
+    Assert the direction: removing vig can only ever lower an implied
+    probability. Where only one side is priced, de-vig by a MEASURED
+    margin from the same event's two-sided quote and label it an
+    assumption; never by a sum over a support the book truncated.
+27. **Repeated measurements of one event are one measurement.** Alt
+    milestones on a start are the same game seen at several thresholds:
+    1,956 ladder rows carry roughly 262 starts' worth of information.
+    Unclustered standard errors shrink by about sqrt(rows per start) and
+    manufacture significance out of correlation. Cluster on the unit
+    that actually varies — here the start, never the row.

@@ -28,6 +28,19 @@ Tracks open items, resolved items, and known risks.
   strikeout prop lines. No historical source identified yet. DK's JSON
   serves current lines only; The Odds API historical endpoint is paid.
   Forward-collecting live lines starting now is the fallback.
+- **Escalated 2026-08-16 — this is now the binding constraint on
+  A-041, not a Phase 3 nicety.** The question "does the model beat the
+  market?" cannot be answered on the backtest, because the two do not
+  overlap: `backtest_predictions.csv` spans 2026-04-11..2026-08-04 and
+  the only strikeout odds inside that window is a single OPENING
+  snapshot on 08-04 (`dk_k_2026-08-04.csv`). Closing captures begin
+  2026-08-05. So 18,798 backtest rows are unscoreable against a price,
+  and the largest honest market sample is 262 starts.
+- **The forward-collection fallback is working** — 12 days of two-sided
+  closing lines (334 snapshots, 287 joining to a priced slate) plus
+  9,598 alt-ladder rows. At ~25 starts/day, reaching 1,000 market-scored
+  starts takes about 40 more days. That is the clock on A-041, and
+  nothing else shortens it except buying historical lines.
 
 ### A-003: Park factor CSV returns HTML
 - **Filed:** 2026-08-04
@@ -338,12 +351,56 @@ Tracks open items, resolved items, and known risks.
   rows are not where money is staked. This is the same omission already
   written down for the outs model ("Score against the MARKET. Nothing
   here measures that") and it applies here too.
-- **Next, in order:** (1) score the backtest against closing odds so
-  "does it beat the market" is answerable on 18,798 rows instead of 264;
-  (2) attack the early-hook tail in the workload model, which is the
-  mechanism; (3) one bet per pitcher per slate. Do NOT raise
+- **Amended 2026-08-16 (second) — scored against the closing line, and
+  the answer is no.** Step (1) below could NOT be done on the backtest:
+  it spans 2026-04-11..08-04 and closing captures begin 08-05, so the
+  overlap is one opening snapshot (see A-002, now escalated). Scored
+  instead on the largest window that has prices, via
+  `tools/score_vs_market.py`:
+
+      PRIMARY  262 starts, posted line, two-sided so the no-vig fair
+               probability is EXACT, one row per start (independent)
+        market Brier 0.2526   model raw 0.2646   cal 0.2664   blend 0.2575
+        paired vs market:  raw +0.01195 +/- 0.00569 (z=+2.10)  WORSE
+                           cal +0.01376 +/- 0.00578 (z=+2.38)  WORSE
+                         blend +0.00486 +/- 0.00283 (z=+1.72)  n.s.
+
+      LADDER   1,956 alt milestones over the same 262 starts, clustered
+               by start (one-sided, de-vigged by each start's own
+               measured two-sided margin — an ASSUMPTION, stated)
+        paired vs market:  raw +0.00625 +/- 0.00265 (z=+2.36)  WORSE
+                           cal +0.00704 +/- 0.00276 (z=+2.55)  WORSE
+                         blend +0.00237 +/- 0.00133 (z=+1.79)  n.s.
+
+  Two samples, one conclusion: **the model is significantly worse than
+  the closing line**, and the production calibrator makes it worse still
+  in both (raw -> cal widens the deficit in every case). The only
+  configuration that is not significantly worse is the 50/50 blend —
+  and it is not worse only because it is half market. The blend is never
+  BETTER in any sample.
+- **The de-vig measured its own bug first, which is why the ladder is
+  trustworthy at all.** The first pass normalised each ladder's own
+  implied PMF; books post ladders truncated (K>=3 upward), so that sum
+  is ~P(K>=3) rather than 1 and it produced a median overround of
+  **0.946** — a book with negative vig, which does not exist. It also
+  flipped the ladder verdict from WORSE (z=+2.36) to indistinguishable
+  (z=+0.03). Replaced with proportional de-vig by the same start's
+  two-sided margin (median total_implied 1.060, a 6% hold). Guarded by
+  `tests/test_market_scoring.py`, which asserts de-vig can only LOWER a
+  probability and that clustered SEs exceed naive ones.
+- **What this does and does not establish.** It is 262 starts over 11
+  days, not a season. It is enough to refuse a promotion and to stop
+  betting; it is NOT enough to conclude the model has no edge in
+  general, and the ladder result rests on a stated de-vig assumption.
+  The honest position is that the model has never been shown to beat a
+  price, and now has been shown to lose to one on every sample that
+  exists.
+- **Next, in order:** (1) keep collecting closing lines — at ~25
+  starts/day, 1,000 market-scored starts is ~40 days out (A-002);
+  (2) attack the early-hook tail in the workload model, the mechanism
+  behind the OVER bias; (3) one bet per pitcher per slate. Do NOT raise
   `MAX_STAKE_UNITS`, relax the edge threshold, or promote a
-  recalibration until (1) answers yes.
+  recalibration until a market-scored sample says the model wins.
 - **Generalises to:** a model can be unbiased on its point estimate and
   still be dangerous, because bets are placed on the tail of the
   distribution, not the mean. Always calibrate the quantity you BET,

@@ -1,6 +1,54 @@
 
 # Changelog
 
+## 2026-08-16 - Scored against the closing line: the model loses (A-041)
+
+Operator asked to score the backtest against closing odds. **That cannot
+be done**, and the reason is an open audit item: the backtest spans
+2026-04-11..08-04 and closing captures begin 08-05, so the overlap is a
+single OPENING snapshot. Historical prop lines were never sourced
+(A-002, now escalated from a Phase 3 nicety to the binding constraint).
+
+Scored instead on the largest window that has prices, via new
+`tools/score_vs_market.py`. Model probabilities are reconstructed
+exactly as production computes them — `k_dist` -> raw P(K > line) ->
+isotonic calibrator -> blend at MODEL_TRUST_WEIGHT — so it is visible
+which stage helps.
+
+    PRIMARY  262 starts, posted line, two-sided (exact no-vig), independent
+      market 0.2526   raw 0.2646   cal 0.2664   blend 0.2575
+      vs market:  raw +0.01195 +/- 0.00569 (z=+2.10)  WORSE
+                  cal +0.01376 +/- 0.00578 (z=+2.38)  WORSE
+                blend +0.00486 +/- 0.00283 (z=+1.72)  not significant
+
+    LADDER   1,956 alt milestones, same 262 starts, CLUSTERED by start
+      vs market:  raw +0.00625 +/- 0.00265 (z=+2.36)  WORSE
+                  cal +0.00704 +/- 0.00276 (z=+2.55)  WORSE
+                blend +0.00237 +/- 0.00133 (z=+1.79)  not significant
+
+Two samples, one conclusion: the model is significantly worse than the
+closing line, and the production calibrator makes it worse still in
+every case. The only configuration that escapes significance is the
+50/50 blend, and only because it is half market — it is never better.
+
+**The ladder de-vig caught its own bug.** The first pass normalised each
+ladder's implied PMF, but books post ladders truncated (K>=3 upward), so
+that sum is ~P(K>=3) not 1. It reported a median overround of 0.946 — a
+book with negative vig — and flipped the ladder verdict from WORSE
+(z=+2.36) to indistinguishable (z=+0.03). Replaced with proportional
+de-vig by each start's own two-sided margin (median 1.060, a 6% hold),
+which is an assumption and is labelled as one in the output.
+
+Scope, stated plainly: 262 starts over 11 days is enough to refuse a
+promotion and to stop betting. It is NOT enough to conclude the model
+has no edge in general. At ~25 starts/day, 1,000 market-scored starts is
+about 40 days away, and nothing shortens that except buying historical
+lines.
+
+9 tests in `tests/test_market_scoring.py`, including that de-vig can
+only LOWER a probability, that clustered SEs exceed naive ones, and that
+a zero-variance paired difference fails closed to z=0. 155 tests pass.
+
 ## 2026-08-16 - Recalibration measured, and refused (A-041 amended)
 
 Operator asked for the calibrator refit. Built it, measured it, and it

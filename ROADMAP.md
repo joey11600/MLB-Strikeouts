@@ -230,15 +230,25 @@
   band including 0.55–0.75. The refit improves held-out Brier
   0.2516 -> 0.2483 but is not significant (z=-0.89, n=137), and it does
   not address the real defect. `models/calibrator.pkl` untouched
-- [ ] **A-041 — score the backtest against the MARKET. BLOCKS BETTING.**
-  The actual root cause. `backtest_predictions.csv` carries no odds at
-  all, so the model has only ever beaten a NAIVE baseline on a synthetic
-  3.5–8.5 line grid — never a book at the posted line. Live it loses:
-  paired over 264 rows, blended minus market +0.00531 +/- 0.00276
-  (z=+1.92); calibrated minus market +0.01444 +/- 0.00562 (z=+2.57).
-  Held-out Brier rises **monotonically** with market trust weight
-  (0.2489 at w=0 -> 0.2582 at w=1). Join closing odds onto the backtest
-  and re-answer this on 18,798 rows instead of 264
+- [x] **A-041 — score against the MARKET: DONE, and the model loses.**
+  `tools/score_vs_market.py`. Could NOT be run on the backtest — it ends
+  2026-08-04 and closing captures begin 08-05 (A-002). On the 262 starts
+  that do have two-sided closing prices: market Brier 0.2526 vs model
+  raw 0.2646 / calibrated 0.2664 / blended 0.2575; paired, the raw model
+  is worse (z=+2.10) and the calibrated model worse still (z=+2.38). The
+  alt ladder (1,956 rows, clustered by start) agrees: z=+2.36 / +2.55.
+  The 50/50 blend is the only configuration that escapes significance,
+  and only because it is half market
+- [ ] **BLOCKS BETTING: no market-scored sample shows the model
+  winning.** Do not place bets, raise `MAX_STAKE_UNITS`, relax the edge
+  threshold, or promote a recalibration until one does. The edge gate
+  has been enforcing this on its own since 2026-08-14
+- [ ] **Keep collecting closing lines — this is now the critical path
+  (A-002).** 12 days banked (334 two-sided snapshots, 9,598 alt rows).
+  At ~25 starts/day, 1,000 market-scored starts is ~40 days out. Nothing
+  shortens it except paying for historical lines. Re-run
+  `tools/score_vs_market.py` weekly; the verdict is only provisional at
+  262 starts
 - [ ] **A-041 — the defect is adverse selection, not calibration.** The
   model is calibrated to 1.4 points where it AGREES with the book
   (n=79) and off by -33 points where it most disagrees (n=26). No
