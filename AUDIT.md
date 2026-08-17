@@ -287,10 +287,63 @@ Tracks open items, resolved items, and known risks.
 - **Correlation compounds it:** Drew Anderson took 3 of the 8 losses on
   one pitcher in one game (.69 / .94 / .81). The haircut keys on
   repeated `game_pk`, not repeated pitcher — already a roadmap item.
-- **Next:** refit the calibrator on 2026 live rows; attack the early-hook
-  tail in the workload model; one bet per pitcher per slate. Do NOT
-  raise `MAX_STAKE_UNITS` or relax the edge threshold until the top bin
-  is monotone.
+- **Amended 2026-08-16 — the recalibration was measured and the fix
+  above was WRONG.** "Refit the calibrator" was the obvious read and it
+  does not survive contact with the data:
+  - **The calibrator was already fit on 2026.**
+    `data/backtest_predictions.csv` covers 2026-04-11..2026-08-04,
+    18,798 rows, and `tools/fit_calibrator.py` fits on exactly that.
+    Refitting "on 2026 data" was already the status quo.
+  - **And on that data it is well calibrated everywhere**, including
+    the region bets are placed in — gaps of +0.008 to +0.030 across all
+    eleven probability bands, with 2,494 rows between 0.55 and 0.75. At
+    0.65-0.70 the backtest actual is **0.705**. The live sample says
+    **0.333** in the same band. Both cannot be a property of one p -> p
+    map, so the map is not what is broken.
+  - **What is broken is conditional on the market**, and it is stark:
+
+        model vs market      n    model pred   actual      gap
+        much UNDER          41        0.350     0.488    +0.138
+        under               60        0.426     0.367    -0.059
+        AGREES              79        0.493     0.506    +0.014
+        over                58        0.564     0.431    -0.133
+        much OVER           26        0.638     0.308    -0.331
+
+    Where the model agrees with the book it is calibrated to within 1.4
+    points. Where it disagrees it is wrong in the direction of the
+    disagreement, and the further it disagrees the worse it gets. That
+    is adverse selection / the winner's curse, and the edge filter
+    SELECTS exactly the rows in the outer columns.
+  - **A univariate calibrator cannot express this.** The same model
+    probability is well calibrated in one column and inverted in
+    another; no p -> p map is right for both.
+  - **The model does not beat the market.** Paired over all 264 live
+    rows: blended minus market **+0.00531 +/- 0.00276 (z=+1.92)**;
+    the standalone calibrated probability minus market **+0.01444 +/-
+    0.00562 (z=+2.57, significant)**. Sweeping the market trust weight
+    on a within-2026 time split, held-out Brier rises **monotonically**
+    with model weight (w=0.0 -> 0.2489, w=0.5 -> 0.2516, w=1.0 ->
+    0.2582). Every unit of model weight costs accuracy.
+  - **The refit itself:** held-out Brier 0.2516 -> 0.2483, directionally
+    better and **not significant (z=-0.89)** on 137 held-out rows.
+    Built as `tools/recalibrate_live.py`, which re-derives all of the
+    above and refuses to promote; gates in
+    `tests/test_recalibration_gate.py`. Not promoted;
+    `models/calibrator.pkl` untouched.
+- **Root cause of the backtest/live gap: the model has never been
+  scored against the MARKET.** `backtest_predictions.csv` carries no
+  odds columns at all — only `model_p_over` vs `naive_p_over`. Beating a
+  naive baseline on a synthetic 3.5-8.5 line grid says nothing about
+  beating a book at the one posted line, and the grid's low-probability
+  rows are not where money is staked. This is the same omission already
+  written down for the outs model ("Score against the MARKET. Nothing
+  here measures that") and it applies here too.
+- **Next, in order:** (1) score the backtest against closing odds so
+  "does it beat the market" is answerable on 18,798 rows instead of 264;
+  (2) attack the early-hook tail in the workload model, which is the
+  mechanism; (3) one bet per pitcher per slate. Do NOT raise
+  `MAX_STAKE_UNITS`, relax the edge threshold, or promote a
+  recalibration until (1) answers yes.
 - **Generalises to:** a model can be unbiased on its point estimate and
   still be dangerous, because bets are placed on the tail of the
   distribution, not the mean. Always calibrate the quantity you BET,

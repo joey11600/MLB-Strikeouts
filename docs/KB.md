@@ -821,3 +821,24 @@ reach the dashboard but not git.
     shape). A mean-unbiased model with a mis-shaped tail is worse than
     an obviously bad one, because it passes every summary statistic on
     the way to the bet list.
+23. **Beating a naive baseline is not beating the market.** The
+    strikeouts backtest scores `model_p_over` against `naive_p_over` on
+    a synthetic 3.5–8.5 line grid and carries no odds columns at all, so
+    "+3.2% Brier improvement" was never a claim about the book. Live, at
+    the one posted line, the model loses to the market (paired, 264
+    rows, z=+1.92 blended / +2.57 standalone) and held-out Brier rises
+    monotonically with model trust weight. Any model that will be bet
+    must be scored against the price it will be bet into — everything
+    else measures a different question (A-041; same omission already
+    written down for the outs model).
+24. **Calibration can be conditional, and the bet list selects on the
+    condition.** The strikeouts model is calibrated to 1.4 points where
+    it AGREES with the book and off by -33 points where it most
+    disagrees. Pooled calibration hides that completely: the curve looks
+    acceptable because the agreeing rows outnumber the others, while the
+    edge filter picks exclusively from the rows that are wrong. Before
+    trusting any calibration curve, re-cut it by the quantity your
+    selector keys on — for a betting model that is always the
+    disagreement with the price. A univariate p -> p calibrator cannot
+    repair this by construction, so reaching for one is a sign the
+    diagnosis has not landed yet (A-041).

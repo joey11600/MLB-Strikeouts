@@ -224,12 +224,29 @@
   `can_push_to_git` read `true` for all 27 hours because `GIT_STATUS` is
   set once in `configure_git()`; `git.checked` still said 2026-08-13.
   Either re-probe on request or publish the age next to the value
-- [ ] **A-041 — refit the calibrator on 2026 live rows. BLOCKS BETTING.**
-  The top confidence bin is inverted (stated 65.4% OVER, actual 33.3%,
-  n=33, z=-3.9) and that is the bin the edge filter draws from. Live
-  Brier excess +0.0225 vs backtest -0.0006 (band +/-0.0136). Do not
-  raise `MAX_STAKE_UNITS` or relax the edge threshold until the curve is
-  monotone
+- [x] **A-041 — refit the calibrator: BUILT, MEASURED, NOT PROMOTED.**
+  `tools/recalibrate_live.py`. The calibrator was already fit on 2026
+  (18,798 rows, Apr 11–Aug 4) and is well calibrated there in every
+  band including 0.55–0.75. The refit improves held-out Brier
+  0.2516 -> 0.2483 but is not significant (z=-0.89, n=137), and it does
+  not address the real defect. `models/calibrator.pkl` untouched
+- [ ] **A-041 — score the backtest against the MARKET. BLOCKS BETTING.**
+  The actual root cause. `backtest_predictions.csv` carries no odds at
+  all, so the model has only ever beaten a NAIVE baseline on a synthetic
+  3.5–8.5 line grid — never a book at the posted line. Live it loses:
+  paired over 264 rows, blended minus market +0.00531 +/- 0.00276
+  (z=+1.92); calibrated minus market +0.01444 +/- 0.00562 (z=+2.57).
+  Held-out Brier rises **monotonically** with market trust weight
+  (0.2489 at w=0 -> 0.2582 at w=1). Join closing odds onto the backtest
+  and re-answer this on 18,798 rows instead of 264
+- [ ] **A-041 — the defect is adverse selection, not calibration.** The
+  model is calibrated to 1.4 points where it AGREES with the book
+  (n=79) and off by -33 points where it most disagrees (n=26). No
+  univariate p -> p map can express that, so no recalibration fixes it.
+  If a lever is needed before the market backtest lands, it is
+  `MODEL_TRUST_WEIGHT` (currently 0.5; every measured increment above
+  0.0 costs accuracy) — but that is a decision to stop trusting the
+  model, not a tuning exercise
 - [ ] **A-041 — attack the early-hook tail in the workload model.** The
   mechanism, not the symptom: 61.4% of starts within 3 BF, 5.3% badly
   short (worst -17.1 BF). An early hook kills an OVER and never an

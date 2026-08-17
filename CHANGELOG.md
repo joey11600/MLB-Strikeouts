@@ -1,6 +1,57 @@
 
 # Changelog
 
+## 2026-08-16 - Recalibration measured, and refused (A-041 amended)
+
+Operator asked for the calibrator refit. Built it, measured it, and it
+is the wrong lever — so it is NOT promoted. `models/calibrator.pkl` is
+untouched.
+
+**The calibrator was already fit on 2026.** `backtest_predictions.csv`
+is 2026-04-11..2026-08-04, 18,798 rows, and `fit_calibrator.py` fits on
+exactly that. On it the model is well calibrated in every probability
+band (gaps +0.008 to +0.030), including 2,494 rows between 0.55 and
+0.75 where bets actually live. At 0.65-0.70 the backtest actual is
+0.705; the live sample says 0.333 in the same band. One p -> p map
+cannot be responsible for both numbers.
+
+**The real defect is conditional on the market:**
+
+    model vs market      n    model pred   actual      gap
+    much UNDER          41        0.350     0.488    +0.138
+    AGREES              79        0.493     0.506    +0.014
+    much OVER           26        0.638     0.308    -0.331
+
+Where the model agrees with the book it is calibrated to 1.4 points.
+Where it disagrees it is wrong in the direction of the disagreement,
+and worse the further it goes — adverse selection, and the edge filter
+selects precisely those rows. A univariate calibrator cannot express
+this: the same probability is calibrated in one column and inverted in
+the other.
+
+**The model does not beat the market.** Paired over 264 live rows,
+blended minus market +0.00531 +/- 0.00276 (z=+1.92); standalone
+calibrated minus market +0.01444 +/- 0.00562 (z=+2.57). Sweeping the
+market trust weight on a within-2026 time split, held-out Brier rises
+monotonically with model weight: w=0.0 -> 0.2489, w=0.5 (production) ->
+0.2516, w=1.0 -> 0.2582.
+
+**The refit itself** improves held-out Brier 0.2516 -> 0.2483 and is not
+significant (z=-0.89, 137 held-out rows).
+
+**Root cause of the backtest/live gap:** `backtest_predictions.csv` has
+no odds columns. The model has only ever been scored against a NAIVE
+baseline, never against the market. Beating naive on a synthetic
+3.5-8.5 line grid says nothing about beating a book at the one posted
+line — the same omission already recorded for the outs model.
+
+New `tools/recalibrate_live.py` re-derives all of this on demand and
+refuses to promote (`promotion_blockers`: sample floor 300 held-out
+rows, |z|>1.96 against production, and an outright block when the model
+is significantly worse than the market). 7 tests in
+`tests/test_recalibration_gate.py`, including that the gate can open —
+a gate that never opens is a wall.
+
 ## 2026-08-16 - Worker wedged 27h (A-040); model's confident OVERs are inverted (A-041)
 
 Operator: "theres been so many failed runs and issues. picks arent being
