@@ -258,6 +258,80 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-042: the workload model has the wrong SHAPE — built, gated, flag OFF
+- **Filed:** 2026-08-16 (the mechanism under A-041, fixed on the
+  operator's instruction to attack the early-hook tail)
+- **Status:** built and gated; `USE_HOOK_MIXTURE = False` pending the
+  2-week shadow CLAUDE.md requires.
+- **Description:** batters faced is **left**-skewed and the negative
+  binomial is **right**-skewed. Measured on 13,170 starts
+  (`data/outs_starts.parquet`, 2024-2026): empirical skew **-1.58**, the
+  fitted model's **+0.24**. The consequence, same starts:
+
+      threshold   actual   NB model        ratio
+      BF <=  8     3.08%      0.11%   27.6x too rare
+      BF <= 10     4.07%      0.58%    7.0x too rare
+      BF <= 12     5.03%      2.18%    2.3x too rare
+      BF <= 18    14.52%     25.51%    0.6x (too COMMON)
+
+- **Why it is an OVER bias specifically, not noise.** A disaster start
+  settles every OVER as a loss and can NEVER settle an UNDER that way.
+  Pricing a 1-in-32 event at 1-in-900 therefore inflates P(over) on
+  every pitcher, in one direction. That is the mechanism behind A-041's
+  measured +5.0pp OVER lean and the inverted top confidence bin.
+- **A better-fitted NB cannot fix it, and the evidence was already in
+  the pickle.** `alpha` = 0.006737946999085467 = **exactly exp(-5)**,
+  the lower bound of `log_alpha` in the fit — the optimizer wanted LESS
+  dispersion, not more, and hit the wall. Loosening that bound moves it
+  toward Poisson, i.e. worse. No negative binomial is left-skewed at any
+  alpha. The process is genuinely two-component: a start is either
+  hooked early or it is not, and the model should say so.
+- **Fix:** a two-component mixture in `models/stage_a_bf.py` —
+  `pi` of starts hooked early (NB about `mu_short`), the rest a normal
+  outing. The conditional MEAN is preserved by re-centring the normal
+  arm to `(mu - pi*mu_short)/(1 - pi)`; the live mean BF error is +0.00
+  over 264 starts, so a change that dragged the mean down would trade a
+  tail bias for a mean bias and still look like progress.
+- **Gates** (`tools/gate_hook_mixture.py`, reproducible):
+
+      train      test    d(logLik)   tail err        pi    mu_short
+      2024       2025     +0.0689   0.0275 -> 0.0141  0.0233   5.96
+      2025       2024     +0.0798   0.0292 -> 0.0179  0.0195   6.02
+      2024+2025  2026     +0.1234   0.0410 -> 0.0287  0.0213   5.99
+
+  Gate 1 leakage: the as-of mean is `shift(1).expanding()`, strictly
+  prior starts, safe by construction. Gate 2: improves in BOTH temporal
+  directions AND forward. Gate 3: `pi` 0.0195-0.0233 and `mu_short`
+  5.96-6.02 across three DISJOINT fits — that agreement is the evidence
+  it is real rather than a curve through noise. Gate 4: N/A, no new
+  covariate. **Gate 5: PARTIAL** — left-tail calibration improves every
+  split, but Gate 5 asks for P(K >= line), which needs the full
+  Stage A -> B -> compound path. That is exactly what the shadow
+  measures, and why the flag is off.
+- **Two bugs caught in my own analysis before they became results**, both
+  by an impossible number rather than by review:
+  1. The first mixture fit drove `alpha` to 0, where `1/alpha` in the
+     log-pmf returns POSITIVE log-probabilities. It reported a mean
+     log-likelihood of **+4.67** (impossible; log p <= 0) and a "tail
+     error" of 331, and read as a spectacular improvement. `_check()`
+     now refuses any positive log-pmf.
+  2. Single-start L-BFGS-B then collapsed two of three splits onto the
+     boundary (`pi` -> 1e-4), reporting a dead heat where there was a
+     real effect. Mixture likelihoods are multimodal; the fit is
+     multi-start and the restarts are load-bearing.
+- **Expected size of the correction, stated before the shadow so it can
+  be checked against:** moving ~2% of mass to ~6 BF should lower P(over)
+  by roughly 1-2 points. A-041's measured lean is 5.0 points, so this is
+  a partial correction — it is not expected to close the gap alone, and
+  a shadow that shows it closing entirely should be treated as
+  suspicious rather than lucky.
+- **Generalises to:** check the SHAPE of a fitted distribution against
+  the data's, not just its mean and variance. This model's mean was
+  unbiased and its variance close, and it was still wrong by 27x where
+  the money is. Skew is one line of code and would have caught it in
+  April. Also: a parameter sitting exactly on its bound is a fit that
+  failed, not a fit that finished.
+
 ### A-041: the model is worst exactly where it is most confident — OPEN
 - **Filed:** 2026-08-16 (operator: "i think the model itself is wrong")
 - **Status:** confirmed, NOT fixed. No bets should be placed until it is.

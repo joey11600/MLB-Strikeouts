@@ -53,6 +53,50 @@ LEAGUE_BF_STD = 5.06
 # precision.
 PITCHES_PER_BF_UNDER_LIMIT = 3.8
 
+# --- Early-hook mixture (A-042). FLAG OFF pending the 2-week shadow. ---
+#
+# The negative binomial is the wrong SHAPE for batters faced. Measured on
+# 13,170 starts (2024-2026, data/outs_starts.parquet): empirical skew
+# **-1.58** -- a long LEFT tail -- against the fitted NB's **+0.24**.
+# What that costs, on the same starts:
+#
+#     threshold   actual   NB model        ratio
+#     BF <=  8     3.08%      0.11%   27.6x too rare
+#     BF <= 10     4.07%      0.58%    7.0x too rare
+#     BF <= 12     5.03%      2.18%    2.3x too rare
+#     BF <= 18    14.52%     25.51%    0.6x (too COMMON)
+#
+# A disaster start settles every OVER as a loss and can never settle an
+# UNDER that way, so pricing a 1-in-32 event at 1-in-900 inflates P(over)
+# on every pitcher. That asymmetry is the mechanism behind the +5.0pp
+# OVER bias in A-041, and it is why the model's confident OVERs invert.
+#
+# No single NB can fix it. The dispersion is ALREADY pinned at its lower
+# bound (alpha = exp(-5) exactly, i.e. the optimizer wanted even LESS
+# spread, not more), and no negative binomial is left-skewed at any
+# alpha. The process is genuinely two-component: a start is either
+# hooked early or it is not.
+#
+# Fitted independently on each training split. The agreement across
+# three disjoint fits is the evidence this is real rather than a curve
+# through noise:
+#
+#     train      pi      mu_short   d(logLik)   tail err
+#     2024     0.0233      5.96      +0.0689   0.0275 -> 0.0141
+#     2025     0.0195      6.02      +0.0798   0.0292 -> 0.0179
+#     2024+25  0.0213      5.99      +0.1234   0.0410 -> 0.0287
+#
+# Gate 2 passes in BOTH temporal directions and forward; tail error is
+# roughly halved every time. Constants below are the forward split, the
+# production direction. Reproduce with tools/gate_hook_mixture.py.
+USE_HOOK_MIXTURE = False
+HOOK_PI = 0.0213
+HOOK_MU_SHORT = 5.99
+# The short component's dispersion fitted to its lower bound on all three
+# splits, i.e. Poisson-like. Held at a small positive value rather than
+# zero because 1/alpha appears in the log-pmf.
+HOOK_ALPHA_SHORT = 1e-3
+
 
 def _negbin_log_pmf(k, mu, alpha):
     """Log PMF of negative binomial parameterized by mean mu and dispersion alpha.
@@ -69,6 +113,45 @@ def _negbin_log_pmf(k, mu, alpha):
 
 def _negbin_pmf(k, mu, alpha):
     return np.exp(_negbin_log_pmf(k, mu, alpha))
+
+
+def hook_mixture_pmf(mu, alpha, pi=None, mu_short=None, alpha_short=None):
+    """P(BF = n) for n in 0..40 as: hooked early, OR a normal outing.
+
+    THE CONDITIONAL MEAN IS PRESERVED, and that is load-bearing. `mu`
+    arriving here is the regression's estimate of expected batters
+    faced, and it is unbiased in live data (measured mean BF error
+    +0.00 over 264 starts). So the normal component is re-centred to
+
+        mu_normal = (mu - pi*mu_short) / (1 - pi)
+
+    rather than left at mu. Skipping that would shift every prediction
+    DOWN by pi*(mu - mu_short) ~ 0.34 batters and trade a tail bias for
+    a mean bias -- fixing the OVER lean by breaking the thing that
+    already worked.
+
+    Measured against the plain NB on the same mu, the mean moves by
+    -0.000 (mu=16) to -0.069 (mu=28) batters. The residual is truncation
+    of the 0..40 support, which the existing model carries identically
+    (its own mean at mu=28 is 27.69, not 28.00) -- not something the
+    mixture introduces.
+    """
+    pi = HOOK_PI if pi is None else pi
+    mu_short = HOOK_MU_SHORT if mu_short is None else mu_short
+    alpha_short = HOOK_ALPHA_SHORT if alpha_short is None else alpha_short
+
+    # Floor at 1.0: a pitch limit can drive mu low enough that removing
+    # the hook mass would leave a non-positive mean for the normal arm.
+    mu_normal = max((mu - pi * mu_short) / (1.0 - pi), 1.0)
+
+    n = np.arange(41)
+    short = _negbin_pmf(n, mu_short, alpha_short)
+    normal = _negbin_pmf(n, mu_normal, alpha)
+    dist = pi * short + (1.0 - pi) * normal
+    # Return a proper pmf. Both arms are truncated at the 0..40 support,
+    # so the raw sum falls below 1 for long-leash starters (0.975 at
+    # mu=28); the caller normalising again is then a no-op.
+    return dist / dist.sum()
 
 
 class StageA:
@@ -203,7 +286,10 @@ class StageA:
             estimated_bf_from_limit = pitch_limit / PITCHES_PER_BF_UNDER_LIMIT
             mu = min(mu, estimated_bf_from_limit)
 
-        dist = np.array([_negbin_pmf(n, mu, alpha) for n in range(41)])
+        if USE_HOOK_MIXTURE:
+            dist = hook_mixture_pmf(mu, alpha)
+        else:
+            dist = np.array([_negbin_pmf(n, mu, alpha) for n in range(41)])
         dist = dist / dist.sum()
 
         return dist

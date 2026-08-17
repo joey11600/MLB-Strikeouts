@@ -257,10 +257,28 @@
   `MODEL_TRUST_WEIGHT` (currently 0.5; every measured increment above
   0.0 costs accuracy) — but that is a decision to stop trusting the
   model, not a tuning exercise
-- [ ] **A-041 — attack the early-hook tail in the workload model.** The
-  mechanism, not the symptom: 61.4% of starts within 3 BF, 5.3% badly
-  short (worst -17.1 BF). An early hook kills an OVER and never an
-  UNDER, which is the whole +5.0pp OVER bias
+- [x] **A-042 — early-hook tail in the workload model: BUILT, GATED,
+  FLAG OFF.** Batters faced is left-skewed (-1.58); the NB is
+  right-skewed (+0.24), pricing BF<=8 at 0.11% against an actual 3.08%.
+  `alpha` was pinned at exactly `exp(-5)`, its fit bound, so no
+  re-fitting of the NB could help. Replaced with a two-component hook
+  mixture that preserves the conditional mean. Gate 2 passes in both
+  temporal directions and forward; Gate 3 passes on three disjoint fits
+  agreeing (pi 0.0195-0.0233, mu_short 5.96-6.02).
+  `tools/gate_hook_mixture.py`
+- [ ] **A-042 — shadow the hook mixture for 2 weeks, then decide.** Gate
+  5 is only PARTIAL: left-tail calibration improves on every split, but
+  the gate asks for P(K >= line) and that needs the full Stage A -> B ->
+  compound path. Watch specifically: (a) does the OVER lean actually
+  drop by the predicted 1-2 points — more than that is suspicious, not
+  lucky; (b) the confident-OVER bin from A-041 (stated 65.4%, actual
+  33.3%) should move toward its diagonal; (c) pitch-limited starts,
+  where the normal arm's mean is floored
+- [ ] **A-042 — audit the other fitted parameters for bound-pinning.**
+  `alpha = exp(-5)` sat exactly on its bound in BOTH `stage_a_fitted.pkl`
+  and `stage_a_eval.pkl` and nothing flagged it. A parameter on its
+  bound is a fit that failed, not one that finished — check Stage B and
+  the outs hazard the same way
 - [ ] **A-041 — one bet per pitcher per slate.** Drew Anderson took 3 of
   8 losses in one game (.69/.94/.81). The haircut keys on repeated
   `game_pk`, not repeated pitcher — same fix already scoped under

@@ -866,3 +866,27 @@ reach the dashboard but not git.
     Unclustered standard errors shrink by about sqrt(rows per start) and
     manufacture significance out of correlation. Cluster on the unit
     that actually varies — here the start, never the row.
+28. **Check the SHAPE of a fitted distribution, not just its mean and
+    variance.** Stage A's batters-faced model had an unbiased mean
+    (+0.00 live) and roughly the right variance, and was still wrong by
+    **27x** in the left tail: it priced BF<=8 at 0.11% against an actual
+    3.08%, because batters faced is left-skewed (-1.58) and a negative
+    binomial is right-skewed (+0.24). Every summary statistic anyone was
+    watching looked fine. `scipy.stats.skew` on the training target is
+    one line and would have caught it in April (A-042).
+29. **A parameter sitting exactly on its bound is a fit that FAILED.**
+    Stage A's dispersion was `alpha = 0.006737946999085467`, which is
+    exactly `exp(-5)` — the lower bound of `log_alpha` in its own
+    optimizer — in both the fitted and eval pickles, for months. The
+    optimizer was asking for a shape the family could not provide, and
+    nothing flagged it because the number looked like a number. Assert
+    that fitted parameters land in the interior, or print the bound
+    next to the estimate (A-042).
+30. **In a betting model, an asymmetric error is worse than a large
+    one.** A start that ends after six batters settles every OVER as a
+    loss and can NEVER settle an UNDER that way. So a missing left tail
+    in the workload distribution does not add symmetric noise to
+    P(K >= line) — it biases every pitcher in one direction, which is
+    the direction the edge filter then selects on. When auditing an
+    error, ask which way it points before asking how big it is (A-042,
+    the mechanism under A-041).

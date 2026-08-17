@@ -1,6 +1,63 @@
 
 # Changelog
 
+## 2026-08-16 - Workload model had the wrong shape: hook mixture, flag OFF (A-042)
+
+The mechanism under A-041's OVER bias, fixed at the source. Built,
+gated, and **not promoted** — `USE_HOOK_MIXTURE = False` pending the
+2-week shadow.
+
+**The defect.** Batters faced is left-skewed; the negative binomial is
+right-skewed. Measured on 13,170 starts: empirical skew **-1.58** vs the
+fitted model's **+0.24**.
+
+    threshold   actual   NB model        ratio
+    BF <=  8     3.08%      0.11%   27.6x too rare
+    BF <= 10     4.07%      0.58%    7.0x too rare
+    BF <= 18    14.52%     25.51%    0.6x (too COMMON)
+
+A disaster start settles every OVER as a loss and can never settle an
+UNDER that way, so pricing a 1-in-32 event at 1-in-900 inflates P(over)
+on every pitcher — in one direction. That is A-041's +5.0pp lean.
+
+**A better-fitted NB cannot fix it, and the pickle already said so.**
+`alpha` = exactly `exp(-5)`, the lower bound of `log_alpha` in the fit:
+the optimizer wanted LESS dispersion and hit the wall. No NB is
+left-skewed at any alpha. The process is two-component.
+
+**The fix** is a hook mixture in `models/stage_a_bf.py`. The conditional
+mean is preserved by re-centring the normal arm — live mean BF error is
++0.00 over 264 starts, and a change that dragged the mean down would
+trade a tail bias for a mean bias while still looking like progress.
+
+**Gates** (`tools/gate_hook_mixture.py`):
+
+    train      test    d(logLik)   tail err          pi   mu_short
+    2024       2025     +0.0689   0.0275 -> 0.0141  0.0233   5.96
+    2025       2024     +0.0798   0.0292 -> 0.0179  0.0195   6.02
+    2024+2025  2026     +0.1234   0.0410 -> 0.0287  0.0213   5.99
+
+Gate 2 passes in both temporal directions and forward. Gate 3 passes on
+the agreement of three disjoint fits (pi 0.0195-0.0233, mu_short
+5.96-6.02). Gate 5 is PARTIAL — tail calibration improves every split,
+but P(K >= line) needs the full compound path, which is what the shadow
+is for.
+
+**Two bugs caught in the analysis before they became results**, both by
+an impossible number: the first fit drove alpha to 0 and reported a mean
+log-likelihood of +4.67 (log p cannot exceed 0) with a "tail error" of
+331; then single-start L-BFGS-B collapsed two splits onto the boundary
+and reported a dead heat. The fit is now multi-start and `_check()`
+refuses any positive log-pmf.
+
+**Expected effect, recorded before the shadow:** ~1-2 points off P(over),
+against A-041's 5.0-point lean. A partial correction. A shadow showing
+it fully closed should be treated as suspicious.
+
+164 tests pass; 9 new in `tests/test_hook_mixture.py`, including that
+the mean tracks the model being replaced and that a pitch-limited start
+cannot produce a negative component mean.
+
 ## 2026-08-16 - Scored against the closing line: the model loses (A-041)
 
 Operator asked to score the backtest against closing odds. **That cannot
