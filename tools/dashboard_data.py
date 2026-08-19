@@ -553,11 +553,17 @@ def _build_model_analytics() -> dict:
         overall_m = sum((p["model_p_over"] - p["actual_over"]) ** 2 for p in preds) / len(preds)
 
         # Calibration bins on RAW model probs, with the production
-        # calibrator's mapping overlaid.
+        # calibrator's mapping overlaid — ONLY while that mapping is
+        # actually applied. Since A-044 the isotonic map is off, and
+        # drawing a transform the board does not use would misread as
+        # "this is what we ship" on a dashboard meant to be understood
+        # in 30 seconds. None omits the series; the renderer already
+        # handles a missing calibrated_mean.
         calibrate = None
         try:
-            from models.calibration import IsotonicCalibrator, CALIBRATOR_PATH
-            if CALIBRATOR_PATH.exists():
+            from models.calibration import (
+                CALIBRATOR_PATH, USE_CALIBRATOR, IsotonicCalibrator)
+            if USE_CALIBRATOR and CALIBRATOR_PATH.exists():
                 cal = IsotonicCalibrator()
                 cal.load()
                 calibrate = cal.predict

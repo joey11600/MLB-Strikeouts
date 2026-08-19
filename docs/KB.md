@@ -18,22 +18,47 @@ times-through-order decay, and arsenal matchup.
 The compound distribution is computed via a Poisson-binomial dynamic
 program — O(n²) where n ≤ 40, so microseconds.
 
-Final output: **P(K ≥ line)** for each line on the board, after
-isotonic calibration (fit on out-of-sample backtest predictions,
-`models/calibrator.pkl`, applied in `strikeout_predictor.predict` and
-via `calibrate_prob()` for milestone tails). Before 2026-08-05 the
-calibrator existed but was never fit or applied — see CHANGELOG
-Phase 7.
+Final output: **P(K ≥ line)** for each line on the board, served
+through `strikeout_predictor.calibrate_prob()` (the milestone/ladder
+tails route through the same call, not just `per_line`).
+
+**The isotonic map is OFF since 2026-08-19 (A-044).** Scored against
+the closing line it measured WORSE than raw — Brier 0.2663 vs 0.2642
+on 329 starts, same sign in both halves — and it pushed probabilities
+UP by +0.018 on average into a model that already over-predicts OVER.
+`USE_CALIBRATOR = False` in `models/calibration.py`; the fitted
+`models/calibrator.pkl` is retained for analysis and for the dashboard's
+calibration curve, but nothing on the board passes through it.
+
+What `calibrate_prob()` still does unconditionally is CLAMP, via
+`clamp_prob()` / `PROB_EPS`: no served probability may be 0 or 1
+(A-043). The clamp is not part of the on/off decision — dropping the
+map removed the call that used to apply it, and a bypass that forgot it
+would put a raw 1.0 back on the board.
+
+History: before 2026-08-05 the calibrator existed but was never fit or
+applied (CHANGELOG Phase 7); A-043 clamped it; A-044 switched it off.
 
 ### Betting probability (market-anchored)
 
 The probability used for edge and staking is NOT the raw model output:
 
 ```
-p_bet = w * calibrated_model + (1 - w) * market_no_vig_fair
+p_bet = w * served_model + (1 - w) * market_no_vig_fair
 w = MODEL_TRUST_WEIGHT = 0.5          (models/edge.py)
 edge = p_bet - fair  = w * (model - fair)
 ```
+
+`served_model` is the clamped raw probability while `USE_CALIBRATOR` is
+False (A-044), not the isotonic-mapped one. `tools/score_vs_market.py`
+reports `raw`, `cal`, `served`, `blend` and `fair` side by side so the
+difference stays visible; `served` is the only one the board ships.
+
+Measured against the closing line on 329 starts, `blend` is
+**indistinguishable from the market** (+0.00418, z=+1.72) — it was
+significantly worse (+0.00524, z=+2.14) with the map on. Not better.
+The model still has no demonstrated edge over the market, which is
+A-041 and open.
 
 One-sided milestone markets are de-vigged with an assumed side margin
 (`ALT_SIDE_MARGIN` = 4%) and held to `LADDER_EDGE_THRESHOLD` = 10%.

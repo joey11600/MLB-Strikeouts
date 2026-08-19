@@ -111,31 +111,59 @@ def check_calibrator_actually_applied(r: Report) -> None:
 
     The calibrator was constructed, never fit, never loaded and never
     applied for weeks, while docs described a calibration step. Proving
-    the file exists is not enough -- it must CHANGE a probability.
+    the file exists is not enough -- it must do what the config SAYS.
+
+    Since A-044 the isotonic map is deliberately OFF, so "changes
+    nothing" is the correct state and the old check would fail on a
+    healthy system. The invariant is no longer "the map moves probes",
+    it is "the served path matches USE_CALIBRATOR, and the A-043 clamp
+    survives either way". Probe the PRODUCTION path, not the artifact:
+    a calibrator that loads fine proves nothing about what ships.
     """
     try:
-        from models.calibration import CALIBRATOR_PATH, IsotonicCalibrator
+        from models.calibration import (
+            CALIBRATOR_PATH, PROB_EPS, USE_CALIBRATOR)
+        from strikeout_predictor import StrikeoutPredictor
     except Exception as exc:
         r.warn("calibrator wired", f"cannot import: {exc}")
         return
     if not CALIBRATOR_PATH.exists():
         r.fail("calibrator wired", f"{CALIBRATOR_PATH} missing",
-               "live picks would ship RAW model probabilities")
+               "re-enabling USE_CALIBRATOR would silently ship raw probabilities")
         return
     try:
-        cal = IsotonicCalibrator()
-        cal.load()
+        pred = StrikeoutPredictor()
+        pred.load_models()
         probes = [0.1, 0.3, 0.5, 0.7, 0.9]
-        out = [cal.predict(p) for p in probes]
+        out = [pred.calibrate_prob(p) for p in probes]
         moved = sum(1 for p, q in zip(probes, out) if abs(p - q) > 1e-9)
-        if moved == 0:
+
+        # The clamp is not part of the on/off decision. It must hold in
+        # both states or A-043 is back.
+        edges = [pred.calibrate_prob(0.0), pred.calibrate_prob(1.0)]
+        if edges[0] < PROB_EPS - 1e-12 or edges[1] > 1.0 - PROB_EPS + 1e-12:
             r.fail("calibrator wired",
-                   "loads but is the identity on every probe",
+                   f"clamp broken: 0.0 -> {edges[0]}, 1.0 -> {edges[1]}",
+                   "the board could serve certainty again (A-043)")
+            return
+
+        if USE_CALIBRATOR and moved == 0:
+            r.fail("calibrator wired",
+                   "USE_CALIBRATOR is on but the served path is the identity",
                    "a fitted calibrator that changes nothing is dead code")
+        elif not USE_CALIBRATOR and moved > 0:
+            r.fail("calibrator wired",
+                   f"USE_CALIBRATOR is off but the map still moves "
+                   f"{moved}/{len(probes)} probes",
+                   "the served probability is not the one the config describes")
+        elif USE_CALIBRATOR:
+            r.ok("calibrator wired",
+                 f"on, moves {moved}/{len(probes)} probes "
+                 f"(e.g. 0.70 -> {out[3]:.3f})")
         else:
             r.ok("calibrator wired",
-                 f"moves {moved}/{len(probes)} probes "
-                 f"(e.g. 0.70 -> {out[3]:.3f})")
+                 f"off by design (A-044); raw passes through, "
+                 f"clamped to [{PROB_EPS}, {1 - PROB_EPS}]")
     except Exception as exc:
         r.fail("calibrator wired", f"load/predict raised: {exc}",
                "the live path would fall back to raw probabilities")

@@ -44,7 +44,8 @@ import pandas as pd
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from models.calibration import IsotonicCalibrator, CALIBRATOR_PATH  # noqa: E402
+from models.calibration import (  # noqa: E402
+    CALIBRATOR_PATH, USE_CALIBRATOR, IsotonicCalibrator, clamp_prob)
 from models.edge import MODEL_TRUST_WEIGHT, no_vig_fair_prob  # noqa: E402
 from tools.daily_pipeline import _normalize_name  # noqa: E402
 from tracker import DATA_STATE_DIR  # noqa: E402
@@ -150,8 +151,15 @@ def build(pattern: str, ladder: bool) -> pd.DataFrame:
                 "total_implied": (None if ladder else nv["total_implied"]),
             })
     df = pd.DataFrame(out)
+    if not df.empty:
+        # "served" is what production actually ships. Since A-044 the
+        # isotonic map is off, so blending "cal" would score a stage the
+        # board never sees. raw and cal are still reported side by side
+        # -- that comparison is the evidence for the switch.
+        df["served"] = (df["cal"] if USE_CALIBRATOR
+                        else df["raw"].map(clamp_prob))
     if not df.empty and not ladder:
-        df["blend"] = (MODEL_TRUST_WEIGHT * df["cal"]
+        df["blend"] = (MODEL_TRUST_WEIGHT * df["served"]
                        + (1 - MODEL_TRUST_WEIGHT) * df["fair"])
     return df
 
@@ -248,7 +256,7 @@ def main() -> int:
         print("No primary closing rows could be built.")
         return 1
     report(primary, "PRIMARY (posted line, two-sided, independent rows)",
-           ["raw", "cal", "blend", "fair"], clustered=False)
+           ["raw", "cal", "served", "blend", "fair"], clustered=False)
 
     if args.ladder:
         lad = build("closing_alts_2026-*.csv", ladder=True)
@@ -257,14 +265,14 @@ def main() -> int:
         if not lad.empty:
             lad = devig_ladder(lad, holds)
         if not lad.empty:
-            lad["blend"] = (MODEL_TRUST_WEIGHT * lad["cal"]
+            lad["blend"] = (MODEL_TRUST_WEIGHT * lad["served"]
                             + (1 - MODEL_TRUST_WEIGHT) * lad["fair"])
             med = lad.groupby("start_key")["overround"].first().median()
             print(f"\n  (ladder de-vigged by each start's own two-sided "
                   f"margin; median total_implied {med:.3f} — 1.0 would be a "
                   f"vig-free book. One-sided, so this is an ASSUMPTION.)")
             report(lad, "LADDER (alt milestones, one-sided, CORRELATED)",
-                   ["raw", "cal", "blend", "fair"], clustered=True)
+                   ["raw", "cal", "served", "blend", "fair"], clustered=True)
 
     print("\nNOTE: this window is 2026-08-05 onward only. The backtest "
           "(2026-04-11..08-04) cannot be scored this way — historical prop "

@@ -258,6 +258,64 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-044: the isotonic calibrator measured WORSE than raw — map switched off
+- **Filed/Resolved:** 2026-08-19 (operator asked for it after the
+  market-scored comparison; see A-041)
+- **Description:** A-043 stopped the calibrator asserting certainty but
+  left open whether the map helps at all. Scored against the CLOSING
+  LINE — the only benchmark that pays — it does not. 329 starts,
+  2026-08-05..08-18, `tools/score_vs_market.py`:
+
+      market fair   Brier 0.2520
+      model RAW     Brier 0.2642
+      model CAL     Brier 0.2663    <- calibrating made it WORSE
+
+      paired cal - raw: +0.00210 +/- 0.00123 (z=+1.71)
+      first half  +0.00263 (n=169)
+      second half +0.00154 (n=160)
+
+- **The statistic is borderline and is recorded as borderline.** z=+1.71
+  does not clear 1.96. Three things carry the decision anyway: the sign
+  is the SAME IN BOTH HALVES; the mechanism is understood (the map
+  shifts probabilities UP by +0.018 mean, +0.054 max, against a model
+  whose standing error is already an OVER bias); and identity is the
+  CONSERVATIVE default — disabling a transform is a return to the
+  untransformed number, not a new claim about the world.
+- **Effect on the OVER bias:** +0.0447 -> +0.0267 against a 0.4407
+  actual over-rate. Roughly halved.
+- **Effect on the SERVED probability** (what the board ships, blended at
+  `MODEL_TRUST_WEIGHT = 0.5`): paired vs market moves from
+  **+0.00524 (z=+2.14, significantly WORSE)** to **+0.00418 (z=+1.72,
+  indistinguishable)**. Brier blend 0.2573 -> 0.2562.
+- **Effect on staking**, replayed through the production gates
+  (`tools/kelly_sweep.py`, new): 18 bets / -9.88u / ROI -27.4% becomes
+  20 bets / -7.14u / ROI -17.8%. Same direction at w=0.75 and w=1.00.
+- **This REDUCES a loss. It does not create an edge.** The model is
+  still not better than the market at the market's own line. **A-041
+  stays open** and nothing here licenses a larger stake, a relaxed edge
+  threshold, or a raised `MAX_STAKE_UNITS`.
+- **Fixed** in `models/calibration.py`: `USE_CALIBRATOR = False`, with
+  the measurement recorded at the constant. `strikeout_predictor.
+  calibrate_prob()` gates on it.
+- **The clamp is NOT part of the decision.** `PROB_EPS` still applies on
+  both branches via the new `clamp_prob()` helper — dropping the map
+  removes the call that used to clamp, and forgetting it would re-open
+  A-043 as a side effect.
+- **Not a recalibration promotion.** `tests/test_recalibration_gate.py`
+  blocks shipping a REFIT on thin evidence; it does not require keeping
+  a map that measures worse. Its own finding — the model is calibrated
+  where it agrees with the market and inverted where it does not, and
+  "no univariate p -> p map fixes that" — is the same conclusion from
+  the other side.
+- **Guarded by** `tests/test_param_bounds.py`
+  (`test_production_serves_the_unmapped_probability`,
+  `test_the_clamp_survives_the_map_being_switched_off`) and the
+  rewritten watchdog check, which now asserts the served path MATCHES
+  `USE_CALIBRATOR` in either state rather than assuming the map is on.
+- **Re-enable only** with a market-scored sample that says the map wins,
+  the same bar `tools/recalibrate_live.py` enforces for a refit.
+
+
 ### A-043: three fitted parameters were sitting on their bounds
 - **Filed/Resolved (partly):** 2026-08-16 (operator asked for the sweep
   after `alpha = exp(-5)` surfaced in A-042)

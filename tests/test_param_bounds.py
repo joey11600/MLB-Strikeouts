@@ -135,3 +135,48 @@ def test_audit_detects_a_bound_from_the_module_not_a_copy():
 def test_audit_exit_code_is_nonzero_while_findings_remain():
     """CI has to be able to fail on this."""
     assert audit.audit(), "audit reports clean while known findings stand"
+
+
+# ── A-044: the isotonic map is off, the clamp is not ────────────────
+
+def test_production_serves_the_unmapped_probability():
+    """The switch has to reach the board, not just the config.
+
+    A-044 turned the isotonic map off because it measured WORSE than
+    raw against the closing line (Brier 0.2663 vs 0.2642, n=329). The
+    failure mode is a flag that flips while some other path keeps
+    calling calibrator.predict(), so assert on the SERVED number.
+    """
+    from models.calibration import USE_CALIBRATOR, clamp_prob
+    from strikeout_predictor import StrikeoutPredictor
+
+    pred = StrikeoutPredictor()
+    pred.load_models()
+
+    for raw in (0.15, 0.3, 0.5, 0.7, 0.9404):
+        served = pred.calibrate_prob(raw)
+        if USE_CALIBRATOR:
+            assert pred.calibrator.is_fitted, (
+                "USE_CALIBRATOR is on but no calibrator loaded")
+            assert served == pred.calibrator.predict(raw)
+        else:
+            assert served == clamp_prob(raw), (
+                f"map still applied at raw={raw}: served {served}")
+
+
+def test_the_clamp_survives_the_map_being_switched_off():
+    """A-043 must not re-open as a side effect of A-044.
+
+    Dropping the isotonic map removes the call that USED to clamp. If
+    the bypass forgets it, a raw 1.0 reaches the board again and Kelly
+    size goes unbounded — the exact defect A-043 closed.
+    """
+    from strikeout_predictor import StrikeoutPredictor
+
+    pred = StrikeoutPredictor()
+    pred.load_models()
+
+    assert pred.calibrate_prob(1.0) < 1.0
+    assert pred.calibrate_prob(0.0) > 0.0
+    assert pred.calibrate_prob(1.0) <= 1.0 - PROB_EPS + 1e-12
+    assert pred.calibrate_prob(0.0) >= PROB_EPS - 1e-12

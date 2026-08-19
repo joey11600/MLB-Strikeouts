@@ -49,6 +49,54 @@ CALIBRATOR_PATH = Path(__file__).parent / "calibrator.pkl"
 PROB_EPS = 1e-3
 
 
+def clamp_prob(p: float) -> float:
+    """Hold a probability strictly inside (0, 1). See PROB_EPS."""
+    return float(np.clip(p, PROB_EPS, 1.0 - PROB_EPS))
+
+
+# The isotonic map is OFF in production (A-044).
+#
+# A-043 stopped the calibrator asserting certainty but left the open
+# question of whether the map helps at all. Scored against the closing
+# line -- the only benchmark that pays -- it does not. On 329 starts
+# (2026-08-05..08-18, tools/score_vs_market.py):
+#
+#     market fair   Brier 0.2520
+#     model RAW     Brier 0.2642
+#     model CAL     Brier 0.2663   <- calibrating made it WORSE
+#
+#     paired cal - raw: +0.00210 +/- 0.00123 (z=+1.71)
+#     first half +0.00263 (n=169)   second half +0.00154 (n=160)
+#
+# z=+1.71 is suggestive, not conclusive, and it is recorded as such.
+# Three things carry the decision past a single borderline statistic:
+#
+#   1. SAME SIGN IN BOTH HALVES. Not one window.
+#   2. THE MECHANISM IS UNDERSTOOD. The map shifts probabilities UP by
+#      +0.018 on average (max +0.054, min -0.017), and the model's
+#      standing error is already an OVER bias. Removing it halves that
+#      bias: +0.0447 -> +0.0267 against a 0.4407 actual over-rate.
+#   3. IDENTITY IS THE CONSERVATIVE DEFAULT. Disabling a transform is a
+#      return to the untransformed number, not a new claim about the
+#      world. test_recalibration_gate blocks PROMOTING a refit on thin
+#      evidence; it does not require keeping one that measures worse.
+#
+# Replayed through the production gates at MODEL_TRUST_WEIGHT=0.5, the
+# staking effect is the same direction at every trust level
+# (tools/kelly_sweep.py):
+#
+#     with map     18 bets   7W-11L   -9.88u   ROI -27.4%
+#     without      20 bets   9W-11L   -7.14u   ROI -17.8%
+#
+# This REDUCES a loss; it does not create an edge. The model remains
+# significantly worse than the market (blend z=+2.14) and that is
+# A-041, still open. Nothing here licenses a bigger stake.
+#
+# Set back to True only with a market-scored sample that says the map
+# wins -- the same bar tools/recalibrate_live.py enforces for a refit.
+USE_CALIBRATOR = False
+
+
 def pav_isotonic(values: list[float], weights: list[float], increasing: bool = True) -> list[float]:
     """Pool-Adjacent-Violators isotonic regression.
 
@@ -150,10 +198,10 @@ class IsotonicCalibrator:
         artifact, it just can no longer reach the board.
         """
         if self._x_knots is None:
-            return float(np.clip(raw_prob, PROB_EPS, 1.0 - PROB_EPS))
+            return clamp_prob(raw_prob)
 
         p = float(np.interp(raw_prob, self._x_knots, self._y_knots))
-        return float(np.clip(p, PROB_EPS, 1.0 - PROB_EPS))
+        return clamp_prob(p)
 
     @property
     def is_fitted(self) -> bool:

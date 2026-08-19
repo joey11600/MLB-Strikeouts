@@ -1,6 +1,84 @@
 
 # Changelog
 
+## 2026-08-19 - The calibrator measured worse than raw; map switched off (A-044)
+
+A-043 stopped the calibrator asserting certainty. It left open the
+question underneath: does the isotonic map help at all? Scored against
+the closing line — the only benchmark that pays — it does not.
+
+    329 starts, 2026-08-05..08-18 (tools/score_vs_market.py)
+
+    market fair   Brier 0.2520
+    model RAW     Brier 0.2642
+    model CAL     Brier 0.2663    <- calibrating made it WORSE
+
+    paired cal - raw: +0.00210 +/- 0.00123 (z=+1.71)
+    first half +0.00263 (n=169)   second half +0.00154 (n=160)
+
+**z=+1.71 does not clear 1.96, and that is stated rather than rounded
+away.** Three things carry the decision past a borderline statistic.
+The sign is the same in both halves, so it is not one window. The
+mechanism is understood: the map shifts probabilities UP by +0.018 on
+average (max +0.054) and the model's standing error is already an OVER
+bias — removing it roughly halves that bias, +0.0447 to +0.0267 against
+a 0.4407 actual over-rate. And identity is the conservative default:
+disabling a transform is a return to the untransformed number, not a
+new claim about the world.
+
+On the number the board actually ships (blended at MODEL_TRUST_WEIGHT
+= 0.5), the model moves from **significantly worse than the market** to
+**indistinguishable from it**:
+
+    blend vs market   before  +0.00524 (z=+2.14)  model WORSE
+                      after   +0.00418 (z=+1.72)  indistinguishable
+
+Replayed through the production gates (`tools/kelly_sweep.py`, new),
+staking improves in the same direction at every trust level:
+
+    with map     18 bets   7W-11L   -9.88u   ROI -27.4%
+    without      20 bets   9W-11L   -7.14u   ROI -17.8%
+
+**This reduces a loss. It does not create an edge.** The model is still
+not better than the market at the market's own line — that is A-041 and
+it stays open. Nothing here licenses a larger stake, a relaxed edge
+threshold, or a raised `MAX_STAKE_UNITS`.
+
+`USE_CALIBRATOR = False` in `models/calibration.py`, with the
+measurement recorded at the constant so the next reader sees the
+evidence and not just the flag. `StrikeoutPredictor.calibrate_prob()`
+gates on it.
+
+The `PROB_EPS` clamp is deliberately NOT part of the switch. Dropping
+the map removes the call that used to clamp, so a naive bypass would
+re-open A-043 — a raw 1.0 back on the board, Kelly size unbounded. Both
+branches now route through a shared `clamp_prob()` helper, and a test
+asserts it in the off state.
+
+This is not a recalibration promotion. `tests/test_recalibration_gate.py`
+blocks shipping a refit on thin evidence; it does not require keeping a
+map that measures worse. Its own finding — the model is calibrated where
+it agrees with the market and inverted where it does not, so "no
+univariate p -> p map fixes that" — is this conclusion from the other
+side.
+
+The watchdog's calibrator check was inverted, not deleted. It used to
+fail when the map changed nothing, which is now the healthy state. It
+now probes the PRODUCTION path (not the artifact, which loads fine and
+proves nothing about what ships) and asserts the served probability
+MATCHES `USE_CALIBRATOR` in either state, plus that the clamp holds
+regardless.
+
+Also new: `tools/kelly_sweep.py` replays the closing-price sample
+through the production gates and sweeps model trust, Kelly fraction,
+and leverage. It reports FLAT and COMPOUND bankroll bases separately
+and never sums them. Two findings worth recording — every leverage
+multiplier scales the loss roughly linearly (1x -9.88u, 2x -19.75u,
+3x -29.63u) while growing max drawdown 10.3% -> 28.4%; and the Kelly
+fraction is currently decorative, because `MAX_STAKE_UNITS` binds
+before any fraction from 0.25 to 1.0 makes a difference.
+
+
 ## 2026-08-16 - Bound-pinning sweep: the calibrator was serving certainty (A-043)
 
 Swept every fitted artifact after `alpha = exp(-5)` surfaced in A-042.

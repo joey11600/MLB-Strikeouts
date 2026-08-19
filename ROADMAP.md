@@ -449,3 +449,41 @@ strikeouts model, not a variant of it.
   is vs a naive baseline, and exactly one ungraded outs slate exists.
   **Do not let this touch `models/edge.py` until enough graded slates
   are banked to fit and validate a calibrator.**
+
+## Phase 11 — Score against the market, not the naive baseline (2026-08-19)
+
+The backtest's "+3–5% Brier over naive" is real and replicated in both
+temporal directions over 12,653 starts. It was never a claim about
+beating a book, and A-041 showed it does not: at the market's own line
+the model is significantly worse than the closing price. Everything in
+this phase is aimed at that gap, not at the naive comparison.
+
+- [x] Score the served probability against the closing line
+  (`tools/score_vs_market.py`, A-041) — now reports `raw`, `cal`,
+  `served`, `blend`, `fair` so the stage that loses the edge is visible
+- [x] **Switch off the isotonic map (A-044).** Measured WORSE than raw
+  against the closing line (0.2663 vs 0.2642, n=329, same sign in both
+  halves). Blended output moves from significantly worse than the
+  market (z=+2.14) to indistinguishable (z=+1.72). Halves the OVER
+  bias, +0.0447 → +0.0267
+- [x] Sweep model trust, Kelly fraction and leverage against real
+  closing prices (`tools/kelly_sweep.py`). Findings: every trust level
+  above 0 loses; leverage scales the loss roughly linearly (1x −9.88u,
+  2x −19.75u, 3x −29.63u) while max drawdown goes 10.3% → 28.4%; and
+  the Kelly fraction is **decorative** — `MAX_STAKE_UNITS` binds before
+  any fraction from 0.25 to 1.0 changes a stake
+- [ ] **A-002 is the binding constraint, not the factor count.** Every
+  factor ever screened was tested on "does it predict strikeouts better
+  than naive", never "does it find prices the market got wrong". Those
+  are different questions and the market already prices season K%,
+  opponent K% and TTO. Historical prop lines are still unsourced, so
+  no factor has ever been screened for EDGE
+- [ ] Build the market-based factor screen once ~1,000 market-scored
+  starts are banked (~40 days from 2026-08-16 at ~25 starts/day)
+- [ ] Attack the early-hook tail (A-042) — the named mechanism behind
+  the OVER bias, and the failure Stage A cannot currently produce.
+  Candidates already in the repo: bullpen rest, blowout risk, innings
+  caps (`data/manual_pitch_limits.csv`)
+- [ ] Do NOT raise `MAX_STAKE_UNITS`, relax the edge threshold, promote
+  a recalibration, or add leverage until a market-scored sample says
+  the model wins

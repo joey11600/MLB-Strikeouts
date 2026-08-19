@@ -21,7 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from models.stage_a_bf import StageA
 from models.stage_b_rate import StageB
 from models.compound import compound_k_distribution, prob_k_geq
-from models.calibration import IsotonicCalibrator, brier_score
+from models.calibration import (
+    USE_CALIBRATOR, IsotonicCalibrator, brier_score, clamp_prob)
 
 
 class StrikeoutPredictor:
@@ -42,14 +43,20 @@ class StrikeoutPredictor:
             self.calibrator.load()
 
     def calibrate_prob(self, raw_prob: float) -> float:
-        """Map a raw tail probability P(K >= x) to a calibrated one.
+        """Map a raw tail probability P(K >= x) to the served one.
 
         Identity until a calibrator has been fit — the ladder/milestone
         path must call this too, not just per_line.
+
+        The isotonic map is OFF by default (USE_CALIBRATOR, A-044): it
+        measured WORSE than raw against the closing line. The PROB_EPS
+        clamp is NOT part of that decision and still applies on both
+        branches — dropping the map must not re-open A-043 by letting a
+        raw 1.0 reach the board.
         """
-        if self.calibrator.is_fitted:
+        if USE_CALIBRATOR and self.calibrator.is_fitted:
             return self.calibrator.predict(raw_prob)
-        return raw_prob
+        return clamp_prob(raw_prob)
 
     def predict(
         self,
