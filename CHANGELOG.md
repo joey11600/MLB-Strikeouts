@@ -1,6 +1,44 @@
 
 # Changelog
 
+## 2026-08-24 - First cross-season KEEPs: p5_pitches + is_home enter shadow (A-049)
+
+The audit's factor round, end to end:
+
+- Six candidate columns implemented strictly as-of in
+  `features/asof.py` (asof_swstr_pct, asof_csw_pct — Savant whiff
+  vocabulary, documented divergence from the legacy foul-tip-counting
+  definition; p5_pitches via shift-then-roll; velo_trend = last
+  start's FB velo vs a 2+-game expanding baseline, never sharing a
+  game; is_home from inning_topbot; opp_team) plus
+  `asof_team_zone_contact` (prior-DAY, doubleheader-safe). Perturbation
+  tests in `tests/test_asof_candidates.py`.
+- Stage B generalized: EXTRA_FEATURES grows to nine, `extras=` dict
+  pass-through on predict paths (legacy kwargs kept), EXTRA_FILL
+  neutral constants for missing TRAINING values only — re-gauntlet
+  test sets are complete-case so no verdict rests on a fill.
+- `tools/regauntlet.py` round 2 on the repaired (A-048) harness,
+  ~12.6k OOS starts, drop-one + a csw-for-swstr swap variant:
+
+      p5_pitches    KEEP    t = +3.4 / +7.3 / +3.4
+      is_home       KEEP    t = +2.7 / +2.9 / +0.5
+      swstr_pct     DEMOTE  (positive both directions, under t>=2)
+      velo_trend    DEMOTE  (direction-unstable)
+      opp_zcontact  DEMOTE  (opponent K% already carries it)
+
+  First features ever past the honest bar (the Phase 6 cohort all
+  died on it, R-005).
+- Per CLAUDE.md, KEEP earns a shadow, not a flag flip:
+  `models/stage_b_candidate.pkl` (core + the two keepers, fit on all
+  three seasons by `tools/fit_candidate_stage_b.py`) now logs a
+  nightly `p_over_candidate` column — production Stage A distribution,
+  candidate Stage B rates — through the A-046 shadow plumbing.
+  `tools/flag_shadow_report.py` gains the candidate section; decide at
+  14 dates. Production pickles untouched; PRODUCTION_EXTRA_FEATURES
+  still [].
+
+Suite: 220 passed.
+
 ## 2026-08-24 - The market's missing information channels, capture-first (A-050)
 
 A-032's screen concluded 16-18% of the line's variance lives OUTSIDE

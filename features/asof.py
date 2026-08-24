@@ -336,6 +336,22 @@ def _add_prior_stats(per_game: pd.DataFrame, entity_col: str,
     return g
 
 
+# Whiff vocabulary for the A-049 candidate features, following Savant:
+# a foul tip is CONTACT, a missed bunt is a swinging strike. NOTE: the
+# older pitcher_season_stats() above counts foul_tip as a whiff; that
+# definition is frozen (its consumers are dead code) and new columns use
+# this one, same as tools/factor_screen_k.py. Two names, two stats —
+# never mix them in one model.
+SWSTR_DESCS = {"swinging_strike", "swinging_strike_blocked", "missed_bunt"}
+SWING_DESCS = SWSTR_DESCS | {"foul", "foul_tip", "bunt_foul_tip",
+                             "foul_bunt", "hit_into_play"}
+FB_TYPES = {"FF", "SI"}
+# Rate gates: below these strictly-prior sample sizes the column is NaN,
+# never imputed (structural-missingness rule, features/outs_asof.py).
+MIN_PRIOR_PITCHES_RATE = 200
+MIN_PRIOR_IZ_SWINGS = 300
+
+
 def asof_pitcher_game_table(df: pd.DataFrame) -> pd.DataFrame:
     """One row per (pitcher, game): labels + strictly-prior features.
 
@@ -346,7 +362,9 @@ def asof_pitcher_game_table(df: pd.DataFrame) -> pd.DataFrame:
     Columns: pitcher, game_pk, game_date, home_team,
              actual_bf, actual_k (labels),
              prior_games, prior_bf, prior_k, asof_k_pct,
-             asof_bf_mean, asof_bf_std, asof_zone_pct, eastward_tz.
+             asof_bf_mean, asof_bf_std, asof_zone_pct, eastward_tz,
+             and the A-049 candidate columns: asof_swstr_pct,
+             asof_csw_pct, p5_pitches, velo_trend, is_home, opp_team.
     """
     if df.empty:
         return pd.DataFrame()
@@ -381,6 +399,48 @@ def asof_pitcher_game_table(df: pd.DataFrame) -> pd.DataFrame:
         pg["zone_valid"] = 0
         pg["zone_in"] = 0
 
+    # A-049 candidate ingredients, per (pitcher, game): pitch counts,
+    # whiff/CSW counts (Savant vocabulary), fastball velocity, home side.
+    if "description" in df.columns:
+        pcounts = df.assign(
+            _sw=df["description"].isin(SWSTR_DESCS).astype(int),
+            _csw=(df["description"].isin(SWSTR_DESCS)
+                  | (df["description"] == "called_strike")).astype(int),
+        ).groupby(["pitcher", "game_pk"]).agg(
+            pitches=("_sw", "size"), swmiss=("_sw", "sum"), cswc=("_csw", "sum"),
+        ).reset_index()
+        pg = pg.merge(pcounts, on=["pitcher", "game_pk"], how="left")
+        pg[["pitches", "swmiss", "cswc"]] = pg[
+            ["pitches", "swmiss", "cswc"]].fillna(0)
+    else:
+        pg["pitches"] = 0
+        pg["swmiss"] = 0
+        pg["cswc"] = 0
+
+    if "pitch_type" in df.columns and "release_speed" in df.columns:
+        fb = df[df["pitch_type"].isin(FB_TYPES) & df["release_speed"].notna()]
+        fbg = fb.groupby(["pitcher", "game_pk"]).agg(
+            fbv=("release_speed", "mean")).reset_index()
+        pg = pg.merge(fbg, on=["pitcher", "game_pk"], how="left")
+    else:
+        pg["fbv"] = np.nan
+
+    if "inning_topbot" in df.columns:
+        # A pitcher who throws in the TOP of an inning fields for the
+        # HOME side.
+        side = df.groupby(["pitcher", "game_pk"]).agg(
+            _top=("inning_topbot", lambda s: float((s == "Top").mean() > 0.5)),
+        ).reset_index().rename(columns={"_top": "is_home"})
+        pg = pg.merge(side, on=["pitcher", "game_pk"], how="left")
+    else:
+        pg["is_home"] = np.nan
+    if "away_team" in df.columns and "home_team" in df.columns:
+        away = df.groupby("game_pk").agg(
+            away_team=("away_team", "first")).reset_index()
+        pg = pg.merge(away, on="game_pk", how="left")
+    else:
+        pg["away_team"] = None
+
     if "home_team" in df.columns:
         teams = df.groupby("game_pk").agg(home_team=("home_team", "first")).reset_index()
         pg = pg.merge(teams, on="game_pk", how="left")
@@ -408,8 +468,86 @@ def asof_pitcher_game_table(df: pd.DataFrame) -> pd.DataFrame:
         pg["game_date"] - grp["game_date"].shift(1)
     ).dt.days.astype(float)
 
+    # ---- A-049 candidate columns, all strictly prior -----------------
+    # Whiff-quality rates over prior pitches; NaN below the sample gate,
+    # never imputed.
+    prior_pitches = grp["pitches"].cumsum() - pg["pitches"]
+    prior_swmiss = grp["swmiss"].cumsum() - pg["swmiss"]
+    prior_cswc = grp["cswc"].cumsum() - pg["cswc"]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        pg["asof_swstr_pct"] = np.where(
+            prior_pitches >= MIN_PRIOR_PITCHES_RATE,
+            prior_swmiss / prior_pitches, np.nan)
+        pg["asof_csw_pct"] = np.where(
+            prior_pitches >= MIN_PRIOR_PITCHES_RATE,
+            prior_cswc / prior_pitches, np.nan)
+
+    # Mean pitch count over the last 5 PRIOR games: shift(1) BEFORE
+    # rolling so the window structurally cannot reach the current row
+    # (features/outs_asof.py pattern).
+    pg["p5_pitches"] = grp["pitches"].transform(
+        lambda s: s.shift(1).rolling(5, min_periods=1).mean())
+
+    # Velocity trend: previous game's mean fastball velo minus the
+    # expanding mean of the games BEFORE that one. shift(1) is the last
+    # start; shift(2).expanding().mean() at row g averages games
+    # 1..g-2, so trend and baseline never share a game and neither ever
+    # sees the current row. NaN until 3 prior FB-velo games exist —
+    # a trend needs a baseline, not a point.
+    prev_fbv = grp["fbv"].shift(1)
+    baseline_fbv = grp["fbv"].transform(
+        lambda s: s.shift(2).expanding(min_periods=2).mean())
+    pg["velo_trend"] = prev_fbv - baseline_fbv
+
+    # Opponent (the batting side this pitcher faces).
+    pg["opp_team"] = np.where(pg["is_home"] == 1.0,
+                              pg["away_team"], pg["home_team"])
+
     pg = pg.rename(columns={"bf": "actual_bf", "k": "actual_k"})
-    return pg.drop(columns=["zone_valid", "zone_in", "curr_tz", "prev_tz"])
+    return pg.drop(columns=["zone_valid", "zone_in", "curr_tz", "prev_tz",
+                            "swmiss", "cswc", "fbv", "away_team"])
+
+
+def asof_team_zone_contact(df: pd.DataFrame) -> pd.DataFrame:
+    """Per (team, game_date): the team's batters' zone-contact rate over
+    strictly PRIOR days.
+
+    Zone contact — in-zone swings that touch the ball — is the stable
+    plate-discipline skill; the 2026-08-24 market screen found opponent
+    zone-contact predicts both the model's error and the direction the
+    book leans (z=-2.3 / -3.8), i.e. the market prices it and the model
+    doesn't. Prior-DAY granularity, not prior-game: same-day earlier
+    games are excluded because slate ordering isn't knowable at
+    feature-build time and a doubleheader would otherwise leak
+    (features/outs_asof.py rule). NaN below MIN_PRIOR_IZ_SWINGS.
+
+    Returns columns: team, game_date, opp_zcontact.
+    """
+    if df.empty or "zone" not in df.columns or "description" not in df.columns:
+        return pd.DataFrame(columns=["team", "game_date", "opp_zcontact"])
+
+    d = df.copy()
+    d["game_date"] = pd.to_datetime(d["game_date"]).dt.normalize()
+    d["bat_team"] = np.where(d["inning_topbot"] == "Bot",
+                             d["home_team"], d["away_team"])
+    iz = d["zone"].notna() & d["zone"].isin(range(1, 10))
+    swing = d["description"].isin(SWING_DESCS)
+    d["_iz_swing"] = (iz & swing).astype(int)
+    d["_iz_contact"] = (iz & swing & ~d["description"].isin(SWSTR_DESCS)).astype(int)
+
+    daily = d.groupby(["bat_team", "game_date"]).agg(
+        iz_swing=("_iz_swing", "sum"), iz_contact=("_iz_contact", "sum"),
+    ).reset_index().sort_values(["bat_team", "game_date"])
+
+    grp = daily.groupby("bat_team", sort=False)
+    prior_sw = grp["iz_swing"].cumsum() - daily["iz_swing"]
+    prior_ct = grp["iz_contact"].cumsum() - daily["iz_contact"]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        daily["opp_zcontact"] = np.where(
+            prior_sw >= MIN_PRIOR_IZ_SWINGS, prior_ct / prior_sw, np.nan)
+
+    return daily.rename(columns={"bat_team": "team"})[
+        ["team", "game_date", "opp_zcontact"]]
 
 
 # Leash-input thresholds (Stage A). IL_GAP_DAYS: a start after this many

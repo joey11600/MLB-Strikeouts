@@ -40,7 +40,34 @@ def _sigmoid(x):
 
 # Optional Stage B features, in canonical design-matrix order. The core
 # design (intercept, pitcher/batter logits, TTO dummies) is fixed.
-EXTRA_FEATURES = ["zone_pct", "eastward_tz", "n_rookies"]
+#
+# The 2026-08-24 additions (A-049) are the Tier A audit candidates:
+# whiff-quality rates (stabilize faster than K% — aimed at the
+# low-line/low-history population where the model measurably loses to
+# the market), workload ramp, home side, and opponent zone-contact.
+# Candidates, not production: PRODUCTION_EXTRA_FEATURES below decides
+# what serves, and only the cross-season re-gauntlet + shadow can move
+# a name into it.
+EXTRA_FEATURES = ["zone_pct", "eastward_tz", "n_rookies",
+                  "swstr_pct", "csw_pct", "p5_pitches", "velo_trend",
+                  "is_home", "opp_zcontact"]
+
+# Neutral fill values for MISSING extra-feature inputs (early-season
+# rows below the as-of sample gates). Zero-information constants in the
+# spirit of the zone_pct fallback: they attenuate a candidate's fitted
+# weight slightly rather than manufacture signal. Test sets in the
+# re-gauntlet are complete-case, so verdicts never rest on fills.
+EXTRA_FILL = {
+    "zone_pct": None,            # LEAGUE_ZONE_PCT, handled below
+    "eastward_tz": 0.0,
+    "n_rookies": 0.0,
+    "swstr_pct": 0.110,          # league swinging-strike rate
+    "csw_pct": 0.283,            # league called+swinging rate
+    "p5_pitches": 90.0,          # typical starter pitch count
+    "velo_trend": 0.0,           # no trend
+    "is_home": 0.5,              # side unknown (shouldn't occur)
+    "opp_zcontact": 0.840,       # league in-zone contact rate
+}
 
 # What production actually uses. The cross-season re-gauntlet
 # (tools/regauntlet.py, 12,653 OOS starts) demoted all three extras:
@@ -70,13 +97,12 @@ class StageB:
         self.extra_features = [f for f in EXTRA_FEATURES if f in extra_features]
 
     def _extra_column(self, df: pd.DataFrame, name: str) -> np.ndarray:
-        if name == "zone_pct":
-            return df["zone_pct"].values if "zone_pct" in df.columns else np.full(len(df), LEAGUE_ZONE_PCT)
-        if name == "eastward_tz":
-            return df["eastward_tz"].values if "eastward_tz" in df.columns else np.zeros(len(df))
-        if name == "n_rookies":
-            return df["n_rookies"].values if "n_rookies" in df.columns else np.zeros(len(df))
-        raise ValueError(name)
+        if name not in EXTRA_FEATURES:
+            raise ValueError(name)
+        fill = LEAGUE_ZONE_PCT if name == "zone_pct" else EXTRA_FILL[name]
+        if name in df.columns:
+            return pd.to_numeric(df[name], errors="coerce").fillna(fill).values
+        return np.full(len(df), fill, dtype=float)
 
     def _build_X(self, df: pd.DataFrame) -> np.ndarray:
         """Build design matrix from batter-level DataFrame."""
@@ -145,22 +171,35 @@ class StageB:
     def predict_single(self, pitcher_k_pct: float, batter_k_pct: float,
                         tto: int, zone_pct: float | None = None,
                         eastward_tz: float = 0.0,
-                        n_rookies: float = 0.0) -> float:
+                        n_rookies: float = 0.0,
+                        extras: dict | None = None) -> float:
         """Predict K probability for one batter.
 
         Callers always pass the full feature set; only the features this
-        model instance was fit with enter the design vector.
+        model instance was fit with enter the design vector. The three
+        legacy named kwargs stay for existing callers; `extras` supplies
+        any EXTRA_FEATURES value by name (A-049 candidates) and wins on
+        collision. A missing value falls to its EXTRA_FILL constant.
         """
         extra_values = {
             "zone_pct": zone_pct if zone_pct is not None else LEAGUE_ZONE_PCT,
             "eastward_tz": eastward_tz,
             "n_rookies": n_rookies,
         }
+        for name, val in (extras or {}).items():
+            if val is not None and not (isinstance(val, float) and np.isnan(val)):
+                extra_values[name] = val
+
+        def _val(name):
+            v = extra_values.get(name)
+            if v is None:
+                v = LEAGUE_ZONE_PCT if name == "zone_pct" else EXTRA_FILL[name]
+            return float(v)
 
         x = np.array(
             [1.0, _logit(pitcher_k_pct), _logit(batter_k_pct),
              float(tto == 2), float(tto >= 3)]
-            + [extra_values[name] for name in self.extra_features]
+            + [_val(name) for name in self.extra_features]
         )
 
         if self.coefficients is None:
@@ -183,11 +222,14 @@ class StageB:
         zone_pct: float | None = None,
         eastward_tz: float = 0.0,
         n_rookies: float = 0.0,
+        extras: dict | None = None,
     ) -> np.ndarray:
         """Return p_i for i = 1..n_max.
 
         lineup_k_pcts is a 9-element list of batter K% values in
         batting order. The sequence wraps with TTO decay applied.
+        `extras` passes A-049 candidate values by name (see
+        predict_single).
         """
         if len(lineup_k_pcts) == 0:
             lineup_k_pcts = [LEAGUE_K_RATE] * 9
@@ -206,7 +248,7 @@ class StageB:
 
             batter_k = lineup_k_pcts[slot] if slot < len(lineup_k_pcts) else LEAGUE_K_RATE
             probs[i] = self.predict_single(pitcher_k_pct, batter_k, tto, zone_pct,
-                                           eastward_tz, n_rookies)
+                                           eastward_tz, n_rookies, extras=extras)
 
         return probs
 
@@ -280,9 +322,24 @@ def prepare_training_data(start_date: date, end_date: date) -> pd.DataFrame:
         "game_pk", "pitcher", "batter", "bf_seq", "tto", "is_k",
     ]].copy()
 
+    # A-049: opponent team zone-contact, prior-day, keyed by the
+    # opponent this start faces.
+    from features.asof import asof_team_zone_contact
+    tzc = asof_team_zone_contact(df)
+    starters = starters.copy()
+    starters["game_date"] = pd.to_datetime(starters["game_date"]).dt.normalize()
+    starters = starters.merge(
+        tzc.rename(columns={"team": "opp_team"}),
+        on=["opp_team", "game_date"], how="left",
+    )
+
     batter_df = batter_df.merge(
-        starters[["game_pk", "pitcher", "asof_k_pct_shrunk", "asof_zone_pct", "eastward_tz"]].rename(
-            columns={"asof_k_pct_shrunk": "pitcher_k_pct"}
+        starters[["game_pk", "pitcher", "asof_k_pct_shrunk", "asof_zone_pct",
+                  "eastward_tz", "asof_swstr_pct", "asof_csw_pct",
+                  "p5_pitches", "velo_trend", "is_home", "opp_zcontact"]].rename(
+            columns={"asof_k_pct_shrunk": "pitcher_k_pct",
+                     "asof_swstr_pct": "swstr_pct",
+                     "asof_csw_pct": "csw_pct"}
         ),
         on=["game_pk", "pitcher"], how="inner",
     )

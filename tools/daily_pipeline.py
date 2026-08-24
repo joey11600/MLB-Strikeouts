@@ -611,6 +611,8 @@ def _write_slate_sidecar(game_date: str, predictions: list,
                                if pred.get("p_over_hookmix") is not None else None),
             "p_over_prior": (round(float(pred["p_over_prior"]), 4)
                              if pred.get("p_over_prior") is not None else None),
+            "p_over_candidate": (round(float(pred["p_over_candidate"]), 4)
+                                 if pred.get("p_over_candidate") is not None else None),
             # H1/H2 (A-049): the day's own market movement for this arm.
             "h1_open_line": pred.get("h1_open_line"),
             "h1_open_fair_over": pred.get("h1_open_fair_over"),
@@ -772,6 +774,26 @@ def _scan_pitch_limit_notes(reg_games: list[dict], iso_date: str) -> int:
             os.unlink(tmp)
         raise
     return len(suggestions)
+
+
+def _p5_pitches(statcast_df: pd.DataFrame, pitcher_id: int) -> float | None:
+    """Mean pitch count over the pitcher's last 5 cached games.
+
+    Serve-time mirror of features/asof.py's p5_pitches (the cache ends
+    yesterday, so every game in it is strictly prior). Ordered by
+    (game_date, game_pk) — never game_pk alone.
+    """
+    if statcast_df.empty or not pitcher_id:
+        return None
+    p = statcast_df[statcast_df["pitcher"] == pitcher_id]
+    if p.empty or "game_date" not in p.columns:
+        return None
+    per_game = p.groupby("game_pk").agg(
+        n=("pitcher", "size"), game_date=("game_date", "first")
+    ).reset_index().sort_values(["game_date", "game_pk"])
+    if per_game.empty:
+        return None
+    return float(per_game["n"].tail(5).mean())
 
 
 def _load_pitch_limits(iso_date: str) -> dict:
@@ -1005,6 +1027,21 @@ def run_daily(
     predictor = StrikeoutPredictor()
     predictor.load_models()
 
+    # A-049: the candidate Stage B (core + p5_pitches + is_home — the
+    # first re-gauntlet KEEPs) rides shadow-only. Absent pickle = no
+    # shadow column, never a crash.
+    candidate_b = None
+    try:
+        from models.stage_b_rate import StageB as _StageB
+        _cand_path = Path(__file__).parent.parent / "models" / "stage_b_candidate.pkl"
+        if _cand_path.exists():
+            candidate_b = _StageB(extra_features=["p5_pitches", "is_home"])
+            candidate_b.load(_cand_path)
+            print("  candidate Stage B loaded (shadow only)")
+    except Exception as exc:
+        print(f"  (candidate Stage B unavailable: {exc})")
+        candidate_b = None
+
     predictions = []
     shadow_prior_rows = []
 
@@ -1206,6 +1243,25 @@ def run_daily(
         except Exception as exc:
             print(f"      (prior-season shadow failed: {exc})")
 
+        # p_over_candidate: production Stage A distribution, candidate
+        # Stage B rates (core + p5_pitches + is_home). Shadow only.
+        p_over_candidate = None
+        if candidate_b is not None:
+            try:
+                from models.compound import (
+                    compound_k_distribution as _ckd, prob_k_geq as _pkg)
+                cand_extras = {
+                    "p5_pitches": _p5_pitches(statcast_df, pitcher_id),
+                    "is_home": 1.0 if entry.get("is_home") else 0.0,
+                }
+                cand_pb = candidate_b.predict_per_batter_k_prob(
+                    stats["season_k_pct"], lineup_k_pcts, n_max=40,
+                    extras=cand_extras)
+                cand_kd = _ckd(result["bf_dist"], cand_pb)
+                p_over_candidate = float(_pkg(cand_kd, dk_line))
+            except Exception as exc:
+                print(f"      (candidate shadow failed: {exc})")
+
         model_prob_over = result["per_line"][dk_line]
         # A-008: an unposted lineup is real uncertainty (~5pp on P(over)),
         # so it costs edge rather than being ignored.
@@ -1229,6 +1285,7 @@ def run_daily(
             "model_prob_over_raw": result["per_line_raw"][dk_line],
             "p_over_hookmix": p_over_hookmix,
             "p_over_prior": p_over_prior,
+            "p_over_candidate": p_over_candidate,
             "wx": wx,
             **mkt,
             "expected_k": result["expected_k"],

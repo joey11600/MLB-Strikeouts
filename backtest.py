@@ -93,6 +93,13 @@ def _build_test_set(test_year: int):
     test = test.merge(bp, on=["game_pk", "pitcher"], how="left")
     test["bp_heavy"] = test["bp_heavy"].fillna(False).astype(bool)
 
+    # A-049 candidate: opponent zone-contact, prior-day, by opponent.
+    from features.asof import asof_team_zone_contact
+    tzc = asof_team_zone_contact(df)
+    test["game_date"] = pd.to_datetime(test["game_date"]).dt.normalize()
+    test = test.merge(tzc.rename(columns={"team": "opp_team"}),
+                      on=["opp_team", "game_date"], how="left")
+
     batter_map = {
         (row.batter, row.game_pk): (row.asof_k_pct_shrunk, row.prior_bf)
         for row in bt.itertuples()

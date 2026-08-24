@@ -258,6 +258,40 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-049: Tier A factor round — first cross-season KEEPs; two features to shadow
+- **Filed:** 2026-08-24 (full-model audit)  **Status:** shadowing
+- **Context:** the audit located the model's market deficit in the
+  low-line / low-history population (line <= 4.5: z=+3.10 worse than
+  the closing price) and screened candidate stats against the market's
+  own disagreement. The screened candidates were then implemented
+  as-of (features/asof.py: asof_swstr_pct, asof_csw_pct, p5_pitches,
+  velo_trend, is_home, opp_team + asof_team_zone_contact) with
+  perturbation tests, and run through the REPAIRED (A-048) cross-season
+  drop-one harness over ~12.6k OOS starts.
+- **Verdicts** (bar: drop-delta t>=2 in BOTH cross-season directions):
+
+      p5_pitches    KEEP    t = +3.4 / +7.3 / +3.4  (all three splits)
+      is_home       KEEP    t = +2.7 / +2.9 / +0.5
+      swstr_pct     DEMOTE  t = +1.8 / +1.3 / +0.0  (helps, under bar)
+      velo_trend    DEMOTE  t = -0.8 / +1.7 / +3.0  (direction-unstable)
+      opp_zcontact  DEMOTE  t = -0.5 / -0.3 / -1.5  (batter K% owns it)
+
+  The csw-for-swstr swap variant scored no better than full. These are
+  the first features EVER to clear the honest bar — the entire Phase 6
+  cohort died on it (R-005).
+- **What shipped:** `models/stage_b_candidate.pkl` (core + p5_pitches
+  + is_home; fit by tools/fit_candidate_stage_b.py; production pickles
+  untouched) and a nightly `p_over_candidate` shadow column through
+  the A-046 infrastructure. Production Stage B remains core-only.
+- **Promotion path:** 14 shadow dates -> tools/flag_shadow_report.py
+  -> operator decision, per CLAUDE.md. Do not shortcut on the
+  regauntlet t-stats alone: the same harness family promoted three
+  features in Phase 6 that died on re-test, and the shadow is the
+  guard that catches what a harness cannot.
+- **Generalises to:** screen against the MARKET's disagreement to pick
+  candidates, but let the repo's own OOS bar and a live shadow decide.
+  Strong t-stats earn a shadow, never a flag flip.
+
 ### A-048: the promotion harness could not fail features the way it claimed to
 - **Filed:** 2026-08-24 (full-model audit)  **Fixed:** 2026-08-24
 - **Description:** four defects in `tools/gauntlet.py`, the 5-gate
