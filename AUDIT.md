@@ -258,6 +258,62 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-045: the worker ran out of process slots and served a frozen board for two days
+- **Filed/Resolved:** 2026-08-24
+- **Description:** Every scheduled CI run from 2026-08-23 20:51 UTC
+  onward was red on one watchdog check — "served board is current:
+  worker is serving no slate at all" — while all 13 other invariants
+  passed. The worker's own log had the cause, twice per pass:
+
+      FAILED git-fetch: exit 255
+      error: cannot fork() for remote-https: Resource temporarily unavailable
+
+  fork() returning EAGAIN means the container hit its kernel task
+  ceiling: no new process or thread could be created. The image ran
+  `python tools/railway_worker.py` as **PID 1**, and PID 1 inherits
+  every orphaned process in the container but python reaps none of
+  them — each orphan (git's background helpers, children of timed-out
+  jobs) became a permanent zombie holding one slot. Deployed
+  2026-08-20 17:22 UTC; first casualty 2026-08-22 13:32 UTC
+  (~44 h ≈ pass 530, consistent with roughly one leaked slot per
+  5-minute publish pass), when `dashboard-data` — whose numpy import
+  claims a BLAS thread per host CPU in one shot — began dying at
+  import. From 13:37 UTC the worker could no longer regenerate
+  data.json, so "nothing to commit": live-grade pushes stopped.
+  Fetches (needing only a couple of slots) limped on until the leak
+  consumed those too; `last_pull ok=False` from then on. `/health`
+  kept answering — everything already running was fine, everything
+  needing a new process was dead — so the site quietly served the
+  2026-08-22 09:35 ET board while CI went red 20+ times.
+- **Why the outage was invisible for a day before CI reddened:** the
+  watchdog's staleness check compares the repo's board to the served
+  one; the frozen board was *current enough* through 08-22 daytime and
+  the 08-23 check times, and pull-liveness alone (correctly, per
+  A-029/A-040 lessons) only fails the check once the served slate is
+  actually behind.
+- **Fixes shipped (all in this commit):**
+  1. `tini` is PID 1 (`Dockerfile` ENTRYPOINT) — orphans get reaped;
+     the leak mechanism is closed regardless of which child orphans
+     them (the specific producer was not identified from logs; with a
+     reaper in place it no longer matters).
+  2. `_restart_if_leaking()` gauges `/proc` before every publish pass,
+     logs `pressure: N pids, M threads`, and exits past 400 pids / 200
+     threads. Exit is the fix, not a workaround: leaked slots are
+     unrecoverable in-process. Scheduler state is on the volume, so a
+     restart costs one publish cycle. `railway.json` now pins
+     `restartPolicyType: ON_FAILURE`.
+  3. `_run()` treats fork-EAGAIN as FATAL (exit 1 → clean restart)
+     instead of logging a failure and carrying on — the A-040 lesson
+     ("a failed fetch was terminal for the life of the container")
+     applied to the failure mode below it.
+  4. `/health` gains `process_pressure` so the climb is visible from
+     outside; `OPENBLAS_NUM_THREADS=4` / `OMP_NUM_THREADS=4` cap the
+     per-spawn thread burst that made numpy the first casualty.
+- **Generalises to:** any resident container that forks. "The process
+  is up and /health is green" does not imply "the container can still
+  create a process" — gauge the resource, and prefer dying loudly
+  while recovery still works.
+
 ### A-044: the isotonic calibrator measured WORSE than raw — map switched off
 - **Filed/Resolved:** 2026-08-19 (operator asked for it after the
   market-scored comparison; see A-041)

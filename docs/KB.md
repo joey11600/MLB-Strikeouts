@@ -488,6 +488,21 @@ a git mirror of the ledger for offsite backup; `VERCEL_DEPLOY_HOOK`
 refreshes the fallback snapshot. Both are pure backup: the volume is
 the live source of truth.
 
+**Container lifecycle (A-045).** `tini` is PID 1 and the worker its
+only child — python as PID 1 reaps no orphans, and the unreaped
+zombies once consumed the container's entire kernel task allowance in
+~44 h, after which nothing could fork and the board froze behind a
+green `/health`. The worker also defends itself: every publish pass it
+counts `/proc` (zombies included) and its own threads, logs
+`pressure: N pids, M threads`, publishes the gauge as
+`process_pressure` on `/health`, and past 400 pids / 200 threads exits
+non-zero so Railway's `ON_FAILURE` restart policy (pinned in
+`railway.json`) boots a clean container. A restart costs one publish
+cycle: scheduler state is on the volume and boot resumes mid-day.
+Note when reading Railway's dashboard: data-only pushes are
+deliberately skip-listed by `watchPatterns`, so the RUNNING deployment
+is usually much older than the newest (SKIPPED) deployment row.
+
 **Local (Windows Task Scheduler, `tools/scheduled_run.py`, ET)** —
 the pre-migration path; keep it enabled until the cloud worker is
 verified pushing, then disable to avoid double-runs:

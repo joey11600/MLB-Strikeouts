@@ -1,6 +1,35 @@
 
 # Changelog
 
+## 2026-08-24 - Worker leaked process slots until nothing could fork; reaper + self-restart (A-045)
+
+Every scheduled CI run since 2026-08-23 20:51 UTC failed the same
+watchdog invariant — "served board is current" — while the other 13
+passed. Root cause was in the container, not the pipeline:
+
+    FAILED git-fetch: exit 255
+    error: cannot fork() for remote-https: Resource temporarily unavailable
+
+The image ran python as PID 1. PID 1 inherits every orphaned process
+and python reaps none, so each orphan became a permanent zombie holding
+one kernel task slot. Boot 08-20 17:22 UTC; first failure 08-22 13:32
+UTC (~44 h ≈ publish pass 530 — consistent with ~1 slot leaked per
+pass). Big spawns died first (numpy's import claims a BLAS thread per
+host CPU), which stopped data.json regeneration and therefore the
+worker's live-grade pushes at 08-22 09:37 ET; plain `git fetch` died
+later; `/health` kept answering throughout because nothing already
+running was affected. The site served the 08-22 09:35 ET board for two
+days.
+
+Shipped: `tini` as PID 1 (Dockerfile ENTRYPOINT) so orphans are
+reaped; `_restart_if_leaking()` logs `pressure: N pids, M threads`
+each publish pass and exits past 400/200 for a clean Railway restart
+(`restartPolicyType: ON_FAILURE` pinned in railway.json);
+`_run()` treats fork-EAGAIN as fatal instead of a per-command failure;
+`/health` exposes `process_pressure`; `OPENBLAS_NUM_THREADS=4` /
+`OMP_NUM_THREADS=4` cap the per-spawn thread burst. Details and the
+generalised lesson: AUDIT A-045.
+
 ## 2026-08-19 - The calibrator measured worse than raw; map switched off (A-044)
 
 A-043 stopped the calibrator asserting certainty. It left open the

@@ -7,8 +7,13 @@ FROM python:3.13-slim
 
 # git: the worker commits the ledger back to the repo.
 # tzdata: zoneinfo needs the Olson database for America/New_York (DST).
+# tini: an init that reaps orphans. python ran as PID 1 and reaps
+#   nothing, so every orphaned grandchild (git helpers, children of
+#   timed-out jobs) stayed a zombie holding a process slot; the
+#   container crossed its fork ceiling after ~44 h and every fetch
+#   after that failed EAGAIN for two days (A-045).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git tzdata ca-certificates \
+    && apt-get install -y --no-install-recommends git tzdata ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -24,5 +29,13 @@ COPY . .
 ENV STATCAST_CACHE_DIR=/data/statcast_cache
 ENV DATA_STATE_DIR=/data/state
 ENV PYTHONUNBUFFERED=1
+# Every spawned python otherwise starts one BLAS thread per host CPU,
+# and Railway hosts are large. Those threads count against the same
+# task ceiling as processes — numpy imports were the first casualty of
+# A-045 precisely because they claim the most slots in one shot.
+ENV OPENBLAS_NUM_THREADS=4
+ENV OMP_NUM_THREADS=4
 
+# tini is PID 1; the worker is its only direct child (A-045).
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["python", "tools/railway_worker.py"]

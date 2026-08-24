@@ -25,6 +25,7 @@ Environment:
     WORKER_STATE_DIR     defaults to the volume root
 """
 import csv
+import errno
 import json
 import urllib.request
 import os
@@ -119,6 +120,19 @@ def _run(label: str, cmd: list[str], timeout: int) -> bool:
     except subprocess.TimeoutExpired:
         log(f"FAILED {label}: timed out after {timeout}s")
         return False
+    except OSError as exc:
+        # fork() failing with EAGAIN means the container is out of
+        # process slots. Nothing later in this process can spawn
+        # either, and leaked slots never come back (A-045) — exit
+        # non-zero and let Railway's ON_FAILURE policy start a clean
+        # container. _restart_if_leaking() should fire long before
+        # this; this is the endgame backstop.
+        if exc.errno == errno.EAGAIN:
+            log(f"FATAL {label}: cannot fork ({exc}) — process slots "
+                f"exhausted; exiting so Railway restarts the container")
+            os._exit(1)
+        log(f"FAILED {label}: {type(exc).__name__}: {exc}")
+        return False
     tail = "\n".join((r.stdout or "").strip().splitlines()[-15:])
     if tail:
         log(f"{label} output:\n{tail}")
@@ -128,6 +142,59 @@ def _run(label: str, cmd: list[str], timeout: int) -> bool:
         return False
     log(f"OK {label}")
     return True
+
+
+# A-045: the fork ceiling. The container leaked one process slot per
+# publish pass (python ran as PID 1 and reaped no orphans, so each one
+# stayed a zombie), crossed the ceiling after ~44 h — first observed
+# failure was pass ~530 — and then served a frozen board for two days
+# while /health kept answering. 400 leaves room to log and restart
+# while forks still work; a healthy container sits under ~30.
+PID_PRESSURE_EXIT = 400
+THREAD_PRESSURE_EXIT = 200
+
+
+def _process_pressure() -> dict:
+    """How close the container is to its fork ceiling, for /health.
+
+    `/proc` lists every process in the container's namespace INCLUDING
+    zombies — which is exactly what an unreaped-orphan leak produces,
+    and why this counts processes rather than asking psutil for "real"
+    ones. Threads live under /proc/self/task and count against the
+    same ceiling, so they are gauged separately. Both stay None
+    off-Linux (local dev).
+    """
+    pids = threads = None
+    try:
+        pids = sum(1 for d in os.listdir("/proc") if d.isdigit())
+        threads = len(os.listdir("/proc/self/task"))
+    except OSError:
+        pass
+    return {"container_pids": pids, "worker_threads": threads,
+            "restart_over": PID_PRESSURE_EXIT}
+
+
+def _restart_if_leaking() -> None:
+    """Exit for a clean restart BEFORE forks start failing, not after.
+
+    Restarting is the fix, not a workaround: a leaked slot is
+    unrecoverable from inside the process. Scheduler state lives on
+    the volume and boot resumes mid-day (_load_state), so the cost of
+    a restart is one publish cycle; the cost of NOT restarting was
+    measured on A-045 at two days of a frozen board. Logged every
+    pass so the climb rate is in the deploy log the next time anyone
+    has to ask.
+    """
+    p = _process_pressure()
+    pids, threads = p["container_pids"], p["worker_threads"]
+    if pids is None:
+        return
+    log(f"pressure: {pids} pids, {threads} threads in container")
+    if pids > PID_PRESSURE_EXIT or (threads or 0) > THREAD_PRESSURE_EXIT:
+        log(f"FATAL process-slot leak: {pids} pids / {threads} threads "
+            f"(limits {PID_PRESSURE_EXIT}/{THREAD_PRESSURE_EXIT}) — "
+            f"exiting so Railway restarts the container")
+        os._exit(1)
 
 
 def seed_volume_state() -> None:
@@ -250,6 +317,11 @@ class DataHandler(BaseHTTPRequestHandler):
                     and GIT_STATUS.get("remote") == "authenticated"
                 ),
                 "git": GIT_STATUS,
+                # A-045: the zombie leak that killed forks was
+                # invisible until exhaustion. container_pids includes
+                # zombies; the worker exits (and Railway restarts it)
+                # past restart_over.
+                "process_pressure": _process_pressure(),
                 "dispatch_credentials": DISPATCH_CREDS,
             }
             self._send(200, json.dumps(payload, indent=1).encode(), "application/json")
@@ -1268,6 +1340,9 @@ def main() -> None:
             # not in this container, so without this pass the board we
             # serve only ever reflects work this container did itself.
             if time.monotonic() >= next_publish:
+                # Gauge first: restarting while forks still work beats
+                # diagnosing after they stop (A-045).
+                _restart_if_leaking()
                 publish_pass()
                 next_publish = time.monotonic() + PUBLISH_EVERY_SECONDS
 

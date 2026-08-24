@@ -215,6 +215,14 @@
   recorded and never retried, so the worker served a 27-hour-old board
   until a human redeployed. Now clears abandoned lock files (age-gated
   at 600s) and retries once, recording `last_pull.recovered`
+- [x] **Reap orphans; restart before the fork ceiling (A-045).** python
+  as PID 1 reaped nothing, so orphaned grandchildren accumulated as
+  zombies until fork() failed EAGAIN (~44 h) and the board froze for
+  two days behind a green `/health`. Now: `tini` is PID 1, the worker
+  gauges `/proc` every publish pass (`pressure:` log line +
+  `process_pressure` on `/health`) and exits for a clean Railway
+  restart past 400 pids / 200 threads, and `_run` treats fork-EAGAIN
+  as fatal rather than a per-command failure
 - [ ] **Surface a red CI run where the operator will see it.** This is
   the real A-040 gap: `tools/watchdog.py` diagnosed the stall correctly
   and exits 1, so every CI run for 27 hours was red and nothing said so.
