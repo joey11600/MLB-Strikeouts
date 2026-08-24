@@ -1,6 +1,32 @@
 
 # Changelog
 
+## 2026-08-24 - Intraday odds archive + line-movement features (A-049 H1/H2)
+
+The audit's cheapest information channel: the model loses even to the
+MORNING price, and line movement is the distilled form of every piece
+of late news the market gets. Two problems stood in the way: H1/H2
+were `NotImplementedError` since Phase 2, and the OPEN was not durably
+archived anywhere — the sidecar's newest-wins merge overwrites the
+morning price at every reprice.
+
+Shipped (capture-first, model-later — the Phase 10 pattern):
+- `features/market.py` implemented: `record_intraday_snapshot` appends
+  every odds capture the pipeline sees to
+  `data/odds/intraday_YYYY-MM-DD.csv` (atomic rewrite, repo rule);
+  `load_intraday` + `movement_features` compute h1_open_line,
+  h1_open_fair_over, h2_line_move, h2_fair_move, h2_n_captures.
+- Documented confound: each capture's fair prob is priced at that
+  capture's line, so h2_fair_move standalone is only interpretable
+  when the line didn't move; the pair must be read jointly.
+- Pipeline wires the fields into every sidecar pitcher record;
+  `model_log.csv` gains h1_open_line / h2_line_move / h2_fair_move
+  (blank before 2026-08-24). Diagnostics + future market-screen
+  inputs; NOTHING prices off them until they pass the gauntlet on a
+  market-scored sample — which requires exactly this archive.
+
+Tests: `tests/test_market_features.py` (6). Suite: 217 passed.
+
 ## 2026-08-24 - Gauntlet harness repaired: real Gate 4, real Gate 5, as-of baseline, symmetric recalibration (A-048)
 
 The feature-promotion harness had four defects, which together explain

@@ -611,6 +611,12 @@ def _write_slate_sidecar(game_date: str, predictions: list,
                                if pred.get("p_over_hookmix") is not None else None),
             "p_over_prior": (round(float(pred["p_over_prior"]), 4)
                              if pred.get("p_over_prior") is not None else None),
+            # H1/H2 (A-049): the day's own market movement for this arm.
+            "h1_open_line": pred.get("h1_open_line"),
+            "h1_open_fair_over": pred.get("h1_open_fair_over"),
+            "h2_line_move": pred.get("h2_line_move"),
+            "h2_fair_move": pred.get("h2_fair_move"),
+            "h2_n_captures": pred.get("h2_n_captures"),
             "k_dist": [round(float(x), 6) for x in (k_dist if k_dist is not None else [])],
             "ladder": rungs,
         })
@@ -755,6 +761,19 @@ def run_daily(
 
     today_props = [p for p in dk_props if p.get("date") == game_date]
     print(f"  {len(today_props)} pitcher O/U props for {game_date}")
+
+    # A-049 H1/H2: persist this capture — the sidecar's newest-wins merge
+    # overwrites the morning price at every reprice, so without this the
+    # OPEN is never durably archived (the input that can't be backfilled).
+    try:
+        from features.market import record_intraday_snapshot, load_intraday, movement_features
+        n_rec = record_intraday_snapshot(game_date, today_props)
+        intraday = load_intraday(game_date, _normalize_name)
+        print(f"  intraday archive: +{n_rec} rows this capture")
+    except Exception as exc:
+        print(f"  (intraday odds archive failed: {exc})")
+        intraday = {}
+        movement_features = None
 
     snap = [p for p in today_props if p.get("odds_source") == "snapshot"]
     if snap:
@@ -1055,6 +1074,11 @@ def run_daily(
         )
         strength = pick_strength(edge_info["best_edge"], edge_info["threshold"])
 
+        # H1/H2 market movement (diagnostic + screen input; prices
+        # nothing). Uses this pitcher's own capture series for the day.
+        mkt = (movement_features(intraday.get(_normalize_name(pitcher_name)))
+               if movement_features else {})
+
         entry_result = {
             **entry,
             "model_prob_over": model_prob_over,
@@ -1062,6 +1086,7 @@ def run_daily(
             "model_prob_over_raw": result["per_line_raw"][dk_line],
             "p_over_hookmix": p_over_hookmix,
             "p_over_prior": p_over_prior,
+            **mkt,
             "expected_k": result["expected_k"],
             "expected_bf": result["expected_bf"],
             "pitcher_k_pct": stats["season_k_pct"],

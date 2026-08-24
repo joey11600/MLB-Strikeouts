@@ -76,6 +76,11 @@ FIELDS = [
     # 2-week shadows actually accumulate. Blank on rows logged before
     # 2026-08-24. Nothing prices or stakes off these.
     "p_over_hookmix", "p_over_prior",
+    # A-049 H1/H2: the day's own market movement for this arm — open
+    # line, movement to the last capture before this row's slate entry.
+    # Diagnostics + future market-screen inputs; nothing prices off
+    # them. Blank before 2026-08-24.
+    "h1_open_line", "h2_line_move", "h2_fair_move",
     "best_side", "edge_best", "threshold", "strength",
     "units_risked",
     "actual_bf", "actual_k", "over_hit",
@@ -154,6 +159,9 @@ def _row_from_pitcher(d: str, p: dict, abf: int, ak: int,
         "fair_over": p.get("fair_over"),
         "p_over_hookmix": p.get("p_over_hookmix"),
         "p_over_prior": p.get("p_over_prior"),
+        "h1_open_line": p.get("h1_open_line"),
+        "h2_line_move": p.get("h2_line_move"),
+        "h2_fair_move": p.get("h2_fair_move"),
         "best_side": p.get("best_side"),
         "edge_best": p.get("edge_best"),
         "threshold": p.get("threshold"),

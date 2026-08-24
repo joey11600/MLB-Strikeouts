@@ -492,6 +492,12 @@ this phase is aimed at that gap, not at the naive comparison.
   2x −19.75u, 3x −29.63u) while max drawdown goes 10.3% → 28.4%; and
   the Kelly fraction is **decorative** — `MAX_STAKE_UNITS` binds before
   any fraction from 0.25 to 1.0 changes a stake
+- [x] **Archive the intraday odds series; implement H1/H2 (A-049,
+  2026-08-24).** Every pipeline capture now lands in
+  `data/odds/intraday_*.csv` (the open was previously overwritten by
+  each reprice); every sidecar row and model_log row carries
+  h1_open_line / h2_line_move / h2_fair_move. Capture-first: the
+  fields price nothing until the market-scored screen can judge them
 - [ ] **A-002 is the binding constraint, not the factor count.** Every
   factor ever screened was tested on "does it predict strikeouts better
   than naive", never "does it find prices the market got wrong". Those
