@@ -740,6 +740,29 @@ reads both and reports the promotion case; it refuses a verdict before
 14 distinct dates.
 
 
+## The outs market (Phase 10 — shadow serving since 2026-08-24)
+
+A SEPARATE PRODUCT from strikeouts (operator directive): its own model
+(`models/outs_hazard.pkl`, inning-lattice hazard, 2024+2025-trained),
+its own artifacts, its own page. The serving spine is
+`tools/outs_serve.py` -> `tools/outs_pipeline.py`: today's probables
+ride the SAME leakage-safe feature builder training uses (placeholder
+labels proven inert), the board lands in `data/outs_slates/`, settled
+results in `data/outs_model_log.csv`, and the page payload in
+`dashboard/public/outs.json` (worker serves `/outs.json`; the /outs
+page falls back to the bundled copy). NOTHING computes an edge, side,
+or stake — the payload cannot carry a pick by construction, and the
+strikeouts ledger/aggregates are market-filtered so the two products
+can never blend.
+
+Calibration: Gate 5 measured to a refusal (A-052) — Platt, isotonic,
+and per-line Platt all degraded per-line calibration on the untouched
+2026 holdout; serving is raw + PROB_EPS clamp. Market baseline:
+z=+0.65 vs its own closing lines on 373 OOS starts (indistinguishable;
+series in `data/outs_scorecard.csv`, weekly). Betting stays blocked
+until a calibrator passes AND z goes negative on a serious sample.
+
+
 ## Two ledgers, one truth (Phase 9)
 
 The container's jobs read and write `DATA_STATE_DIR` (the Railway

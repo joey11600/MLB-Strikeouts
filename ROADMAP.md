@@ -479,20 +479,31 @@ strikeouts model, not a variant of it.
 - [x] Gate 4 — `career_x_season` dropped (r=+0.9955, VIF 350 on the S1
   design; `season_start_number` saturates its cap on 74.5% of 2024 rows,
   degenerating the interaction to 8×`career_start_number`)
-- [ ] **Gate 5 — NOT passed.** ECE 0.017–0.026 with single-bin gaps to
-  5.1pp, against a measured break-even requirement of ~3.6pp per side.
-  An edge filter would fire on calibration error as often as on edge.
-  Route through `models/calibration.py` and refit its own calibrator.
+- [ ] **Gate 5 — NOT passed, now measured to a refusal (2026-08-24,
+  A-052).** Fit Platt, isotonic, AND per-line Platt on 67,970 pooled
+  cross-season OOS pairs; on the untouched 2026 holdout every map made
+  per-line calibration WORSE (raw mean line ECE 0.0205 / worst gap
+  7.4pp; per-line Platt 0.0247). The ship-gate in
+  `tools/fit_outs_calibrator.py` refused all three — the 2026
+  miscalibration is not a stable p→p bias. Serving is raw + clamp;
+  the 7.4pp worst-line gap vs the ~3.6pp break-even bar is exactly
+  why no bet can price. Re-run the fitter as seasons accrue; the gate
+  decides.
 - [ ] Gates 1/3/5 per-feature against the outs target — the effect sizes
   in the spec are reproductions from the strikeouts gauntlet, not gate
   passes on this target
 - [ ] `stop_rate_12` (sign-unstable across splits) and `stop_rate_21`
   (design measures a null) are Gate-2 rejection candidates, currently
   advisory-only
-- [ ] Score against the MARKET. Nothing here measures that — all skill
-  is vs a naive baseline, and exactly one ungraded outs slate exists.
-  **Do not let this touch `models/edge.py` until enough graded slates
-  are banked to fit and validate a calibrator.**
+- [x] Score against the MARKET (2026-08-24, A-052) — the banked
+  closing captures made a day-one verdict possible:
+  `tools/score_outs_vs_market.py`, 373 out-of-sample starts over 16
+  dates, raw vs closing no-vig fair **z = +0.65 — indistinguishable
+  from the book** (the K model was z=+2.10 WORSE at comparable n).
+  Series in `data/outs_scorecard.csv`, re-scored weekly by the
+  scorecard task. **The edge.py rule STANDS**: indistinguishable is
+  not edge — nothing prices until z goes negative on a serious sample
+  AND a calibrator passes its gate.
 
 ## Phase 11 — Score against the market, not the naive baseline (2026-08-19)
 

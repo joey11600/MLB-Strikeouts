@@ -1,6 +1,45 @@
 
 # Changelog
 
+## 2026-08-24 - The outs model serves: shadow board, refused calibrators, an even market baseline (A-052)
+
+Phase 10's production layer, shadow-first — the model prices a
+DIAGNOSTIC board daily and bets nothing:
+
+- **Serving core** (`tools/outs_serve.py`): today's probables matched
+  to the DK outs board, expressed as rows through the SAME leakage-
+  safe feature builder training uses. Placeholder labels on today-rows
+  are proven inert by perturbation test (outs=0 vs outs=27: identical
+  features). drest from the pitch cache (any appearance, matching
+  training). Whole-number lines refused at pricing (PUSH is its own
+  path). Live-verified: 20 pitchers priced for tonight.
+- **Daily pipeline** (`tools/outs_pipeline.py`): dataset refresh ->
+  board -> own sidecar (`data/outs_slates/`, newest-wins merge) ->
+  own evidence log (`data/outs_model_log.csv`, union-only) -> own
+  payload (`dashboard/public/outs.json`). Worker runs it on
+  morning/lineups (price) and night (--grade), serves `/outs.json`,
+  and the weekly scorecard task now scores BOTH markets.
+- **Gate 5 taken to a measured refusal** (`tools/fit_outs_calibrator.py`):
+  Platt, isotonic, and per-line Platt fit on 67,970 pooled
+  cross-season OOS pairs; ALL THREE made per-line calibration worse
+  on the untouched 2026 holdout and the ship-gate refused them
+  (A-044's lesson, enforced by construction). Serving is raw + clamp;
+  the worst-line gap (7.4pp vs ~3.6pp break-even) is exactly why the
+  model prices no bets.
+- **The first-day market scorecard the K model never had**
+  (`tools/score_outs_vs_market.py`): closing outs prices were banked
+  since 08-08, before any model existed — so day one came with a
+  verdict: 373 out-of-sample starts, 16 dates, **raw vs closing
+  no-vig fair z = +0.65 — indistinguishable from the book** (the K
+  model was z = +2.10 WORSE at comparable n). Series persisted to
+  `data/outs_scorecard.csv`; indistinguishable is not edge.
+- **/outs upgraded** from a static explainer to the live board:
+  scorecard tiles, per-date boards sorted by model-vs-market gap,
+  settled results grading in, explicit "diagnostic only — no picks".
+
+Tests: `tests/test_outs_serve.py` (7). Suite: 249 passed. Dashboard
+builds clean; board verified rendering with live data.
+
 ## 2026-08-24 - The outs market is structurally separate before its first row exists (Phase 10)
 
 Operator directive: the outs model (how many outs the starter records

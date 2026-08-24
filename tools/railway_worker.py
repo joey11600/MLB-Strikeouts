@@ -64,6 +64,7 @@ VOLUME_STATE = STATE_DIR / "state"
 
 PORT = int(os.environ.get("PORT", "8080"))
 DASHBOARD_JSON = REPO / "dashboard" / "public" / "data.json"
+OUTS_JSON = REPO / "dashboard" / "public" / "outs.json"
 
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "joey11600/MLB-Strikeouts")
 SEASON_START = date(2026, 3, 26)
@@ -279,6 +280,16 @@ class DataHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/live.json"):
             try:
                 self._send(200, LIVE_STATE.read_bytes(), "application/json")
+            except Exception as exc:
+                self._send(503, json.dumps({"error": str(exc)}).encode(),
+                           "application/json")
+            return
+        if self.path.startswith("/outs.json"):
+            # The outs market's OWN payload (Phase 10) — a separate
+            # artifact from data.json by operator directive; the /outs
+            # page reads it live with the bundled copy as fallback.
+            try:
+                self._send(200, OUTS_JSON.read_bytes(), "application/json")
             except Exception as exc:
                 self._send(503, json.dumps({"error": str(exc)}).encode(),
                            "application/json")
@@ -1189,6 +1200,11 @@ def task_morning() -> None:
     _run("daily-cycle", [PYTHON, "run.py"], 2400)
     _log_evidence()
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+    # Separate market, separate pipeline, separate artifact (Phase 10).
+    # Shadow-only — it prices a diagnostic board and grades evidence;
+    # a failure here must never cost the strikeouts slate, hence its
+    # own _run (which logs-and-continues on error).
+    _run("outs-board", [PYTHON, "tools/outs_pipeline.py"], 1800)
     commit_and_push("morning slate")
 
 
@@ -1197,6 +1213,7 @@ def task_lineups() -> None:
     _run("lineup-lock-predict", [PYTHON, "run.py", "predict"], 2400)
     _log_evidence()
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+    _run("outs-board", [PYTHON, "tools/outs_pipeline.py"], 1800)
     commit_and_push("lineup-lock re-run")
 
 
@@ -1224,6 +1241,8 @@ def task_night() -> None:
     # model rather than the threshold-filtered bet sample.
     _log_evidence()
     _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+    # Grade the outs shadow board against last night's settled starts.
+    _run("outs-grade", [PYTHON, "tools/outs_pipeline.py", "--grade"], 1800)
     commit_and_push("overnight grading")
     # After the commit, so a failing invariant is loud without costing
     # us the night's ledger.
@@ -1245,6 +1264,9 @@ def task_scorecard() -> None:
         return
     sync_repo()
     _run("market-scorecard", [PYTHON, "tools/market_scorecard.py"], 1800)
+    # The outs market's own verdict series — separate tool, separate
+    # CSV, same weekly cadence.
+    _run("outs-scorecard", [PYTHON, "tools/score_outs_vs_market.py"], 2400)
     commit_and_push("weekly market scorecard")
 
 

@@ -258,6 +258,45 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-052: the outs model goes live as a shadow product — calibration maps refused, market baseline even
+- **Filed:** 2026-08-24 (operator: "lets proceed with making the outs
+  model")  **Status:** shadow serving; betting blocked by design
+- **What shipped:** the outs market's production layer, built shadow-
+  first: `tools/outs_serve.py` (today-rows through the SAME leakage-
+  safe builder training uses — placeholder labels proven inert by
+  perturbation test), `tools/outs_pipeline.py` (daily board -> own
+  sidecar `data/outs_slates/` -> own evidence log
+  `data/outs_model_log.csv` -> own payload
+  `dashboard/public/outs.json`), worker serving `/outs.json` + outs
+  steps on morning/lineups/night/scorecard tasks, and the /outs page
+  rendering the live board (disagreements first, settled results
+  graded in). NOTHING computes an edge, side, or stake — the payload
+  cannot carry a pick by construction.
+- **Gate 5, measured to a refusal:** fit Platt, isotonic, AND per-line
+  Platt maps on 67,970 pooled cross-season OOS pairs (fit24->25 +
+  fit25->24), validated on untouched 2026 via the 2024+2025-trained
+  pkl. Raw: pooled ECE 0.0092, mean per-line ECE 0.0205, worst line
+  gap 7.4pp. Every map made the PER-LINE quantities worse (per-line
+  Platt: mean ECE 0.0247). The ship-gate refused all three — the
+  2026 per-line miscalibration is not a stable p->p bias the
+  cross-season sample can teach a correction for. A-041/A-044's
+  lesson, replicated on the second market and caught by construction
+  this time. Serving is raw + PROB_EPS clamp; the worst-line gap
+  (7.4pp vs ~3.6pp break-even) is exactly why no bet can price yet.
+- **The market baseline the K model never had:** closing outs prices
+  were captured BEFORE any model priced anything (A-002's lesson,
+  applied in time), so the model could be scored retroactively on
+  day one: **373 out-of-sample starts over 16 dates, raw vs closing
+  no-vig fair: z = +0.65 — statistically indistinguishable from the
+  book** (K model at comparable n: z = +2.10 worse). Recorded to
+  `data/outs_scorecard.csv`; re-scored weekly by the scorecard task.
+  Indistinguishable is not edge: z must go NEGATIVE on a serious
+  sample before the threshold question is even asked.
+- **Generalises to:** capture prices before building the model, and
+  the model's first market scorecard is free. And a calibration map
+  must always face a holdout gate that can refuse it — both markets
+  have now independently proven the refusal path earns its keep.
+
 ### A-051: structural round — rate random effect KEEP; TTO-4 and damping measured and rejected
 - **Filed:** 2026-08-24 (full-model audit)  **Status:** RE shadowing
 - **The defect:** on the full 2026 backtest the served distribution is
