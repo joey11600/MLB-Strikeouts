@@ -243,8 +243,16 @@ class StageA:
         for name, coef in zip(self.feature_names, self.coefficients):
             print(f"    {name:20s} = {coef:+.4f}")
 
-    def predict_bf_distribution(self, features: dict) -> np.ndarray:
-        """Return P(BF = n) for n = 0..40 as a 41-element array."""
+    def predict_bf_distribution(self, features: dict,
+                                use_hook_mixture: bool | None = None) -> np.ndarray:
+        """Return P(BF = n) for n = 0..40 as a 41-element array.
+
+        use_hook_mixture overrides the module flag for ONE call. Production
+        always leaves it None (the flag decides); it exists so the shadow
+        path can price the counterfactual distribution alongside the served
+        one. A second copy of this method would drift and quietly invalidate
+        the promotion evidence (same rule as compute_edge's trust_weight).
+        """
         # AUDIT A-007: never substitute a league default for a missing
         # input. A fabricated workload/rate inflates the projection, and
         # the edge filter then selects that error into the bet list at
@@ -286,7 +294,8 @@ class StageA:
             estimated_bf_from_limit = pitch_limit / PITCHES_PER_BF_UNDER_LIMIT
             mu = min(mu, estimated_bf_from_limit)
 
-        if USE_HOOK_MIXTURE:
+        use_mix = USE_HOOK_MIXTURE if use_hook_mixture is None else use_hook_mixture
+        if use_mix:
             dist = hook_mixture_pmf(mu, alpha)
         else:
             dist = np.array([_negbin_pmf(n, mu, alpha) for n in range(41)])

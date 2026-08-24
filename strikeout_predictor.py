@@ -63,6 +63,7 @@ class StrikeoutPredictor:
         pitcher_features: dict,
         lineup_k_pcts: list[float] | None = None,
         lines: list[float] | None = None,
+        use_hook_mixture: bool | None = None,
     ) -> dict:
         """Run the full prediction pipeline.
 
@@ -75,6 +76,9 @@ class StrikeoutPredictor:
             Per-batter K% in batting order. Defaults to league avg.
         lines : list of float
             Lines to evaluate P(K >= line) for. Defaults to standard set.
+        use_hook_mixture : bool or None
+            Per-call override of Stage A's USE_HOOK_MIXTURE flag, for the
+            shadow path only. None (production) defers to the flag.
 
         Returns
         -------
@@ -110,7 +114,8 @@ class StrikeoutPredictor:
         eastward_tz = pitcher_features.get("f1_eastward_tz", 0.0)
         n_rookies = pitcher_features.get("b14_n_rookies", 0.0)
 
-        bf_dist = self.stage_a.predict_bf_distribution(pitcher_features)
+        bf_dist = self.stage_a.predict_bf_distribution(
+            pitcher_features, use_hook_mixture=use_hook_mixture)
 
         per_batter_probs = self.stage_b.predict_per_batter_k_prob(
             pitcher_k, lineup_k_pcts, n_max=40, zone_pct=zone_pct,

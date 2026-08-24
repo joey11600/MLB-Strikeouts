@@ -710,6 +710,18 @@ probability and a settled outcome). Rows merely present are counted
 separately; conflating them once advertised 22 observations beside a
 4-row Brier.
 
+**Flag shadows (A-046).** Two counterfactual columns ride every logged
+row since 2026-08-24: `p_over_hookmix` (raw P(over) with the A-042 hook
+mixture ON) and `p_over_prior` (with the prior-season window ON). They
+are computed through the production predict path via per-call overrides
+— never a reimplementation — and nothing prices or stakes off them.
+Pitchers production refuses but the prior window would recover are
+priced into a `shadow_prior_pitchers` sidecar section and scored to
+`data/shadow_prior_log.csv`, a separate file so model_log consumers
+can't ingest shadow rows by accident. `tools/flag_shadow_report.py`
+reads both and reports the promotion case; it refuses a verdict before
+14 distinct dates.
+
 
 ## Two ledgers, one truth (Phase 9)
 

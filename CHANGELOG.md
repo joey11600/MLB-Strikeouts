@@ -1,6 +1,44 @@
 
 # Changelog
 
+## 2026-08-24 - The two flag-off models now log shadow predictions nightly (A-046)
+
+USE_HOOK_MIXTURE (A-042) and USE_PRIOR_SEASON both passed their gates
+and were parked behind OFF flags "pending a 2-week shadow" — and
+nothing anywhere recorded what they would have predicted. Ten days
+produced zero shadow evidence; as built, neither could ever be
+promoted.
+
+Shipped:
+- `StageA.predict_bf_distribution(..., use_hook_mixture=)` and
+  `StrikeoutPredictor.predict(..., use_hook_mixture=)`: per-call
+  override of the module flag, so the shadow prices through the exact
+  production code path (no second copy to drift).
+- `daily_pipeline`: every priced pitcher now also gets
+  `p_over_hookmix` (raw P(over) with the A-042 mixture ON) and
+  `p_over_prior` (raw P(over) with the prior-season window ON,
+  via a `force_prior` that bypasses only the flag, never the
+  substance bars). Neither touches the served price.
+- Pitchers production REFUSES but the prior window would recover are
+  priced counterfactually into a new `shadow_prior_pitchers` sidecar
+  section (never the board), merged newest-wins like the board list,
+  retired automatically once the pitcher graduates to the board.
+- `model_log.py`: two new columns (blank on rows before 2026-08-24),
+  plus `data/shadow_prior_log.csv` for recovered starts — a separate
+  file so no model_log consumer silently ingests shadow rows. Row
+  build and union-merge refactored into `_row_from_pitcher` /
+  `_merge_union` (same append/update-only guarantees, now shared).
+- `tools/flag_shadow_report.py`: reads the accumulated columns and
+  reports the promotion case per flag — paired Brier, OVER-lean
+  shift, the A-041 confident-OVER band, the prior window's 0.8-1.0
+  band — and says NOT YET until 14 distinct dates exist. It reports;
+  flags stay operator decisions.
+
+Tests: `tests/test_flag_shadow_logging.py` (10) — override equals
+flag-on output, force bypasses only the flag, schema carries the
+columns, sidecar shadow section persists/merges/retires, and both
+flags are still OFF.
+
 ## 2026-08-24 - Worker leaked process slots until nothing could fork; reaper + self-restart (A-045)
 
 Every scheduled CI run since 2026-08-23 20:51 UTC failed the same

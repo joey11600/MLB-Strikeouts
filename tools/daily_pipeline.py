@@ -234,7 +234,7 @@ def _group_alt_lines_by_pitcher(alt_lines: list[dict]) -> dict:
     return grouped
 
 
-def _prior_is_usable(prior: dict | None) -> bool:
+def _prior_is_usable(prior: dict | None, force: bool = False) -> bool:
     """Is this prior-season row substantial enough to lean on?
 
     Both bars matter and they do different jobs: MIN_PRIOR_BF says the
@@ -243,8 +243,12 @@ def _prior_is_usable(prior: dict | None) -> bool:
     relief appearances clears the first and fails the second, which is the
     point — prior-season volume must never launder a reliever into a
     starter (AUDIT A-007).
+
+    `force` bypasses only the USE_PRIOR_SEASON flag, never the substance
+    bars. It exists for the shadow path (A-046), which must price the
+    counterfactual while the flag is off.
     """
-    if not USE_PRIOR_SEASON or not prior:
+    if not (USE_PRIOR_SEASON or force) or not prior:
         return False
     return (float(prior.get("prior_bf") or 0) >= MIN_PRIOR_BF
             and int(prior.get("prior_starts") or 0) >= MIN_PRIOR_STARTS)
@@ -253,7 +257,8 @@ def _prior_is_usable(prior: dict | None) -> bool:
 def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
                            home_team: str | None = None,
                            target_date: date | None = None,
-                           prior: dict | None = None) -> dict:
+                           prior: dict | None = None,
+                           force_prior: bool = False) -> dict:
     """Compute season K% and BF stats for a pitcher from Statcast data.
 
     `prior` is that pitcher's row from the previous season's sidecar
@@ -261,10 +266,13 @@ def _compute_pitcher_stats(statcast_df: pd.DataFrame, pitcher_id: int,
     for the RATE and, when the current season is too thin to say, for the
     workload — see docs/PRIOR_SEASON_SCOPE.md. It never relaxes the role
     gate's verdict on a pitcher whose current usage says reliever.
+
+    `force_prior=True` treats the prior as if USE_PRIOR_SEASON were on
+    (shadow path only); the substance bars still apply.
     """
     completed = statcast_df[statcast_df["events"].notna()]
     p = completed[completed["pitcher"] == pitcher_id]
-    use_prior = _prior_is_usable(prior)
+    use_prior = _prior_is_usable(prior, force=force_prior)
 
     if p.empty and not use_prior:
         return {"season_k_pct": None, "bf_mean": None, "total_bf": 0,
@@ -484,6 +492,28 @@ def _compute_team_k_rate(statcast_df: pd.DataFrame, team: str) -> float | None:
     return shrink_rate(float(ks), float(len(pa)), BATTER_K_PSEUDO_BF)
 
 
+def _lineup_inputs(entry: dict, statcast_df: pd.DataFrame):
+    """Per-batter K% inputs for this start: (lineup_k_pcts, lineup_source).
+
+    Returns (None, None) when neither a posted lineup nor opponent team
+    history exists — the caller must skip rather than fabricate (A-007).
+    Factored out so the shadow path (A-046) prices a refused pitcher with
+    EXACTLY the inputs production would have used, not a reimplementation.
+    """
+    lineup = entry.get("lineup", [])
+    if lineup and not statcast_df.empty:
+        return (_compute_batter_k_rates(statcast_df, lineup),
+                entry.get("lineup_source", "confirmed"))
+    # No lineup posted yet. Use the opponent TEAM's as-of K% rather than a
+    # league constant: it recovers 57-77% of a confirmed lineup's value
+    # out-of-sample in all three temporal directions, where the constant
+    # recovers none by construction (zero variance).
+    team_k = _compute_team_k_rate(statcast_df, entry.get("opponent_team"))
+    if team_k is None:
+        return None, None
+    return [team_k] * 9, "projected"
+
+
 def _write_json_atomic(path: Path, payload: dict) -> None:
     """Atomic JSON write: tempfile + fsync + os.replace (repo rule)."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -500,12 +530,18 @@ def _write_json_atomic(path: Path, payload: dict) -> None:
         raise
 
 
-def _write_slate_sidecar(game_date: str, predictions: list) -> None:
+def _write_slate_sidecar(game_date: str, predictions: list,
+                         shadow_prior: list | None = None) -> None:
     """Persist the full evaluated slate to data/slates/YYYY-MM-DD.json.
 
     Every analyzed pitcher — full P(K=k) distribution, expected K/BF,
     and EVERY evaluated ladder rung (bet or passed with reason) — so the
     dashboard can show the whole board, not just the surviving picks.
+
+    `shadow_prior` (A-046) is the list of pitchers production REFUSED but
+    the prior-season window would recover, priced counterfactually. They
+    are written to a separate `shadow_prior_pitchers` section — never
+    into `pitchers`, which drives the board.
     """
     pitchers = []
     for pred in predictions:
@@ -550,6 +586,13 @@ def _write_slate_sidecar(game_date: str, predictions: list) -> None:
             "threshold": round(float(pred.get("threshold", 0)), 4),
             "strength": pred.get("strength"),
             "primary_units_risked": float(pred.get("primary_units_final", 0.0)),
+            # A-046 shadow columns: counterfactual raw P(over) with the
+            # hook mixture on / prior-season window on. Diagnostic only —
+            # nothing prices or stakes off them.
+            "p_over_hookmix": (round(float(pred["p_over_hookmix"]), 4)
+                               if pred.get("p_over_hookmix") is not None else None),
+            "p_over_prior": (round(float(pred["p_over_prior"]), 4)
+                             if pred.get("p_over_prior") is not None else None),
             "k_dist": [round(float(x), 6) for x in (k_dist if k_dist is not None else [])],
             "ladder": rungs,
         })
@@ -565,6 +608,7 @@ def _write_slate_sidecar(game_date: str, predictions: list) -> None:
     #
     # Newest wins per pitcher (a lineup-lock price beats a projected
     # one); pitchers absent from this run keep their earlier entry.
+    shadow_rows = list(shadow_prior or [])
     carried = 0
     if out_path.exists():
         try:
@@ -576,6 +620,16 @@ def _write_slate_sidecar(game_date: str, predictions: list) -> None:
                     if p.get("pitcher_id") not in fresh:
                         pitchers.append(p)
                         carried += 1
+                # Same newest-wins merge for the shadow section — a
+                # re-price later in the day must not drop the morning's
+                # shadow rows (they are the only record for those arms).
+                fresh_shadow = {p.get("pitcher_id") for p in shadow_rows}
+                # A pitcher who graduated to the real board (lineup posted,
+                # role established) must not linger in the shadow section.
+                for p in prior.get("shadow_prior_pitchers", []):
+                    if (p.get("pitcher_id") not in fresh_shadow
+                            and p.get("pitcher_id") not in fresh):
+                        shadow_rows.append(p)
         except (OSError, ValueError) as exc:
             print(f"  (could not read prior sidecar to merge: {exc})")
 
@@ -584,6 +638,7 @@ def _write_slate_sidecar(game_date: str, predictions: list) -> None:
         "generated_at": datetime.now(UTC).isoformat(),
         "reconstructed": False,
         "pitchers": pitchers,
+        "shadow_prior_pitchers": shadow_rows,
     }
     _write_json_atomic(out_path, payload)
     print(f"  Slate sidecar written: {out_path} ({len(pitchers)} pitchers"
@@ -730,17 +785,26 @@ def run_daily(
     # Prior-season sidecar, keyed by pitcher id. A precomputed summary,
     # not a second season of pitches: the worker prices six times a day
     # and loading another ~750K rows per run is not affordable.
+    #
+    # Loaded even with USE_PRIOR_SEASON off: the shadow path (A-046)
+    # prices the counterfactual every day so the 2-week shadow the
+    # promotion decision requires actually accumulates. The flag only
+    # controls whether the PRODUCTION price uses it.
     prior_by_id = {}
-    if USE_PRIOR_SEASON:
+    try:
         from tools.build_prior_season import load_prior_season
         prior_df = load_prior_season(d.year - 1)
         if prior_df.empty:
             print(f"  !! prior-season sidecar for {d.year - 1} is missing; "
-                  f"every pitcher falls back to current-season-only")
+                  f"prior-season {'pricing' if USE_PRIOR_SEASON else 'shadow'} "
+                  f"falls back to current-season-only")
         else:
             prior_by_id = {int(r["pitcher"]): r
                            for r in prior_df.to_dict("records")}
-            print(f"  prior season {d.year - 1}: {len(prior_by_id)} pitchers")
+            print(f"  prior season {d.year - 1}: {len(prior_by_id)} pitchers"
+                  + ("" if USE_PRIOR_SEASON else " (shadow only — flag off)"))
+    except Exception as exc:
+        print(f"  !! prior-season sidecar load failed: {exc} — shadow degraded")
 
     # Leash-input context: operator pitch limits for today, and each
     # team's relief usage yesterday (both feed Stage A's leash).
@@ -763,6 +827,65 @@ def run_daily(
     predictor.load_models()
 
     predictions = []
+    shadow_prior_rows = []
+
+    def _shadow_prior_price(entry, stats_prior, skip_reason):
+        """Price a production-refused pitcher under the prior-season window.
+
+        A-046: with USE_PRIOR_SEASON off, the pitchers the feature would
+        RECOVER never reach the board, so nothing accumulates the shadow
+        evidence the promotion decision needs. This prices them with the
+        exact production inputs and stashes the result for the sidecar's
+        shadow_prior_pitchers section — never for the board, never for a
+        bet.
+        """
+        if stats_prior is None or stats_prior.get("season_k_pct") is None:
+            return
+        if stats_prior.get("eff_bf", 0) < 50 or not stats_prior.get("is_startable"):
+            return
+        lineup_k_pcts, lineup_source = _lineup_inputs(entry, statcast_df)
+        if lineup_k_pcts is None:
+            return
+        sfeatures = {
+            "a3_season_k_pct_shrunk": stats_prior["season_k_pct"],
+            "c1_bf_mean": stats_prior["bf_mean"],
+            "c10_il_return": bool(
+                stats_prior.get("days_since_last") is not None
+                and stats_prior["days_since_last"] > IL_GAP_DAYS),
+            "c11_pitch_limit": pitch_limits.get(str(entry.get("pitcher_id"))),
+        }
+        try:
+            line = float(entry.get("line", 5.5))
+            sres = predictor.predict(sfeatures, lineup_k_pcts=lineup_k_pcts,
+                                     lines=[line])
+            nv = no_vig_fair_prob(entry.get("over_odds", "-110"),
+                                  entry.get("under_odds", "-110"))
+        except Exception as exc:
+            print(f"      (prior shadow failed for "
+                  f"{entry.get('pitcher_name')}: {exc})")
+            return
+        shadow_prior_rows.append({
+            "pitcher_id": entry.get("pitcher_id"),
+            "pitcher_name": entry.get("pitcher_name"),
+            "pitcher_team": entry.get("pitcher_team"),
+            "opponent_team": entry.get("opponent_team"),
+            "is_home": bool(entry.get("is_home")),
+            "game_pk": entry.get("game_pk"),
+            "start_time_utc": str(entry.get("start_time_utc", "") or ""),
+            "line": entry.get("line"),
+            "over_odds": str(entry.get("over_odds", "")),
+            "under_odds": str(entry.get("under_odds", "")),
+            "lineup_source": lineup_source,
+            "expected_k": round(float(sres["expected_k"]), 2),
+            "expected_bf": round(float(sres["expected_bf"]), 2),
+            "p_over_raw": round(float(sres["per_line_raw"][line]), 4),
+            "fair_over": round(float(nv["fair_over"]), 4),
+            "recovered_reason": skip_reason or "",
+        })
+        print(f"      (prior-season shadow priced "
+              f"{entry.get('pitcher_name')}: P(over)="
+              f"{sres['per_line_raw'][line]:.1%})")
+
     for entry in matched:
         pitcher_id = entry.get("pitcher_id")
         pitcher_name = entry.get("pitcher_name", "???")
@@ -781,6 +904,19 @@ def run_daily(
                      "eff_bf": 0.0, "is_startable": False,
                      "skip_reason": "no Statcast data loaded"}
 
+        # A-046 shadow: the same pitcher's stats as if USE_PRIOR_SEASON
+        # were ON. Computed before the gates so a refused pitcher still
+        # produces shadow evidence. With the flag already on, production
+        # IS the prior path and the shadow is just the production stats.
+        stats_prior = stats
+        if not USE_PRIOR_SEASON and not statcast_df.empty and pitcher_id:
+            prior_row = prior_by_id.get(int(pitcher_id))
+            if prior_row is not None:
+                stats_prior = _compute_pitcher_stats(
+                    statcast_df, pitcher_id, home_team=home_team,
+                    target_date=d, prior=prior_row, force_prior=True,
+                )
+
         # Gate on the sample the rate was actually estimated from. Without
         # a prior season eff_bf IS total_bf, so this is unchanged from the
         # original 50-BF rule; with one, a pitcher two starts into the
@@ -790,6 +926,8 @@ def run_daily(
             if stats.get("used_prior_season"):
                 detail += f", {stats.get('eff_bf', 0):.0f} effective"
             print(f"    {pitcher_name}: insufficient data ({detail}), skipping")
+            _shadow_prior_price(entry, stats_prior,
+                                f"insufficient data ({detail})")
             continue
 
         # Role gate: never price a pitcher whose workload we can't
@@ -797,30 +935,20 @@ def run_daily(
         # edge and the staking engine then concentrates on it.
         if not stats.get("is_startable", False):
             print(f"    {pitcher_name}: SKIP — {stats.get('skip_reason')}")
+            _shadow_prior_price(entry, stats_prior, stats.get("skip_reason"))
+            continue
+
+        lineup_k_pcts, lineup_source = _lineup_inputs(entry, statcast_df)
+        if lineup_k_pcts is None:
+            # Refuse rather than fabricate. A league average here is an
+            # invented input, and the edge filter selects invented inputs
+            # into the bet list precisely because they flatter the
+            # projection (AUDIT A-007).
+            print(f"    {pitcher_name}: SKIP — no lineup and no opponent "
+                  f"batting history for {entry.get('opponent_team')}")
             continue
 
         lineup = entry.get("lineup", [])
-        if lineup and not statcast_df.empty:
-            lineup_k_pcts = _compute_batter_k_rates(statcast_df, lineup)
-            lineup_source = entry.get("lineup_source", "confirmed")
-        else:
-            # No lineup posted yet. Use the opponent TEAM's as-of K% rather
-            # than a league constant: it recovers 57-77% of a confirmed
-            # lineup's value out-of-sample in all three temporal directions,
-            # where the constant recovers none by construction (zero
-            # variance). See _compute_team_k_rate.
-            team_k = _compute_team_k_rate(statcast_df, entry.get("opponent_team"))
-            if team_k is None:
-                # Refuse rather than fabricate. A league average here is an
-                # invented input, and the edge filter selects invented inputs
-                # into the bet list precisely because they flatter the
-                # projection (AUDIT A-007).
-                print(f"    {pitcher_name}: SKIP — no lineup and no opponent "
-                      f"batting history for {entry.get('opponent_team')}")
-                continue
-            lineup_k_pcts = [team_k] * 9
-            lineup_source = "projected"
-
         n_rookies = 0.0
         if lineup and not statcast_df.empty:
             completed_all = statcast_df[statcast_df["events"].notna()]
@@ -864,6 +992,41 @@ def run_daily(
         lines_to_check = [dk_line]
         result = predictor.predict(features, lineup_k_pcts=lineup_k_pcts, lines=lines_to_check)
 
+        # --- A-046 shadow columns. Neither touches the served price. ----
+        # p_over_hookmix: raw P(over) with the A-042 hook mixture ON,
+        # whatever the flag says. Identical inputs, identical Stage B —
+        # only Stage A's family differs, so the column isolates exactly
+        # the promotion question.
+        try:
+            hook_res = predictor.predict(
+                features, lineup_k_pcts=lineup_k_pcts, lines=lines_to_check,
+                use_hook_mixture=True)
+            p_over_hookmix = float(hook_res["per_line_raw"][dk_line])
+        except Exception as exc:
+            print(f"      (hook-mixture shadow failed: {exc})")
+            p_over_hookmix = None
+
+        # p_over_prior: raw P(over) with the prior-season window ON. When
+        # the widened stats are identical (no usable prior, or flag
+        # already on) this equals the production raw and the report reads
+        # it as "feature changes nothing here".
+        p_over_prior = None
+        try:
+            if (stats_prior is not stats
+                    and stats_prior.get("season_k_pct") is not None
+                    and (stats_prior.get("season_k_pct") != stats.get("season_k_pct")
+                         or stats_prior.get("bf_mean") != stats.get("bf_mean"))):
+                pfeatures = dict(features)
+                pfeatures["a3_season_k_pct_shrunk"] = stats_prior["season_k_pct"]
+                pfeatures["c1_bf_mean"] = stats_prior["bf_mean"]
+                prior_res = predictor.predict(
+                    pfeatures, lineup_k_pcts=lineup_k_pcts, lines=lines_to_check)
+                p_over_prior = float(prior_res["per_line_raw"][dk_line])
+            else:
+                p_over_prior = float(result["per_line_raw"][dk_line])
+        except Exception as exc:
+            print(f"      (prior-season shadow failed: {exc})")
+
         model_prob_over = result["per_line"][dk_line]
         # A-008: an unposted lineup is real uncertainty (~5pp on P(over)),
         # so it costs edge rather than being ignored.
@@ -879,6 +1042,8 @@ def run_daily(
             "model_prob_over": model_prob_over,
             "model_prob_under": 1.0 - model_prob_over,
             "model_prob_over_raw": result["per_line_raw"][dk_line],
+            "p_over_hookmix": p_over_hookmix,
+            "p_over_prior": p_over_prior,
             "expected_k": result["expected_k"],
             "expected_bf": result["expected_bf"],
             "pitcher_k_pct": stats["season_k_pct"],
@@ -1019,7 +1184,8 @@ def run_daily(
         for pred in predictions:
             pred["primary_units_final"] = 0.0
         if not dry_run:
-            _write_slate_sidecar(game_date, predictions)
+            _write_slate_sidecar(game_date, predictions,
+                                 shadow_prior=shadow_prior_rows)
         else:
             print("  DRY RUN — not writing the slate sidecar.")
         return []
@@ -1077,7 +1243,8 @@ def run_daily(
         return all_plays
 
     print(f"\n[8/8] Writing picks to {PICKS_PATH}...")
-    _write_slate_sidecar(game_date, predictions)
+    _write_slate_sidecar(game_date, predictions,
+                         shadow_prior=shadow_prior_rows)
     existing_picks = _load_existing_picks(game_date)
 
     all_rows = []

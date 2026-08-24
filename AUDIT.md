@@ -258,6 +258,30 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-046: both gated fixes had no shadow path — their 2-week clocks never started
+- **Filed:** 2026-08-24 (full-model audit)  **Fixed:** 2026-08-24
+- **Description:** `USE_HOOK_MIXTURE` (A-042) and `USE_PRIOR_SEASON`
+  both passed their gates and were parked OFF "pending a 2-week
+  shadow" — but nothing logged their counterfactual predictions.
+  Grep-verified across the pipeline, worker, and tools: no consumer of
+  either flag wrote a shadow value anywhere. Ten days after A-042
+  shipped, zero shadow evidence existed; the promotion decision the
+  flags were waiting on could never arrive. A shadow period that
+  nothing records is not a shadow period — it is an indefinite off
+  switch that reads like process discipline.
+- **Fix:** the pipeline now prices both counterfactuals nightly through
+  the production code path (per-call `use_hook_mixture` override;
+  `force_prior` that bypasses only the flag, never the substance bars)
+  and logs them: `p_over_hookmix` / `p_over_prior` columns in
+  `model_log.csv`, plus `data/shadow_prior_log.csv` for pitchers only
+  the prior window can price (kept out of every model_log consumer by
+  construction). `tools/flag_shadow_report.py` turns the columns into
+  the promotion case and refuses a verdict before 14 distinct dates.
+- **Generalises to:** "shadow for two weeks, then decide" is only a
+  plan if the shadow WRITES something. When gating a feature on future
+  evidence, ship the evidence collector in the same commit as the
+  flag, or the gate silently becomes permanent.
+
 ### A-045: the worker ran out of process slots and served a frozen board for two days
 - **Filed/Resolved:** 2026-08-24
 - **Description:** Every scheduled CI run from 2026-08-23 20:51 UTC

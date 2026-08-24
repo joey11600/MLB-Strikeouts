@@ -281,7 +281,11 @@
   drop by the predicted 1-2 points — more than that is suspicious, not
   lucky; (b) the confident-OVER bin from A-041 (stated 65.4%, actual
   33.3%) should move toward its diagonal; (c) pitch-limited starts,
-  where the normal arm's mean is floored
+  where the normal arm's mean is floored.
+  **2026-08-24 (A-046): the shadow now actually records** — the
+  pipeline logs `p_over_hookmix` nightly into `model_log.csv`; read it
+  with `python tools/flag_shadow_report.py`. Clock starts with the
+  first graded slate after 08-24; decide at 14 dates
 - [x] **A-043 — bound-pinning sweep: DONE, 3 findings.** Stage A alpha
   at its optimizer bound (A-042), outs-hazard lambda at the top of
   `LAMBDA_GRID`, and the calibrator's top knot at exactly 1.0. Stage B
@@ -329,7 +333,12 @@
   specifically: (a) the 0.8–1.0 prediction band, 9.0 points high on the
   holdout where every other band is within 3; (b) season debuts, a third
   of recovered starts, which have no production baseline at all and are
-  measurably harder (Brier 0.190–0.198 vs 0.179–0.182)
+  measurably harder (Brier 0.190–0.198 vs 0.179–0.182).
+  **2026-08-24 (A-046): the shadow now actually records** — priced
+  board rows log `p_over_prior`; refused-but-recoverable pitchers are
+  priced into `shadow_prior_pitchers` sidecar sections and scored to
+  `data/shadow_prior_log.csv`. Read with
+  `python tools/flag_shadow_report.py`; decide at 14 dates
 - [ ] **Rebuild the prior-season sidecar each offseason.** `python
   tools/build_prior_season.py <year>` once the season closes. Nothing
   schedules this yet, and a missing sidecar degrades silently to

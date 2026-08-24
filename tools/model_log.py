@@ -48,6 +48,12 @@ UTC = ZoneInfo("UTC")
 SLATES_DIR = DATA_STATE_DIR / "slates"
 LOG_PATH = DATA_STATE_DIR / "model_log.csv"
 
+# A-046: pitchers production REFUSED but the prior-season window would
+# recover, priced counterfactually by the pipeline. They are scored in
+# their own file so no consumer of model_log.csv (live calibration,
+# recalibration fits, dashboards) silently ingests shadow rows.
+SHADOW_PRIOR_LOG_PATH = DATA_STATE_DIR / "shadow_prior_log.csv"
+
 FIELDS = [
     "date", "game_pk", "pitcher_id", "pitcher_name", "pitcher_team",
     # is_home is logged for ONE reason: it is the only one of 68 screened
@@ -65,6 +71,11 @@ FIELDS = [
     "opponent_team", "line", "over_odds", "under_odds", "lineup_source",
     "expected_bf", "expected_k",
     "p_over_raw", "p_over_calibrated", "blended_prob_over", "fair_over",
+    # A-046 shadow columns: raw P(over) under the two flag-off models
+    # (hook mixture / prior-season window), logged every night so their
+    # 2-week shadows actually accumulate. Blank on rows logged before
+    # 2026-08-24. Nothing prices or stakes off these.
+    "p_over_hookmix", "p_over_prior",
     "best_side", "edge_best", "threshold", "strength",
     "units_risked",
     "actual_bf", "actual_k", "over_hit",
@@ -108,6 +119,89 @@ def _actuals_for(dates: set[str]) -> dict:
     return out
 
 
+def _row_from_pitcher(d: str, p: dict, abf: int, ak: int,
+                      recon: bool, now: str) -> dict | None:
+    """One log row from one sidecar pitcher record. None if the record
+    can't be scored (unparseable line). Shared by the production log and
+    the A-046 shadow-prior log so the two can never drift in schema."""
+    try:
+        line = float(p.get("line"))
+    except (TypeError, ValueError):
+        return None
+    ebf = p.get("expected_bf")
+    ek = p.get("expected_k")
+    return {
+        "date": d,
+        "game_pk": p.get("game_pk"),
+        "pitcher_id": p.get("pitcher_id"),
+        "pitcher_name": p.get("pitcher_name"),
+        "pitcher_team": p.get("pitcher_team"),
+        # 1/0 rather than True/False so the column reads straight
+        # into arithmetic without a per-consumer string coercion --
+        # the `line` column is a string and that cost a silent NaN
+        # in the chart renderer once already (A-026).
+        "is_home": 1 if p.get("is_home") else 0,
+        "opponent_team": p.get("opponent_team"),
+        "line": line,
+        "over_odds": p.get("over_odds"),
+        "under_odds": p.get("under_odds"),
+        "lineup_source": p.get("lineup_source"),
+        "expected_bf": ebf,
+        "expected_k": ek,
+        "p_over_raw": p.get("p_over_raw"),
+        "p_over_calibrated": p.get("p_over_calibrated"),
+        "blended_prob_over": p.get("blended_prob_over"),
+        "fair_over": p.get("fair_over"),
+        "p_over_hookmix": p.get("p_over_hookmix"),
+        "p_over_prior": p.get("p_over_prior"),
+        "best_side": p.get("best_side"),
+        "edge_best": p.get("edge_best"),
+        "threshold": p.get("threshold"),
+        "strength": p.get("strength", "SHADOW" if p.get("recovered_reason") else None),
+        "units_risked": (p.get("pick") or {}).get("units_risked",
+                                                  p.get("primary_units_risked", 0)),
+        "actual_bf": abf,
+        "actual_k": ak,
+        "over_hit": 1 if ak > line else 0,
+        "bf_error": round(abf - ebf, 2) if ebf is not None else "",
+        "k_error": round(ak - ek, 2) if ek is not None else "",
+        "reconstructed": int(recon),
+        "logged_at": now,
+    }
+
+
+def _merge_union(path: Path, new_rows: list[dict]) -> list[dict]:
+    """Union stored rows with fresh ones by (date, game_pk, pitcher_id).
+
+    A freshly derived row supersedes the stored one; a stored row is
+    never dropped merely because this run could not re-derive it (the
+    A-030 rule). Raises rather than writing a smaller file.
+    """
+    existing = []
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            existing = list(csv.DictReader(f))
+
+    def _key(r: dict) -> tuple:
+        return (str(r.get("date")), str(r.get("game_pk")),
+                str(r.get("pitcher_id")))
+
+    merged = {_key(r): r for r in existing}
+    kept = len(merged)
+    for r in new_rows:
+        merged[_key(r)] = r
+    all_rows = list(merged.values())
+    # Checked BEFORE the write, or the guard documents the loss instead of
+    # preventing it.
+    if len(all_rows) < kept:
+        raise RuntimeError(
+            f"{path.name} would shrink {kept} -> {len(all_rows)}; refusing "
+            f"to write. This function is append/update-only."
+        )
+    all_rows.sort(key=lambda r: (r["date"], str(r["pitcher_name"])))
+    return all_rows
+
+
 def log_dates(targets: list[str] | None = None) -> int:
     if not SLATES_DIR.exists():
         print("no slates directory")
@@ -124,13 +218,9 @@ def log_dates(targets: list[str] | None = None) -> int:
         print("no Statcast data for those dates yet — nothing to log")
         return 0
 
-    existing = []
-    if LOG_PATH.exists():
-        with open(LOG_PATH, encoding="utf-8") as f:
-            existing = list(csv.DictReader(f))
-
     now = datetime.now(UTC).isoformat()
     rows = []
+    shadow_rows = []
     for d in dates:
         with open(SLATES_DIR / f"{d}.json", encoding="utf-8") as f:
             slate = json.load(f)
@@ -143,51 +233,25 @@ def log_dates(targets: list[str] | None = None) -> int:
             got = actuals.get((int(gpk), int(pid)))
             if got is None:
                 continue  # didn't pitch, or data not in yet
-            abf, ak = got
-            try:
-                line = float(p.get("line"))
-            except (TypeError, ValueError):
+            row = _row_from_pitcher(d, p, *got, recon, now)
+            if row is not None:
+                rows.append(row)
+                logged += 1
+        # A-046: recovered-only pitchers, scored into their own file.
+        n_shadow = 0
+        for p in slate.get("shadow_prior_pitchers", []):
+            gpk, pid = p.get("game_pk"), p.get("pitcher_id")
+            if gpk is None or pid is None:
                 continue
-            ebf = p.get("expected_bf")
-            ek = p.get("expected_k")
-            rows.append({
-                "date": d,
-                "game_pk": gpk,
-                "pitcher_id": pid,
-                "pitcher_name": p.get("pitcher_name"),
-                "pitcher_team": p.get("pitcher_team"),
-                # 1/0 rather than True/False so the column reads straight
-                # into arithmetic without a per-consumer string coercion --
-                # the `line` column is a string and that cost a silent NaN
-                # in the chart renderer once already (A-026).
-                "is_home": 1 if p.get("is_home") else 0,
-                "opponent_team": p.get("opponent_team"),
-                "line": line,
-                "over_odds": p.get("over_odds"),
-                "under_odds": p.get("under_odds"),
-                "lineup_source": p.get("lineup_source"),
-                "expected_bf": ebf,
-                "expected_k": ek,
-                "p_over_raw": p.get("p_over_raw"),
-                "p_over_calibrated": p.get("p_over_calibrated"),
-                "blended_prob_over": p.get("blended_prob_over"),
-                "fair_over": p.get("fair_over"),
-                "best_side": p.get("best_side"),
-                "edge_best": p.get("edge_best"),
-                "threshold": p.get("threshold"),
-                "strength": p.get("strength"),
-                "units_risked": (p.get("pick") or {}).get("units_risked",
-                                                          p.get("primary_units_risked", 0)),
-                "actual_bf": abf,
-                "actual_k": ak,
-                "over_hit": 1 if ak > line else 0,
-                "bf_error": round(abf - ebf, 2) if ebf is not None else "",
-                "k_error": round(ak - ek, 2) if ek is not None else "",
-                "reconstructed": int(recon),
-                "logged_at": now,
-            })
-            logged += 1
+            got = actuals.get((int(gpk), int(pid)))
+            if got is None:
+                continue
+            row = _row_from_pitcher(d, p, *got, recon, now)
+            if row is not None:
+                shadow_rows.append(row)
+                n_shadow += 1
         print(f"  {d}: logged {logged} pitchers"
+              + (f", {n_shadow} shadow-prior" if n_shadow else "")
               + ("  (reconstructed slate)" if recon else ""))
 
     # Union by key -- NEVER a wholesale replace of the dates being rebuilt.
@@ -207,25 +271,16 @@ def log_dates(targets: list[str] | None = None) -> int:
     # the backfill able to correct a row. But a stored row is never dropped
     # merely because this run could not re-derive it. Same union-only,
     # never-downgrade rule the ledger reconcile follows (KB invariant 9).
-    def _key(r: dict) -> tuple:
-        return (str(r.get("date")), str(r.get("game_pk")),
-                str(r.get("pitcher_id")))
-
-    merged = {_key(r): r for r in existing}
-    kept = len(merged)
-    for r in rows:
-        merged[_key(r)] = r
-    all_rows = list(merged.values())
-    # Checked BEFORE the write, or the guard documents the loss instead of
-    # preventing it.
-    if len(all_rows) < kept:
-        raise RuntimeError(
-            f"model log would shrink {kept} -> {len(all_rows)}; refusing to "
-            f"write. This function is append/update-only."
-        )
-    all_rows.sort(key=lambda r: (r["date"], str(r["pitcher_name"])))
+    all_rows = _merge_union(LOG_PATH, rows)
     _write_atomic(LOG_PATH, all_rows)
     print(f"\nmodel log now holds {len(all_rows)} prediction/outcome pairs -> {LOG_PATH}")
+
+    if shadow_rows or SHADOW_PRIOR_LOG_PATH.exists():
+        all_shadow = _merge_union(SHADOW_PRIOR_LOG_PATH, shadow_rows)
+        if all_shadow:
+            _write_atomic(SHADOW_PRIOR_LOG_PATH, all_shadow)
+            print(f"shadow-prior log holds {len(all_shadow)} recovered-start "
+                  f"pairs -> {SHADOW_PRIOR_LOG_PATH}")
     return len(rows)
 
 
