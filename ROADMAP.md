@@ -308,10 +308,13 @@
   once the market-scored sample is large enough
 - [ ] **A-043 — wire the audit into CI.** It exits 1 today and nothing
   runs it. Same gap as A-040: a check nobody receives is not a check
-- [ ] **A-041 — one bet per pitcher per slate.** Drew Anderson took 3 of
-  8 losses in one game (.69/.94/.81). The haircut keys on repeated
-  `game_pk`, not repeated pitcher — same fix already scoped under
-  Phase 10
+- [x] **A-041 — same-pitcher exposure now haircut (A-047,
+  2026-08-24).** Drew Anderson took 3 of 8 losses in one game
+  (.69/.94/.81) and the haircut keyed on repeated `game_pk` only.
+  `portfolio_daily_cap` now trims on repeated pitcher OR repeated game
+  — strictly more conservative. The stricter "one bet per pitcher per
+  slate, larger edge wins" rule remains scoped to Phase 10 for the
+  K-vs-outs cross-market case
 - [ ] **A-039 follow-up: alert when a settled total meets a non-final
   poll.** `stale_poll` is now set on exactly that disagreement, so the
   condition is detectable — but nothing watches it, and this class of

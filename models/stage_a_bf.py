@@ -283,12 +283,20 @@ class StageA:
 
         x = np.array([1.0, prior_bf, k_pct, il_return])
 
-        if self.coefficients is not None:
-            mu = float(np.exp(np.clip(x @ self.coefficients, -5, 5)))
-            alpha = self.alpha
-        else:
-            mu = prior_bf if prior_bf else LEAGUE_BF_MEAN
-            alpha = 0.1
+        if self.coefficients is None:
+            # A-047: this used to silently substitute mu = prior_bf,
+            # alpha = 0.1 — a completely different, unfitted model — and
+            # price the whole slate off it with no signal. Stage B has
+            # refused to run unfitted since Phase 7; the same failure on
+            # this half of the pipeline was a shrug. Fail loudly, like
+            # Stage B does.
+            raise RuntimeError(
+                "Stage A has no fitted coefficients. Run training or check "
+                "models/stage_a_fitted.pkl — refusing to price a slate on "
+                "an unfitted fallback (that manufactures edge, A-007)."
+            )
+        mu = float(np.exp(np.clip(x @ self.coefficients, -5, 5)))
+        alpha = self.alpha
 
         if pitch_limit is not None:
             estimated_bf_from_limit = pitch_limit / PITCHES_PER_BF_UNDER_LIMIT

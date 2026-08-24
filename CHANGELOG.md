@@ -1,6 +1,42 @@
 
 # Changelog
 
+## 2026-08-24 - Ladder un-deadened, haircut re-keyed to the pitcher, two loud-failure guards (A-047)
+
+Four money-code fixes from the full-model audit, none of which changes
+a served probability:
+
+- **The ladder was silently dead for 19 days.** The gate lookup read
+  `play.get("pick_side")`; primary plays only ever carry `best_side`
+  (`pick_side` is written on ladder plays and in the CSV writer). The
+  side was always None, `gate_open` never opened, zero rungs reached
+  candidate across every sidecar since 2026-08-05 (commit 35bd8be6).
+  Lookup extracted into `_primary_for()` and fixed to `best_side`,
+  with a regression test that mimics the production play shape.
+- **Correlation haircut re-keyed: pitcher first, game second.** It
+  keyed on game_pk alone — backwards against the measured
+  correlations (same-pitcher ~+0.50, cross-pitcher same-game ~+0.02;
+  A-041's worst slate was three losses on one arm in one game, none
+  trimmed). Repeated pitcher OR repeated game now trims. Strictly
+  more conservative. Keys still register only on funded picks:
+  a zeroed pick is no exposure.
+- **Stage A refuses to run unfitted** instead of silently substituting
+  `mu = prior_bf, alpha = 0.1` and pricing the slate on an unfitted
+  fallback. Stage B has raised since Phase 7; now both halves fail
+  loudly (A-007's rule).
+- **`prob_k_geq` refuses whole-number lines.** It returned
+  `P(K >= 6)` for line 6 — counting the PUSH as an over win — while
+  its own docstring claimed `P(K >= 7)`. Every observed DK line is
+  X.5, so this was latent; if an integer line ever appears the
+  pipeline now fails loudly instead of mispricing both sides (same
+  refusal the outs model already ships).
+
+Also audited `quantize_stake`'s banker's rounding: immaterial in the
+reachable range; 1.5u reachable only via `quantize_stake_down` per the
+operator rule of 2026-08-05. Behavior unchanged, now pinned by test.
+
+Tests: `tests/test_money_code_fixes.py` (11). Suite: 195 passed.
+
 ## 2026-08-24 - The two flag-off models now log shadow predictions nightly (A-046)
 
 USE_HOOK_MIXTURE (A-042) and USE_PRIOR_SEASON both passed their gates

@@ -258,6 +258,32 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-047: the ladder read a key primaries never carry — dead since 2026-08-05
+- **Filed:** 2026-08-24 (full-model audit)  **Fixed:** 2026-08-24
+- **Description:** `tools/daily_pipeline.py` fed the ladder gate
+  `play.get("pick_side")`. Primary plays carry `best_side` — the only
+  writers of `pick_side` are ladder plays themselves and the CSV
+  serializer. So `primary_side` was always None, `gate_open` in
+  `models/ladder.py` (which requires `primary_side == "OVER"`) never
+  opened, and every alt-line rung was rejected. Verified three ways:
+  the code path, a grep of every `pick_side` write site, and six days
+  of slate sidecars showing zero rungs past the gate; the last ladder
+  rows in the ledger are 2026-08-04/05, the day the bug shipped in
+  35bd8be6 ("Ladder discipline"). Money impact so far: none visible —
+  betting has been edge-gate-blocked since 08-14 — but the subsystem
+  would have stayed dead when betting resumed.
+- **Fix:** lookup extracted into `_primary_for()` (regression-tested
+  against the exact production play shape) and read from `best_side`.
+  Same commit carries three adjacent money-code fixes: haircut
+  re-keyed pitcher-first (same-pitcher corr ~+0.50 vs cross-pitcher
+  same-game ~+0.02), Stage A now raises unfitted instead of silently
+  substituting a fallback model, and `prob_k_geq` refuses whole-number
+  lines instead of folding the push into the over.
+- **Generalises to:** a gate whose input key can simply be absent
+  fails CLOSED and silent. When a subsystem's output drops to zero,
+  that is a signal to check, not a quiet day — the watchdog should
+  own "ladder evaluated N rungs, M candidates" as a tracked number.
+
 ### A-046: both gated fixes had no shadow path — their 2-week clocks never started
 - **Filed:** 2026-08-24 (full-model audit)  **Fixed:** 2026-08-24
 - **Description:** `USE_HOOK_MIXTURE` (A-042) and `USE_PRIOR_SEASON`

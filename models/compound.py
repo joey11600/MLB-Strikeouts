@@ -76,13 +76,26 @@ def compound_k_distribution(
 
 
 def prob_k_geq(k_dist: np.ndarray, line: float) -> float:
-    """P(K >= ceil(line)) from the compound distribution.
+    """P(over) at a HALF-POINT line: for 5.5, P(K >= 6).
 
-    For a line of 5.5, returns P(K >= 6).
-    For a whole-number line of 6, returns P(K >= 7) for the over,
-    but the caller must handle push logic.
+    Whole-number lines are refused (A-047). The old behavior returned
+    ceil(6) -> P(K >= 6), which counts the push at K = 6 as an over WIN
+    — its own docstring claimed P(K >= 7), so code and doc disagreed
+    and both sides of a push-able line would have been mispriced in the
+    over's favor. No caller has ever passed a whole line (DK posts
+    X.5), so this is a latent-bug guard, not a behavior change: if an
+    alternate book or a settings change ever surfaces an integer line,
+    the pipeline must model {win, push, lose} explicitly, the way
+    models/outs_hazard.py already refuses (its lines sit ON the
+    lattice, where this class of error is fatal).
     """
     import math
+    if float(line) == int(line):
+        raise ValueError(
+            f"prob_k_geq: whole-number line {line} needs explicit push "
+            f"handling (P(K == {int(line)}) is a stake-returned PUSH, "
+            f"not an over win). Refusing to fold it into either side."
+        )
     threshold = math.ceil(line)
     if threshold >= len(k_dist):
         return 0.0

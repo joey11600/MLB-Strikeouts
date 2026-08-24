@@ -521,6 +521,19 @@ python run.py status       # show record and P&L
 python run.py backfill     # refresh Statcast cache
 ```
 
+### Money-code guards added 2026-08-24 (A-047)
+
+- The ladder's primary-side lookup is `_primary_for()` in
+  `tools/daily_pipeline.py` and reads `best_side`. (`pick_side` exists
+  only on ladder plays and in the CSV writer — reading it off a
+  primary was the bug that killed the ladder for 19 days.)
+- `portfolio_daily_cap` haircuts on repeated PITCHER or repeated game,
+  pitcher first — same-pitcher entries settle off one arm and
+  correlate ~+0.50; cross-pitcher same-game measured ~+0.02.
+- `prob_k_geq` refuses whole-number lines (push must be modeled as
+  {win, push, lose}, never folded into a side). Stage A refuses to
+  predict unfitted, matching Stage B.
+
 ## Dashboard (Phase 8 — Next.js rebuild; Phase 5 static page retired)
 
 ### Data pipeline

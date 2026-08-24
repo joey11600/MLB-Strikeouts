@@ -492,6 +492,24 @@ def _compute_team_k_rate(statcast_df: pd.DataFrame, team: str) -> float | None:
     return shrink_rate(float(ks), float(len(pa)), BATTER_K_PSEUDO_BF)
 
 
+def _primary_for(pred: dict, all_plays: list[dict]) -> tuple[float, str | None]:
+    """(units, side) of this pitcher's PRIMARY play, for the ladder gate.
+
+    A-047: this lookup read `play.get("pick_side")` — a key primary
+    plays never carry (they carry `best_side`; `pick_side` is written
+    only on ladder plays and in the CSV writer). The side was therefore
+    always None, `gate_open` in models/ladder.py never opened, and every
+    ladder rung was silently rejected from 2026-08-05 (commit 35bd8be6)
+    onward — verified as zero rungs past the gate across six slates of
+    sidecars. One word, 19 days of a dead subsystem.
+    """
+    for play in all_plays:
+        if (play.get("pitcher_id") == pred.get("pitcher_id")
+                and play.get("pick_type") == "primary"):
+            return (play.get("units_risked", 0.0), play.get("best_side"))
+    return 0.0, None
+
+
 def _lineup_inputs(entry: dict, statcast_df: pd.DataFrame):
     """Per-batter K% inputs for this start: (lineup_k_pcts, lineup_source).
 
@@ -1117,13 +1135,7 @@ def run_daily(
             if not pitcher_alts or k_dist is None:
                 continue
 
-            primary_units = 0.0
-            primary_side = None
-            for play in all_plays:
-                if (play.get("pitcher_id") == pred.get("pitcher_id")
-                        and play.get("pick_type") == "primary"):
-                    primary_units = play.get("units_risked", 0.0)
-                    primary_side = play.get("pick_side")
+            primary_units, primary_side = _primary_for(pred, all_plays)
 
             rungs = evaluate_ladder(
                 k_dist, pitcher_alts,

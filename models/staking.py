@@ -20,6 +20,13 @@ CORRELATION_HAIRCUT = 0.15
 # whole units when >= 0.75, else 0.5, else 0.25, else no bet. Ladder
 # rungs derive from the quantized primary, so a 2u primary yields the
 # 2 / 1 / 0.5 template.
+#
+# 1.5 is REACHABLE ONLY via quantize_stake_down (cap fills), never via
+# quantize_stake — that is the operator rule above ("whole units when
+# >= 0.75"), not an oversight. Audited 2026-08-24 (A-047 sweep): the
+# only half-point subtlety in quantize_stake is Python's banker's
+# rounding at exactly x.5, which is immaterial in the reachable range
+# (1.5 -> 2 either way; 2.5 caps at 2 regardless). Pinned by test.
 STAKE_DENOMS = [2.0, 1.5, 1.0, 0.5, 0.25]
 
 
@@ -79,11 +86,22 @@ def portfolio_daily_cap(
 ) -> list[dict]:
     """Apply portfolio-level daily cap with correlation haircut.
 
-    Pitchers in the same game are correlated (game environment, umpire,
-    weather). Reduce the combined allocation for same-game picks.
+    The haircut keys on the PITCHER first and the game second (A-047).
+    It used to key on game_pk alone, which is backwards against the
+    measured correlations: same-pitcher entries (a primary plus ladder
+    rungs, or K-vs-outs once that market lives) settle off the same arm
+    and correlate ~+0.50, while cross-pitcher same-game correlation
+    measured ~+0.02. A-041's worst slate was exactly this shape — three
+    losses on one pitcher in one game, none haircut beyond the first.
+    Both keys now apply: repeated pitcher OR repeated game trims the
+    stake. That is strictly more conservative than before.
 
-    picks: list of dicts with at least 'units_risked', 'game_pk', 'best_edge'.
-    Returns the same list with units_risked adjusted down if needed.
+    Keys register only when a pick actually receives units — the haircut
+    prices correlation with EXPOSURE, and a zeroed pick is no exposure.
+
+    picks: list of dicts with at least 'units_risked', 'game_pk',
+    'pitcher_id', 'best_edge'. Returns the same list with units_risked
+    adjusted down if needed.
     """
     if not picks:
         return picks
@@ -91,13 +109,17 @@ def portfolio_daily_cap(
     picks = sorted(picks, key=lambda p: p.get("best_edge", 0), reverse=True)
 
     games_seen = set()
+    pitchers_seen = set()
     total_allocated = 0.0
 
     for pick in picks:
         game_pk = pick.get("game_pk", "")
+        pitcher_id = pick.get("pitcher_id", "")
         raw_units = pick.get("units_risked", 0.0)
 
-        if game_pk in games_seen:
+        correlated = (pitcher_id != "" and pitcher_id in pitchers_seen) or (
+            game_pk != "" and game_pk in games_seen)
+        if correlated:
             raw_units *= (1.0 - haircut)
 
         remaining = daily_max - total_allocated
@@ -117,5 +139,6 @@ def portfolio_daily_cap(
         pick["units_risked"] = final_units
         total_allocated += final_units
         games_seen.add(game_pk)
+        pitchers_seen.add(pitcher_id)
 
     return picks
