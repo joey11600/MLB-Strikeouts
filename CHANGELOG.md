@@ -1,6 +1,45 @@
 
 # Changelog
 
+## 2026-08-24 - Watchdog learns the new subsystems; A-016/A-038/A-039/A-043 follow-ups closed
+
+Five hardening chores, each closing a "detectable but nothing watches
+it" gap:
+
+- **Six new watchdog checks** (14 -> 18 green today, and each proven
+  able to FAIL by synthetic red fixtures): `ladder evaluates` (the
+  A-047 dead-gate signature is a red check now, not sidecar
+  archaeology), `props all accounted` (intraday odds archive
+  reconciled daily against priced + shadow + a new sidecar `skipped`
+  ledger that records every unpriced prop WITH its reason — the A-038
+  follow-up), `no stale polls` (A-039 follow-up; pre-fix archive rows
+  excluded so the check stays meaningful), `shadow columns recording`
+  (the four A-046/A-049/A-051 clocks must tick or the promotion
+  windows silently stop counting), `parameter bounds` (A-043's audit
+  finally runs somewhere — NEW pinnings red, the two documented A-042
+  alphas a tracked WARN via KNOWN_PINNED, which must only ever
+  shrink), and `statcast days complete`.
+- **Statcast completeness by game count (A-016):** `backfill_statcast`
+  verifies recently settled days hold every scheduled final game
+  (distinct game_pk vs the MLB schedule) and re-fetches shortfalls;
+  schedule-unavailable degrades to the size rule.
+- **Outs-hazard lambda closed with a measurement (A-043):** grid
+  extended to 1000; raw argmin at the new edge but statistically TIED
+  with interior 300 (paired z=+1.75) while small lambda is genuinely
+  worse (z~+3). Selection now prefers a tied interior point; shipped
+  lambda=300 with the whole selection curve persisted in the pkl;
+  `audit_param_bounds` reads the evidence instead of alarming on grid
+  position. OOS skill unchanged (+7.52%).
+- **Roadmap swept with evidence:** A-013 write path, A-034, A-035,
+  A-037, A-039 confirmations ticked against today's /health readings
+  (last_refresh advancing at a scheduled window, real recent_bytes,
+  last_pull.ok, 5-minute commit cadence) and the standing watchdog
+  checks that supersede the date-scoped spot checks.
+
+Tests: `tests/test_watchdog_new_checks.py` (10),
+`tests/test_param_bounds.py` rewritten to pin the FIXED lambda state
+plus a synthetic edge-detection case. Suite: 236 passed.
+
 ## 2026-08-24 - Weekly market scorecard automated; Phase 11 factor screen built (A-002 discipline)
 
 "Re-run tools/score_vs_market.py weekly" was a human TODO — the same

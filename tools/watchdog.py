@@ -851,6 +851,305 @@ def check_served_board_is_current(r: Report) -> None:
              f"worker within {max(lag, 0):.0f} min of the repo, {got_n} pitchers")
 
 
+def _latest_slate(max_age_days: int = 3) -> tuple[str, dict] | None:
+    """(date, payload) of the newest slate within max_age_days, else None."""
+    if not SLATES.exists():
+        return None
+    for p in sorted(SLATES.glob("2026-*.json"), reverse=True):
+        try:
+            d = date.fromisoformat(p.stem)
+        except ValueError:
+            continue
+        if (_today() - d).days > max_age_days:
+            return None
+        try:
+            return p.stem, json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def check_ladder_evaluates(r: Report) -> None:
+    """The ladder must be a live subsystem, not a silent zero (A-047).
+
+    Two invariants on the newest slate:
+      1. When alt lines existed, rungs were evaluated at all.
+      2. When a funded OVER primary cleared the gap gate's arithmetic
+         (units > 0, E[K] - line >= 1.5), at least one rung got PAST
+         the gap gate. The A-047 bug made this exact condition
+         impossible for 19 days and only sidecar archaeology caught it.
+    With betting blocked there are no funded primaries and the gate is
+    legitimately idle — that reads OK with a note, not a pass-by-luck.
+    """
+    got = _latest_slate()
+    if got is None:
+        r.warn("ladder evaluates", "no recent slate sidecar to inspect")
+        return
+    d, slate = got
+    pitchers = slate.get("pitchers", [])
+    rungs = [rung for p in pitchers for rung in (p.get("ladder") or [])]
+    if not rungs:
+        # Alt lines aren't guaranteed (DK posts them most days) — a
+        # board with zero rungs anywhere is worth an eyebrow, not red.
+        r.warn("ladder evaluates", f"{d}: no ladder rungs on any pitcher "
+               f"(alt board may not have been fetched)",
+               "zero rungs for days on end was how A-047 hid")
+        return
+
+    gate_openable = [
+        p for p in pitchers
+        if (p.get("primary_units_risked") or 0) > 0
+        and p.get("best_side") == "OVER"
+        and p.get("expected_k") is not None and p.get("line") is not None
+        and (float(p["expected_k"]) - float(p["line"])) >= 1.5
+    ]
+    stuck = [
+        p["pitcher_name"] for p in gate_openable
+        if all(rung.get("status") in ("passed_gap_gate", "primary_equivalent")
+               for rung in (p.get("ladder") or []))
+    ]
+    if stuck:
+        r.fail("ladder evaluates",
+               f"{d}: gate arithmetic open for {stuck} yet every rung "
+               f"rejected at the gap gate",
+               "this exact signature was the A-047 dead-key bug")
+    elif gate_openable:
+        r.ok("ladder evaluates",
+             f"{d}: {len(rungs)} rungs, gate open for "
+             f"{len(gate_openable)} pitcher(s)")
+    else:
+        r.ok("ladder evaluates",
+             f"{d}: {len(rungs)} rungs evaluated; gate idle "
+             f"(no funded OVER primaries — betting blocked)")
+
+
+def check_props_all_accounted(r: Report) -> None:
+    """Every DK prop captured intraday must land somewhere in the slate:
+    priced, shadow-priced, or skipped WITH a reason (A-038 follow-up).
+
+    The tag bug survived two slates because a dropped name's only trace
+    was one stdout line. The intraday archive now records every name the
+    book posted; the sidecar records every name the pipeline handled;
+    the difference must be empty.
+    """
+    got = _latest_slate()
+    if got is None:
+        r.warn("props all accounted", "no recent slate sidecar")
+        return
+    d, slate = got
+    intraday = ODDS / f"intraday_{d}.csv"
+    if not intraday.exists():
+        r.warn("props all accounted",
+               f"{d}: no intraday capture file (wired 2026-08-24; a gap "
+               f"after that date means the archive step failed)")
+        return
+    if "skipped" not in slate:
+        r.warn("props all accounted",
+               f"{d}: sidecar predates the skip ledger — judgeable from "
+               f"the first full post-2026-08-24 slate")
+        return
+    try:
+        from tools.daily_pipeline import _normalize_name
+    except Exception as exc:
+        r.warn("props all accounted",
+               f"could not import the name normalizer ({type(exc).__name__})")
+        return
+
+    posted = {_normalize_name(row.get("pitcher_name", ""))
+              for row in _rows(intraday)} - {""}
+    accounted = set()
+    for key in ("pitchers", "shadow_prior_pitchers", "skipped"):
+        for p in slate.get(key, []):
+            accounted.add(_normalize_name(p.get("pitcher_name") or ""))
+    missing = sorted(posted - accounted)
+    if missing:
+        r.fail("props all accounted",
+               f"{d}: {len(missing)} DK prop(s) match nothing in the "
+               f"sidecar: {missing[:5]}",
+               "a silently dropped name is the A-038 failure mode")
+    else:
+        r.ok("props all accounted",
+             f"{d}: {len(posted)} posted props all accounted for")
+
+
+def check_no_stale_polls(r: Report) -> None:
+    """A settled Statcast total must never sit beside a non-final poll
+    without being flagged AND surfaced (A-039 follow-up).
+
+    dashboard_data marks the disagreement (`stale_poll`) instead of
+    silently rewriting it; this makes someone actually read the flag.
+    A stale poll renders as a plausible live game, so no human notices.
+    """
+    local = ROOT / "dashboard" / "public" / "data.json"
+    if not local.exists():
+        r.warn("no stale polls", "no local data.json")
+        return
+    try:
+        payload = json.loads(local.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        r.warn("no stale polls", f"data.json unreadable ({exc})")
+        return
+    # Rows BEFORE the A-039 carryover fix (2026-08-13) are documented
+    # archive state — three known no-bet pitchers frozen mid-game by the
+    # old poller. Alerting on them forever would teach the operator to
+    # ignore this check; the signal is a NEW occurrence.
+    fix_date = "2026-08-14"
+    flagged = []
+    for d, slate in (payload.get("slates") or {}).items():
+        if str(d) < fix_date:
+            continue
+        for p in slate.get("pitchers", []):
+            if (p.get("live") or {}).get("stale_poll"):
+                flagged.append(f"{d}:{p.get('pitcher_name')}")
+    if flagged:
+        r.warn("no stale polls",
+               f"{len(flagged)} row(s) since {fix_date} grade-settled over "
+               f"a non-final poll: {flagged[:4]}",
+               "the live watcher stopped mid-game for these (A-039 class); "
+               "totals are Statcast-correct but the poller needs a look")
+    else:
+        r.ok("no stale polls",
+             f"no settled-total/non-final-poll conflicts since {fix_date} "
+             f"(pre-fix archive rows excluded)")
+
+
+SHADOW_WIRED = date(2026, 8, 25)   # first slate fully priced by A-046 code
+
+
+def check_shadow_columns_recording(r: Report) -> None:
+    """The four shadow clocks must actually tick (A-046's whole point).
+
+    Every model_log row for a date priced after the wiring must carry at
+    least the hookmix column (the others can be legitimately null for a
+    given pitcher). Empty across a whole recent date = a clock stopped,
+    and the 14-day promotion windows silently stop counting.
+    """
+    rows = _rows(MODEL_LOG)
+    recent = {}
+    for row in rows:
+        try:
+            d = date.fromisoformat(str(row.get("date")))
+        except ValueError:
+            continue
+        if d >= SHADOW_WIRED:
+            recent.setdefault(d, []).append(row)
+    if not recent:
+        r.ok("shadow columns recording",
+             f"not judgeable yet — no graded rows for dates >= "
+             f"{SHADOW_WIRED} (clocks started 2026-08-24)")
+        return
+    latest = max(recent)
+    have = [row for row in recent[latest]
+            if (row.get("p_over_hookmix") or "").strip() != ""]
+    if not have:
+        r.fail("shadow columns recording",
+               f"{latest}: {len(recent[latest])} rows, zero carry "
+               f"p_over_hookmix",
+               "the shadow clocks stopped — promotion evidence is not "
+               "accumulating (A-046's failure mode, again)")
+    else:
+        n_cand = sum(1 for row in recent[latest]
+                     if (row.get("p_over_candidate") or "").strip() != "")
+        n_re = sum(1 for row in recent[latest]
+                   if (row.get("p_over_re") or "").strip() != "")
+        r.ok("shadow columns recording",
+             f"{latest}: {len(have)}/{len(recent[latest])} rows with "
+             f"hookmix, {n_cand} candidate, {n_re} rate-RE")
+
+
+# Documented pinned parameters with remediation already in flight. A NEW
+# pinning is a red check; these stay a tracked yellow until their fixes
+# land (then the entry is DELETED — an allowlist that only grows is how
+# checks die). Keyed on stable substrings of the audit's finding lines.
+KNOWN_PINNED = {
+    # A-042: the NB family can't produce the left-skew; the fix (hook
+    # mixture) is in its 2-week shadow. Both pickles carry the same fit.
+    "stage_a_fitted.pkl: alpha=0.006737946999085467":
+        "A-042 — hook mixture shadowing; retire on promotion",
+    "stage_a_eval.pkl: alpha=0.006737946999085467":
+        "A-042 — same fit as production",
+}
+
+
+def check_param_bounds(r: Report) -> None:
+    """No fitted parameter may sit ON its optimizer bound (A-043).
+
+    tools/audit_param_bounds.py has exited 1 on a pinned parameter since
+    08-16 and nothing ran it — the same gap as A-040: a check nobody
+    receives is not a check. It runs in a subprocess so an import-time
+    crash in the audit is a WARN here, never a watchdog crash.
+
+    Findings in KNOWN_PINNED (documented, remediation in flight) report
+    as WARN so the operator sees a tracked condition, not a wolf-cry;
+    anything NEW is a hard FAIL.
+    """
+    import subprocess
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "audit_param_bounds.py")],
+            capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    except Exception as exc:
+        r.warn("parameter bounds", f"audit could not run ({exc})")
+        return
+    out = (proc.stdout or "") + (proc.stderr or "")
+    if proc.returncode == 0:
+        r.ok("parameter bounds", "no fitted parameter on a bound")
+        return
+    findings = [ln.strip() for ln in out.splitlines()
+                if ln.strip().startswith(("OPTIMIZER BOUND", "GRID EDGE",
+                                          "SATURATED"))]
+    new = [f for f in findings
+           if not any(k in f for k in KNOWN_PINNED)]
+    if new:
+        r.fail("parameter bounds",
+               f"{len(new)} NEW pinned parameter(s): {new[0][:110]}",
+               "a parameter on its bound means the family is wrong or "
+               "the search space is too small (A-042/A-043)")
+    else:
+        r.warn("parameter bounds",
+               f"{len(findings)} known pinned parameter(s), remediation "
+               f"in flight (see KNOWN_PINNED)",
+               "goes green when the hook-mixture shadow resolves A-042")
+
+
+def check_statcast_days_complete(r: Report) -> None:
+    """Recent cached days must hold every scheduled final game (A-016).
+
+    Size says a file has rows; only a game count says it has the DAY. A
+    mid-slate write freezes large-but-incomplete without this.
+    """
+    try:
+        from data.backfill_statcast import (
+            _cached_game_count, _expected_final_games)
+    except Exception as exc:
+        r.warn("statcast days complete", f"helpers unavailable ({exc})")
+        return
+    problems, checked = [], 0
+    for back in (2, 3):
+        d = _today() - timedelta(days=back)
+        pq = CACHE / d.strftime("%Y-%m") / f"{d.isoformat()}.parquet"
+        if not pq.exists():
+            continue
+        expected = _expected_final_games(d.isoformat())
+        if expected is None:
+            r.warn("statcast days complete",
+                   f"{d}: schedule unavailable — cannot verify")
+            return
+        checked += 1
+        got = _cached_game_count(pq)
+        if got < expected:
+            problems.append(f"{d}: {got}/{expected}")
+    if problems:
+        r.fail("statcast days complete", "; ".join(problems),
+               "an incomplete settled day silently loses that slate's "
+               "evidence (A-016)")
+    elif checked:
+        r.ok("statcast days complete", f"{checked} recent day(s) verified "
+             f"against the schedule")
+    else:
+        r.warn("statcast days complete", "no recent settled days in cache")
+
+
 CHECKS = [
     check_calibrator_actually_applied,
     check_models_fitted,
@@ -859,10 +1158,16 @@ CHECKS = [
     check_todays_board,
     check_model_log_growing,
     check_statcast_fresh,
+    check_statcast_days_complete,
     check_odds_provenance,
     check_yesterdays_results_present,
     check_statcast_confirms_grades,
     check_scheduler_ran,
+    check_ladder_evaluates,
+    check_props_all_accounted,
+    check_no_stale_polls,
+    check_shadow_columns_recording,
+    check_param_bounds,
     check_dashboard_matches_ledger,
     check_served_board_is_current,
 ]

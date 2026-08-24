@@ -149,8 +149,10 @@
   relay, paid proxy, or paid odds API (A-012) — operator call
 - [x] Reconcile the git checkout into the volume ledger on every pull
       (A-013) — the two were independent ledgers
-- [ ] Set GITHUB_TOKEN on Railway so container writes reach git
-      (A-013 write path) — operator credential
+- [x] Set GITHUB_TOKEN on Railway so container writes reach git
+      (A-013 write path) — confirmed operational 2026-08-24: the worker
+      pushes live-grade commits at 5-minute cadence and /health reports
+      last_pull.ok=true, can_push_to_git=true
 - [ ] Retire the local Windows scheduled tasks once the cloud path has
   run clean for a week (deliberately still enabled as backup)
 - [x] Data-only commits no longer trigger a Vercel rebuild (A-023) —
@@ -190,10 +192,10 @@
   break ties, and an ambiguous name is refused rather than guessed —
   candidates were previously a dict keyed by name, so two same-named
   probables would have overwritten each other. 30/30 matched, 0 unmatched
-- [ ] Confirm A-037 in production — after the redeploy, `/health`
-  `statcast_cache.last_refresh.at` should advance at each scheduled
-  window (15:00 / 16:45 / 18:15 ET), not only at boot, and
-  `recent_bytes` for yesterday should be a real size rather than null
+- [x] Confirm A-037 in production — confirmed 2026-08-24: `/health`
+  showed `last_refresh.at = 2026-08-24T12:33 ET, ok, window
+  2026-08-20..08-24` (a scheduled window, not a boot) and
+  `recent_bytes["2026-08-23"] = 799,305` — a real size
 - [x] **Stop the board sitting on yesterday with late games stuck "IN
   GAME" (A-039).** Three independent causes: the dashboard fetched once
   on mount and never again, so an open tab never moved; a date only
@@ -205,11 +207,11 @@
   published for <today> yet" note, a bounded carryover that finishes
   yesterday first, and a settled Statcast total that outranks a stopped
   poll. No money affected — all three frozen rows were no-bet pitchers
-- [ ] Confirm A-039 in production — on the morning of 2026-08-14 the
-  2026-08-13 board should show **0 in game** with every late start
-  Final, and the 22:10 ET starters are the ones to check first. If any
-  row is still stuck, the carryover is not running: check the worker log
-  for a `carryover 2026-08-13:` line shortly after midnight ET
+- [x] Confirm A-039 in production — superseded by ten clean days of
+  operation and, as of 2026-08-24, a standing watchdog check
+  (`no stale polls`): zero settled-total/non-final-poll conflicts
+  since the 08-13 fix (the three pre-fix archive rows are documented
+  and excluded)
 - [x] **Give the worker a way back from a wedged checkout (A-040).** A
   failed `git fetch` was terminal for the life of the container: it was
   recorded and never retried, so the worker served a 27-hour-old board
@@ -301,19 +303,26 @@
   exceeded 0.9959; 5 of the 46 with outcomes LOST. `PROB_EPS = 1e-3`
   clamps `predict()` on the way out; blast radius 61/1001 values, max
   change 0.00100
-- [ ] **A-043 — refit the outs hazard with an extended lambda grid.**
-  `lambda = 30.0` is `max(LAMBDA_GRID)`, chosen by `min(grid,
-  key=brier)`, so the curve may still have been improving — the model
-  may be under-regularised. Extend past 30 (100, 300, 1000) and confirm
-  the minimum is INTERIOR. Also persist the per-lambda scores into the
-  pkl: they are computed and printed today and then thrown away, which
-  is why this needs a refit to answer at all
+- [x] **A-043 — outs hazard lambda: measured and closed (2026-08-24).**
+  Extended the grid to 1000; the raw argmin moved to the NEW edge —
+  but the paired per-start z's show the top of the curve is
+  statistically TIED (300 vs 1000: z=+1.75) while the small-lambda end
+  is genuinely worse (z~+3). Selection now prefers a tied INTERIOR
+  point over a boundary argmin, the shipped pkl carries lambda=300
+  with the full selection curve persisted (`meta.lambda_grid`,
+  per-entry `z_vs_best`), and `audit_param_bounds` reads that evidence
+  instead of alarming on grid position alone. OOS skill unchanged
+  (+7.52% on the decision split vs +7.49 at lambda=30)
 - [ ] **A-043 — smooth the calibrator's top bin rather than relying on
   the clamp.** The guard stops the impossible assertion; it does not
   make the top bin calibrated. Fold into the A-041 recalibration work
   once the market-scored sample is large enough
-- [ ] **A-043 — wire the audit into CI.** It exits 1 today and nothing
-  runs it. Same gap as A-040: a check nobody receives is not a check
+- [x] **A-043 — audit wired into CI (2026-08-24).** The watchdog's
+  `parameter bounds` check runs `tools/audit_param_bounds.py` on every
+  night job and CI run: NEW pinned parameters fail red; the two
+  documented A-042 alphas report as a tracked WARN until the
+  hook-mixture shadow resolves them (a permanent red trains the
+  operator to ignore red)
 - [x] **A-041 — same-pitcher exposure now haircut (A-047,
   2026-08-24).** Drew Anderson took 3 of 8 losses in one game
   (.69/.94/.81) and the haircut keyed on repeated `game_pk` only.
@@ -321,11 +330,11 @@
   — strictly more conservative. The stricter "one bet per pitcher per
   slate, larger edge wins" rule remains scoped to Phase 10 for the
   K-vs-outs cross-market case
-- [ ] **A-039 follow-up: alert when a settled total meets a non-final
-  poll.** `stale_poll` is now set on exactly that disagreement, so the
-  condition is detectable — but nothing watches it, and this class of
-  fault renders as a plausible live game rather than as an error.
-  `tools/watchdog.py` is the natural home
+- [x] **A-039 follow-up: stale-poll alert (2026-08-24).** The watchdog's
+  `no stale polls` check scans the served payload for
+  settled-total/non-final-poll conflicts since the fix date; the three
+  documented pre-fix archive rows are excluded so the check stays
+  meaningful
 - [x] **Widen the pitcher history window to prior seasons — BUILT, flag
   OFF, all five gates passed.** `docs/PRIOR_SEASON_SCOPE.md`,
   `docs/GATES.md`. Recovers 11.5% of starts (409, ~2.9/day) that the
@@ -353,18 +362,20 @@
   schedules this yet, and a missing sidecar degrades silently to
   current-season-only — the pipeline prints a warning and prices on, so
   the board would just quietly get shorter again
-- [ ] **A-038 follow-up: alert on unmatched props rather than printing
-  them.** The tag bug survived two slates because the only signal was one
-  stdout line on a scheduled run. A DK prop that matches no probable is a
-  measurable daily number and belongs on `/health` next to
-  `statcast_cache`, with the same treatment for a probable that no prop
-  covers. Related: the name join is a third-party display string in both
-  directions and has no test against real captured DK names
-- [ ] **A-016 follow-up:** `backfill_statcast` skips any day >2 days old
-  and >20 KB, so a file written mid-games is large-but-incomplete and
-  freezes that way. Check completeness against the MLB schedule
-  (expected games vs distinct `game_pk` in the file) rather than size
-  alone. Overlaps the off-day re-fetch item
+- [x] **A-038 follow-up: unmatched props now alert (2026-08-24).** The
+  sidecar carries a `skipped` ledger (every unpriced prop with its
+  reason, including "no MLB probable matched"), and the watchdog's
+  `props all accounted` check reconciles the intraday odds archive
+  against pitchers + shadow + skipped daily — a silently dropped name
+  is a red check by the next morning. Still open from the original
+  note: a regression test of the name join against real captured DK
+  names
+- [x] **A-016 follow-up: completeness by game count (2026-08-24).**
+  `backfill_statcast` now verifies recently settled days hold every
+  scheduled final game (distinct `game_pk` vs the MLB schedule) and
+  re-fetches shortfalls; schedule-unavailable falls back to the size
+  rule rather than blocking. The watchdog's `statcast days complete`
+  check independently verifies the last few settled days daily
 - [ ] Reconsider whether the worker should commit `dashboard/public/data.json`
   at all — it overwrote CI's better copy every 5 minutes and the site
   prefers the worker's live payload anyway, so the committed artifact is
@@ -373,8 +384,10 @@
   watcher archives per date and the dashboard looks up by slate date, so
   the midnight-to-09:00 blank window is closed. 2026-08-10 served 1/18
   actual K totals when found
-- [ ] Confirm A-035 on the morning of 2026-08-12 — the 08-11 board should
-  read complete before 09:00 ET, not 1-of-N
+- [x] Confirm A-035 — superseded by two weeks of operation; the
+  2026-08-24 watchdog reads yesterday's board complete (4,598 pitches
+  cached for all 23 pitchers) and the mechanism has run clean since
+  the fix
 - [ ] Consider surfacing `result_source` on the board so an overnight
   live figure is visibly distinct from a Statcast-confirmed one
 - [x] Stop the worker wedging itself on a halted rebase (A-034) —
@@ -382,9 +395,10 @@
   because the files in conflict are regenerated from the volume in the
   same pass. Four hours of grades had been committed to a detached HEAD
   and never pushed
-- [ ] Confirm A-034 in production — after the redeploy, `/health` should
-  show `last_pull.ok: true` with `head.detached: false`, and commits
-  should resume at 5-minute intervals
+- [x] Confirm A-034 in production — confirmed 2026-08-24: `/health`
+  `last_pull.ok: true` and worker commits landing at 5-minute
+  intervals all day (the rebase-to-reset path has run clean since
+  08-13)
 - [ ] Re-read the Vercel usage chart after a full slate day and confirm
   the number actually landed near ~1-2 CPU-hours/day
 - [ ] Apply the same build-skip to the NRFI project (99 CPU-hours,

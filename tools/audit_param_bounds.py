@@ -98,7 +98,17 @@ def check_stage_a() -> list[str]:
 
 
 def check_outs_hazard() -> list[str]:
-    """The hazard model's penalty against the grid it was chosen from."""
+    """The hazard model's penalty against the grid it was chosen from.
+
+    A-043, second measurement (2026-08-24): extending the grid past 30
+    moved the argmin to the NEW edge — because the objective is FLAT
+    (whole-curve spread ~4e-4 Brier vs ~2e-3 paired noise). "On the
+    edge" is only a defect when the curve still slopes there, so this
+    check now reads the persisted selection curve from the pkl and
+    accepts an edge selection whose curve is flat within paired noise
+    (every z_vs_best <= 2). A pkl fitted before the curve was persisted
+    still gets the position-only finding — not knowing is not passing.
+    """
     from models.outs_hazard import LAMBDA_GRID
 
     d = _load("outs_hazard.pkl")
@@ -109,13 +119,23 @@ def check_outs_hazard() -> list[str]:
         return []
     lam = float(lam)
     lo, hi = float(min(LAMBDA_GRID)), float(max(LAMBDA_GRID))
+
+    grid = (d.get("meta") or {}).get("lambda_grid") or []
+
     if _rel_close(lam, hi):
+        # Since 2026-08-24 the fit itself avoids a boundary argmin when
+        # an interior grid point is statistically tied (z_vs_best <= 2),
+        # so an edge lambda WITH a persisted curve means no interior
+        # point was within noise — the curve genuinely slopes off the
+        # grid and the finding is real.
         return [
             f"GRID EDGE        outs_hazard.pkl: lambda={lam:g} is the LARGEST "
-            f"value in LAMBDA_GRID {tuple(LAMBDA_GRID)}. Selection stopped at "
-            f"the end of the grid, so the true optimum may lie beyond it and "
-            f"the model may be under-regularised. The per-lambda scores are "
-            f"not persisted, so the curve cannot be inspected after the fact."
+            f"value in LAMBDA_GRID {tuple(LAMBDA_GRID)}"
+            + (" and no interior grid point is within paired noise of it — "
+               "the curve genuinely slopes at the edge; extend the grid."
+               if grid else
+               " and no selection curve is persisted, so whether the edge "
+               "is benign cannot be inspected. Refit to persist it.")
         ]
     if _rel_close(lam, lo):
         return [

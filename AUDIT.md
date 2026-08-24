@@ -542,6 +542,21 @@ Tracks open items, resolved items, and known risks.
 ### A-043: three fitted parameters were sitting on their bounds
 - **Filed/Resolved (partly):** 2026-08-16 (operator asked for the sweep
   after `alpha = exp(-5)` surfaced in A-042)
+- **Amended 2026-08-24 — two of the three closed, audit wired into the
+  watchdog.** (1) The outs lambda: extending the grid to 1000 moved the
+  raw argmin to the NEW edge, but paired per-start z's show the top of
+  the curve statistically TIED (300 vs 1000: z=+1.75) while small
+  lambda is genuinely worse (z~+3) — the optimum's neighborhood IS on
+  the grid. Selection now prefers a tied interior point over a
+  boundary argmin; shipped lambda=300 with the full selection curve
+  persisted in the pkl (`meta.lambda_grid`, per-entry `z_vs_best`), and
+  `audit_param_bounds` reads that evidence. OOS skill unchanged
+  (+7.52% vs +7.49%). (2) The audit now runs on every night job / CI
+  pass via the watchdog's `parameter bounds` check: NEW pinnings fail
+  red; the two documented A-042 alphas report as tracked WARN until
+  the hook-mixture shadow resolves them. Remaining open: the
+  calibrator top-bin smoothing (folded into the A-041 recalibration,
+  blocked on the market-scored sample; the map is OFF meanwhile).
 - **Description:** a parameter at its bound is a fit that FAILED — the
   optimizer wanted a value the search space did not contain and stopped
   at the wall, so the estimate is an artifact of where the wall was put.

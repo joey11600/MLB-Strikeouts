@@ -549,7 +549,8 @@ def _write_json_atomic(path: Path, payload: dict) -> None:
 
 
 def _write_slate_sidecar(game_date: str, predictions: list,
-                         shadow_prior: list | None = None) -> None:
+                         shadow_prior: list | None = None,
+                         skipped: list | None = None) -> None:
     """Persist the full evaluated slate to data/slates/YYYY-MM-DD.json.
 
     Every analyzed pitcher — full P(K=k) distribution, expected K/BF,
@@ -639,6 +640,7 @@ def _write_slate_sidecar(game_date: str, predictions: list,
     # Newest wins per pitcher (a lineup-lock price beats a projected
     # one); pitchers absent from this run keep their earlier entry.
     shadow_rows = list(shadow_prior or [])
+    skipped_rows = list(skipped or [])
     carried = 0
     if out_path.exists():
         try:
@@ -660,6 +662,17 @@ def _write_slate_sidecar(game_date: str, predictions: list,
                     if (p.get("pitcher_id") not in fresh_shadow
                             and p.get("pitcher_id") not in fresh):
                         shadow_rows.append(p)
+                # Same for the skip ledger, keyed by normalized name (an
+                # unmatched prop has no pitcher_id). Fresh run wins; a
+                # skip retires once the name is priced.
+                priced_names = {_normalize_name(p.get("pitcher_name") or "")
+                                for p in pitchers}
+                fresh_skip = {_normalize_name(s.get("pitcher_name") or "")
+                              for s in skipped_rows}
+                for s in prior.get("skipped", []):
+                    n = _normalize_name(s.get("pitcher_name") or "")
+                    if n and n not in fresh_skip and n not in priced_names:
+                        skipped_rows.append(s)
         except (OSError, ValueError) as exc:
             print(f"  (could not read prior sidecar to merge: {exc})")
 
@@ -669,6 +682,11 @@ def _write_slate_sidecar(game_date: str, predictions: list,
         "reconstructed": False,
         "pitchers": pitchers,
         "shadow_prior_pitchers": shadow_rows,
+        # Every DK prop the run did NOT price, with its reason — the
+        # watchdog reconciles the intraday capture against
+        # pitchers + shadow + this list, so a silently dropped name
+        # (A-038) is a red check by the next morning.
+        "skipped": skipped_rows,
     }
     _write_json_atomic(out_path, payload)
     print(f"  Slate sidecar written: {out_path} ({len(pitchers)} pitchers"
@@ -1046,6 +1064,27 @@ def run_daily(
 
     predictions = []
     shadow_prior_rows = []
+    skipped_rows = []
+
+    def _record_skip(name, pid, reason):
+        """Every DK prop must be accounted for: priced, shadow-priced,
+        or skipped WITH REASON in the sidecar. A prop that silently
+        matches nothing is the A-038 failure mode, and it survived two
+        slates precisely because the only trace was one stdout line on
+        a scheduled run. The watchdog reconciles the intraday capture
+        against this ledger daily."""
+        skipped_rows.append({"pitcher_name": name,
+                             "pitcher_id": pid,
+                             "reason": reason})
+
+    # Props whose name matched no MLB probable (or an ambiguous one) —
+    # they never reach `matched` and would otherwise vanish untracked.
+    matched_names = {_normalize_name(m.get("pitcher_name", "")) for m in matched}
+    for p in today_props:
+        n = _normalize_name(p.get("pitcher_name", ""))
+        if n and n not in matched_names:
+            _record_skip(p.get("pitcher_name", ""), None,
+                         "no MLB probable matched (A-038 class)")
 
     def _shadow_prior_price(entry, stats_prior, skip_reason):
         """Price a production-refused pitcher under the prior-season window.
@@ -1144,6 +1183,8 @@ def run_daily(
             if stats.get("used_prior_season"):
                 detail += f", {stats.get('eff_bf', 0):.0f} effective"
             print(f"    {pitcher_name}: insufficient data ({detail}), skipping")
+            _record_skip(pitcher_name, pitcher_id,
+                         f"insufficient data ({detail})")
             _shadow_prior_price(entry, stats_prior,
                                 f"insufficient data ({detail})")
             continue
@@ -1153,6 +1194,7 @@ def run_daily(
         # edge and the staking engine then concentrates on it.
         if not stats.get("is_startable", False):
             print(f"    {pitcher_name}: SKIP — {stats.get('skip_reason')}")
+            _record_skip(pitcher_name, pitcher_id, stats.get("skip_reason"))
             _shadow_prior_price(entry, stats_prior, stats.get("skip_reason"))
             continue
 
@@ -1164,6 +1206,9 @@ def run_daily(
             # projection (AUDIT A-007).
             print(f"    {pitcher_name}: SKIP — no lineup and no opponent "
                   f"batting history for {entry.get('opponent_team')}")
+            _record_skip(pitcher_name, pitcher_id,
+                         f"no lineup and no opponent batting history "
+                         f"for {entry.get('opponent_team')}")
             continue
 
         lineup = entry.get("lineup", [])
@@ -1440,7 +1485,8 @@ def run_daily(
             pred["primary_units_final"] = 0.0
         if not dry_run:
             _write_slate_sidecar(game_date, predictions,
-                                 shadow_prior=shadow_prior_rows)
+                                 shadow_prior=shadow_prior_rows,
+                                 skipped=skipped_rows)
         else:
             print("  DRY RUN — not writing the slate sidecar.")
         return []
@@ -1499,7 +1545,8 @@ def run_daily(
 
     print(f"\n[8/8] Writing picks to {PICKS_PATH}...")
     _write_slate_sidecar(game_date, predictions,
-                         shadow_prior=shadow_prior_rows)
+                         shadow_prior=shadow_prior_rows,
+                         skipped=skipped_rows)
     existing_picks = _load_existing_picks(game_date)
 
     all_rows = []

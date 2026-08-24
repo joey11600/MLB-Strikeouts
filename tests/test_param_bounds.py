@@ -111,13 +111,36 @@ def test_stage_a_alpha_is_still_reported_as_pinned():
     assert any("exp(-5)" in f for f in findings), findings
 
 
-def test_outs_hazard_lambda_is_reported_at_the_grid_edge():
+def test_outs_hazard_lambda_now_interior_with_persisted_curve():
+    """A-043 closed 2026-08-24: the grid was extended, the raw argmin
+    landed on the NEW edge with an interior point statistically tied
+    (z=+1.75), and selection now prefers the tied interior value. The
+    shipped pkl must reflect that: interior lambda, curve persisted."""
+    import pickle
+    from models.outs_hazard import LAMBDA_GRID, MODEL_PATH
+
+    with open(MODEL_PATH, "rb") as f:
+        d = pickle.load(f)
+    lam = float(d["lambda"])
+    assert min(LAMBDA_GRID) < lam < max(LAMBDA_GRID), (
+        f"lambda={lam} is on the grid edge again — either the curve "
+        f"genuinely slopes off the grid now (extend it) or the interior "
+        f"tie-break regressed")
+    grid = d["meta"]["lambda_grid"]
+    assert grid and all("z_vs_best" in r for r in grid), (
+        "selection curve not persisted — the A-043 evidence rides in the pkl")
+    assert audit.check_outs_hazard() == []
+
+
+def test_outs_hazard_edge_lambda_still_detected(monkeypatch):
+    """The detector must not have died with the fix: a pkl whose lambda
+    sits at the grid top (no persisted curve) is still a finding."""
     from models.outs_hazard import LAMBDA_GRID
 
+    monkeypatch.setattr(audit, "_load", lambda name: {
+        "lambda": float(max(LAMBDA_GRID)), "meta": {}})
     findings = audit.check_outs_hazard()
-    assert findings, "lambda at the top of LAMBDA_GRID was not reported"
-    assert any("GRID EDGE" in f for f in findings)
-    assert str(max(LAMBDA_GRID)).rstrip("0").rstrip(".") in findings[0]
+    assert findings and "GRID EDGE" in findings[0]
 
 
 def test_audit_detects_a_bound_from_the_module_not_a_copy():

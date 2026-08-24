@@ -41,6 +41,34 @@ def _today_et() -> date:
     return datetime.now(ZoneInfo("America/New_York")).date()
 
 
+def _expected_final_games(date_str: str) -> int | None:
+    """How many regular-season games FINISHED on a date, per the MLB
+    schedule. None when the schedule can't be fetched — the caller then
+    falls back to the size rule rather than blocking the backfill on a
+    second API's availability (not knowing is a reason to keep the old
+    behavior, not to refuse to run)."""
+    try:
+        from data.game_context import fetch_schedule
+        games = fetch_schedule(date_str)
+        return sum(
+            1 for g in games
+            if g.get("gameType") == "R"
+            and str((g.get("status") or {}).get("detailedState", "")
+                    ).startswith(("Final", "Completed"))
+        )
+    except Exception:
+        return None
+
+
+def _cached_game_count(parquet_path: Path) -> int:
+    """Distinct game_pk count in one cached day (single-column read)."""
+    try:
+        return int(pd.read_parquet(
+            parquet_path, columns=["game_pk"])["game_pk"].nunique())
+    except Exception:
+        return 0
+
+
 def backfill(start_date: date, end_date: date, sleep_sec: float = 1.0) -> None:
     from pybaseball import statcast
 
@@ -80,13 +108,35 @@ def backfill(start_date: date, end_date: date, sleep_sec: float = 1.0) -> None:
             # — "big enough" is not "finished", and the size check alone
             # would freeze a partial day forever.
             settled = current < _today_et() - timedelta(days=1)
-            if fresh_enough and settled:
+            # A-016: size is necessary, not sufficient. A file written
+            # mid-slate is >20KB and still missing games, and once
+            # settled it froze that way forever. For RECENTLY settled
+            # days, also count the games actually IN the file against
+            # the schedule; a shortfall forces a re-fetch. Bounded to a
+            # week because older days passed this same check when they
+            # were recent, and re-asking the schedule for the whole
+            # season on every run would hammer the API for nothing.
+            complete = True
+            if (fresh_enough and settled
+                    and current >= _today_et() - timedelta(days=7)):
+                expected = _expected_final_games(date_str)
+                if expected is not None:
+                    cached_games = _cached_game_count(parquet_path)
+                    complete = cached_games >= expected
+                    if not complete:
+                        print(f"  [{day_num}/{total_days}] {date_str} — "
+                              f"INCOMPLETE ({cached_games}/{expected} games "
+                              f"cached), re-fetching")
+            if fresh_enough and settled and complete:
                 print(f"  [{day_num}/{total_days}] {date_str} — cached ({size:,} bytes)")
                 current += timedelta(days=1)
                 continue
-            reason = ("today or later, games may still be live" if not settled
-                      else f"only {size} bytes, looks empty")
-            print(f"  [{day_num}/{total_days}] {date_str} — re-fetching ({reason})")
+            if fresh_enough and settled and not complete:
+                pass  # message already printed above
+            else:
+                reason = ("today or later, games may still be live" if not settled
+                          else f"only {size} bytes, looks empty")
+                print(f"  [{day_num}/{total_days}] {date_str} — re-fetching ({reason})")
 
         print(f"  [{day_num}/{total_days}] {date_str} — fetching...", end=" ", flush=True)
         try:
