@@ -1,6 +1,54 @@
 
 # Changelog
 
+## 2026-08-24 - Gauntlet harness repaired: real Gate 4, real Gate 5, as-of baseline, symmetric recalibration (A-048)
+
+The feature-promotion harness had four defects, which together explain
+the promote-then-demote cycle (three T2 features promoted within-2026,
+all three demoted by the cross-season re-gauntlet):
+
+- **Gate 4 was vacuous.** `run_gauntlet` called it with `np.array([0])`
+  and `{}` — the correlation loop never executed and the gate passed
+  everything ever screened. It now receives the candidate's real values
+  (decision-split train window, shared pitch cache with Gate 2) and
+  always checks the two production inputs (season K%, BF mean) plus
+  the registry partners. An unmeasurable check reports UNMEASURED
+  (None), never PASS.
+- **Gate 5 was a Gate 2 echo.** It re-read Gate 2's Brier improvements
+  and re-applied a weaker version of Gate 2's own test — it could not
+  independently fail anything. It now tests what its name says
+  (CLAUDE.md gate 5: calibration, not accuracy): pooled-line expected
+  calibration error of the augmented model must not degrade past
+  ECE_TOLERANCE (0.010) in either temporal direction.
+- **The baseline leaked.** `_build_game_set` computed season K% /
+  BF mean / BF std over the whole split window INCLUDING the predicted
+  game. Now: pitches load from season start (priors mirror production's
+  season-to-date), stats are expanding cumsum-minus-current, ordering
+  is (game_date, game_pk), and the production gates apply (50 prior
+  BF, 3 prior starts).
+- **The augmented model got a recalibration freebie.** The old
+  comparison was raw-baseline vs refit-with-feature; the refit's
+  intercept+slope recalibration alone was worth ~0.3-1.0%, so PURE
+  NOISE cleared "improves both directions" on 14/20 seeds. The base
+  side now gets the identical recalibration minus only the candidate
+  column. Re-measured: noise clears both directions 0/20; p95 floor
+  -0.034% (was +0.317% with the freebie, 0.167% recorded pre-repair).
+
+The noise floor is now persisted (`data/gauntlet_noise_floor.json`,
+written by `calibrate_noise_floor`, preferred over the constant on
+import) because it is harness-specific. Negative controls re-run on
+the repaired harness: lunar / random / shuffled-label all REJECTED.
+The first-9-batters lineup proxy is documented as known optimism
+(candidate and baseline share it; historical projected lineups are not
+archived, so there is nothing honest to substitute).
+
+Every recorded Gate 4 PASS and Gate 5 verdict from before this date is
+meaningless (the gates measured nothing); Gate 2 verdicts from before
+this date were measured against a leaked baseline with the freebie.
+Production is unaffected — zero T2 features are live.
+
+Tests: `tests/test_gauntlet_harness.py` (11). Suite: 206 passed.
+
 ## 2026-08-24 - Stage B batter-weight "underfit" measured and closed as not-a-defect (A-032 amendment)
 
 A-032's correction paragraph left "reweighting is open work" on the

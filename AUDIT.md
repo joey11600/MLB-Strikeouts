@@ -258,6 +258,44 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-048: the promotion harness could not fail features the way it claimed to
+- **Filed:** 2026-08-24 (full-model audit)  **Fixed:** 2026-08-24
+- **Description:** four defects in `tools/gauntlet.py`, the 5-gate
+  tryout every factor must pass:
+  1. Gate 4 (collinearity) was invoked with an empty array and empty
+     dict — its loop never ran; it has passed every feature ever
+     screened. Every recorded Gate 4 PASS is meaningless.
+  2. Gate 5 (calibration) re-read Gate 2's Brier improvements — a
+     strictly weaker copy of Gate 2's own test. It could never
+     independently fail a feature; it measured nothing of its name.
+  3. The baseline was not as-of: season K% / BF stats pooled over the
+     whole split window INCLUDING the predicted game, while the
+     candidate was as-of — a leaked, stronger-than-live opponent.
+  4. The augmented model's refit included an intercept+slope
+     recalibration the raw baseline never got. Measured: PURE NOISE
+     cleared "improves both temporal directions" on 14 of 20 seeds
+     (p95 of min-improvement +0.317%). The floor constant in the file
+     (0.167%) was calibrated before these repairs and `zone_pct` was
+     recorded PROMOTED at +0.166% — below even that.
+  Together these explain the promote-then-demote cycle: within-2026
+  promotions (a9_zone_pct, f1_eastward_tz, b14_n_rookies) that all
+  died on the honest cross-season re-gauntlet (A-005/R-005).
+- **Fix:** real Gate 4 (candidate values + production inputs + registry
+  partners; UNMEASURED reported as None, never PASS); real Gate 5
+  (pooled-line ECE must not degrade past 0.010 either direction);
+  as-of expanding baseline loading from season start with production
+  gates (50 prior BF / 3 prior starts, ordered by date then game_pk);
+  symmetric base-side recalibration. Floor re-derived on the repaired
+  harness and PERSISTED (`data/gauntlet_noise_floor.json`): noise now
+  clears both directions 0/20, p95 -0.034%. Negative controls
+  (lunar, random, shuffled-label) re-run: all REJECTED. The
+  first-9-batters lineup proxy is documented as shared optimism.
+- **Generalises to:** a gate is only a gate if it can FAIL something.
+  Verify each gate rejects a designed-to-fail input at build time —
+  the same lesson as the negative controls, applied to the harness
+  itself. And a noise floor is a property of the harness that
+  produced it; re-derive it whenever the harness changes.
+
 ### A-047: the ladder read a key primaries never carry — dead since 2026-08-05
 - **Filed:** 2026-08-24 (full-model audit)  **Fixed:** 2026-08-24
 - **Description:** `tools/daily_pipeline.py` fed the ladder gate
