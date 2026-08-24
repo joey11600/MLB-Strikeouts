@@ -73,6 +73,8 @@ SEASON_START = date(2026, 3, 26)
 # is short; a missed grade or slate is still worth producing.
 SCHEDULE = [
     ("night",   dtime(3, 0),   360),
+    # Weekly market scorecard — the task itself no-ops unless Sunday.
+    ("scorecard", dtime(4, 30), 360),
     # 09:00 at the operator's request — earlier board, more time to act.
     # Note this is BEFORE Statcast reliably publishes yesterday's games
     # (measured 0 pitches at 03:21 ET, 3,530 by 08:59 ET), which is why
@@ -1228,11 +1230,30 @@ def task_night() -> None:
     _run("watchdog", [PYTHON, "tools/watchdog.py"], 300)
 
 
+def task_scorecard() -> None:
+    """Weekly market scorecard (Sundays; A-002 discipline, automated).
+
+    The daily slot no-ops six days out of seven — the SCHEDULE table is
+    daily-shaped and a silent skip is cheaper than teaching it
+    weekdays. The scorecard appends the model-vs-closing-line verdict
+    to data/market_scorecard.csv and prints the three shadow-clock
+    reports, so the evidence the betting block waits on accumulates on
+    a schedule instead of on memory (the A-046 lesson).
+    """
+    if datetime.now(ET).weekday() != 6:
+        log("scorecard: not Sunday — skipping")
+        return
+    sync_repo()
+    _run("market-scorecard", [PYTHON, "tools/market_scorecard.py"], 1800)
+    commit_and_push("weekly market scorecard")
+
+
 TASKS = {
     "morning": task_morning,
     "lineups": task_lineups,
     "close": task_close,
     "night": task_night,
+    "scorecard": task_scorecard,
 }
 
 

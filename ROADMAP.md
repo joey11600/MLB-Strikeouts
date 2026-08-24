@@ -256,7 +256,13 @@
   At ~25 starts/day, 1,000 market-scored starts is ~40 days out. Nothing
   shortens it except paying for historical lines. Re-run
   `tools/score_vs_market.py` weekly; the verdict is only provisional at
-  262 starts
+  262 starts.
+  **2026-08-24: the weekly re-run is now a scheduled task** —
+  `scorecard` (Sundays 04:30 ET, worker + CI) appends to
+  `data/market_scorecard.csv` and prints the shadow clocks. At 447
+  starts the verdict HARDENED: raw z=+2.89 worse than the close, and
+  the 50/50 blend crossed into significance (z=+2.01). 553 starts to
+  the factor-screen threshold
 - [ ] **A-041 — the defect is adverse selection, not calibration.** The
   model is calibrated to 1.4 points where it AGREES with the book
   (n=79) and off by -33 points where it most disagrees (n=26). No
@@ -504,8 +510,11 @@ this phase is aimed at that gap, not at the naive comparison.
   are different questions and the market already prices season K%,
   opponent K% and TTO. Historical prop lines are still unsourced, so
   no factor has ever been screened for EDGE
-- [ ] Build the market-based factor screen once ~1,000 market-scored
-  starts are banked (~40 days from 2026-08-16 at ~25 starts/day)
+- [x] Build the market-based factor screen (2026-08-24) —
+  `tools/market_factor_screen.py`, runnable at any n with a loud
+  PROVISIONAL banner below 1,000 starts; the weekly scorecard
+  announces when the threshold is crossed. RUN it for decisions at
+  ~1,000 (~late Sept 2026)
 - [ ] Attack the early-hook tail (A-042) — the named mechanism behind
   the OVER bias, and the failure Stage A cannot currently produce.
   Candidates already in the repo: bullpen rest, blowout risk, innings

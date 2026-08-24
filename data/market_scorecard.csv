@@ -1,0 +1,2 @@
+run_at,n_starts,n_dates,over_rate,brier_raw,brier_served,brier_blend,brier_market,z_raw_vs_market,z_blend_vs_market
+2026-08-24T16:29:44.829200+00:00,447,19,0.434,0.26309,0.26309,0.25512,0.25097,2.892,2.008

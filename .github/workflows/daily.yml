@@ -27,7 +27,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "Force one task (night|morning|close|lineups). Blank = whatever is due."
+        description: "Force one task (night|morning|close|lineups|scorecard). Blank = whatever is due."
         required: false
         default: ""
 

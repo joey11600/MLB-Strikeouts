@@ -1,6 +1,29 @@
 
 # Changelog
 
+## 2026-08-24 - Weekly market scorecard automated; Phase 11 factor screen built (A-002 discipline)
+
+"Re-run tools/score_vs_market.py weekly" was a human TODO — the same
+shape of gap as A-046. Now:
+
+- `tools/market_scorecard.py` appends the model-vs-closing-line
+  verdict (n, Brier raw/blend/market, paired z both ways) to
+  `data/market_scorecard.csv` — an append-only series of the one
+  number that decides betting — then prints all four shadow-clock
+  reports in the same breath. First row recorded: n=447, raw z=+2.89
+  WORSE, blend z=+2.01 WORSE.
+- Worker + CI run it Sundays 04:30 ET via a `scorecard` task in the
+  shared SCHEDULE (the task no-ops other days; the hourly CI `--due`
+  path picks it up with zero workflow changes).
+- `tools/market_factor_screen.py` — the Phase 11 screen, built now so
+  the 1,000-start threshold is an execution date, not a build date.
+  For each candidate factor: does it predict the MODEL's error, and
+  does the market lean where it points? Prints a loud PROVISIONAL
+  banner below 1,000 starts; the scorecard announces when the
+  threshold is crossed. First provisional run at 447: velo_trend reads
+  "market has it, model lacks it"; p5_pitches reads "may beat the
+  market — verify hard" — consistent with the A-049/A-051 shadows.
+
 ## 2026-08-24 - Rate random effect KEEP at sigma=0.15; TTO-4 and damping rejected (A-051)
 
 The structural round from the audit, all three measured cross-season:
