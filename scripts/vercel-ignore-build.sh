@@ -53,6 +53,11 @@ set -u
 DATA_ONLY_PATHS=(
   ':(exclude)data'
   ':(exclude)dashboard/public/data.json'
+  # The outs market's future payload artifact (Phase 10). Registered
+  # BEFORE the first outs data commit exists, because forgetting this
+  # is exactly how A-023 regressed: every outs data push would resume
+  # burning a full Next build for a file the site reads live anyway.
+  ':(exclude)dashboard/public/outs.json'
 )
 
 BASE="${VERCEL_GIT_PREVIOUS_SHA:-}"

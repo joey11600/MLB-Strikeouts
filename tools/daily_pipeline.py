@@ -840,7 +840,18 @@ def _load_pitch_limits(iso_date: str) -> dict:
 
 
 def _load_existing_picks(iso_date: str) -> dict:
-    """Load existing picks for a date, keyed by (game_pk, pitcher_id, line)."""
+    """Existing picks for a date, keyed by (game_pk, pitcher_id, market,
+    line).
+
+    Market is part of the identity (Phase 10 / operator directive
+    2026-08-24): a K 5.5 and an outs 17.5 on the same arm are different
+    bets, and the current non-collision of their line ranges is an
+    accident, not a guarantee. This pipeline only ever writes and
+    matches market="K" rows (blank legacy rows read as K via
+    market_of), so an outs row can never be locked, overwritten, or
+    journaled by the strikeouts pass.
+    """
+    from tracker import market_of
     if not PICKS_PATH.exists():
         return {}
 
@@ -851,6 +862,7 @@ def _load_existing_picks(iso_date: str) -> dict:
                 key = (
                     row.get("game_pk", ""),
                     row.get("pitcher_id", ""),
+                    market_of(row),
                     row.get("line", ""),
                 )
                 existing[key] = row
@@ -1565,6 +1577,7 @@ def run_daily(
         key = (
             str(play.get("game_pk", "")),
             str(play.get("pitcher_id", "")),
+            "K",                      # this pipeline's only market
             line_val,
         )
 
@@ -1616,6 +1629,10 @@ def run_daily(
             "updated_at": now_utc,
             "lineup_source": play.get("lineup_source", ""),
             "odds_source": play.get("odds_source", ""),
+            # This pipeline prices exactly one market. The outs model
+            # (Phase 10) writes its own rows with market="OUTS" through
+            # its own pipeline — never through this one.
+            "market": "K",
             "notes": "ladder" if play.get("pick_type") == "ladder" else "",
         }
 

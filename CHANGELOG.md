@@ -1,6 +1,41 @@
 
 # Changelog
 
+## 2026-08-24 - The outs market is structurally separate before its first row exists (Phase 10)
+
+Operator directive: the outs model (how many outs the starter records
+— a bet on the leash, not on strikeouts) is a separate product, and it
+must be separate on the pages too. Shipped BEFORE any outs pick
+exists, so blending is impossible rather than merely avoided:
+
+- **Ledger `market` column** (append-late; blank legacy rows read as
+  "K" via `tracker.market_of`, the only sanctioned accessor). A
+  pick's identity is now (game_pk, pitcher_id, market, line) —
+  `_load_existing_picks` keys include market, so the strikeouts
+  pipeline can never lock, overwrite, or journal an outs row. The
+  K/outs line-range non-collision is no longer load-bearing.
+- **`dashboard_data._load_picks` filters to market="K"** — the single
+  choke point every strikeouts-site aggregate (P&L, performance,
+  ledger, headline) reads through. The first outs row cannot leak
+  into a published strikeouts number by construction.
+- **`pl_calc` reports per market and never a combined figure** (a
+  blended number would be quoted, and once quoted it exists). With
+  only strikeout rows the output is byte-identical to before —
+  verified against the live ledger (-6.29u unchanged).
+- **`/outs` page + nav** on the dashboard: a deliberately static page
+  staking out the separation — what the market is, where the research
+  model stands (Gate 2 passed, calibration not), that prices have
+  been captured daily since 08-08, and that nothing prices until the
+  same gates the strikeouts model is held to. Renders its own board
+  when the model earns one.
+- **`dashboard/public/outs.json` pre-registered in DATA_ONLY_PATHS**
+  so the first outs data commit doesn't regress A-023 (full Next
+  builds for a file the site reads live).
+
+Tests: `tests/test_market_separation.py` (6) — including "the blended
+total must not appear anywhere in pl_calc output". Suite: 242 passed.
+Dashboard builds clean; /outs verified rendering.
+
 ## 2026-08-24 - Watchdog learns the new subsystems; A-016/A-038/A-039/A-043 follow-ups closed
 
 Five hardening chores, each closing a "detectable but nothing watches

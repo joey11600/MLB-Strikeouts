@@ -73,6 +73,16 @@ FIELDS = [
     # from a live-priced one after the fact, and any post-mortem asking
     # "were the bad bets the ones priced off stale prices?" is unanswerable.
     "odds_source",
+    # Which MARKET this pick belongs to: "K" (starting-pitcher
+    # strikeouts) or "OUTS" (total outs recorded, Phase 10). Appended
+    # late, so historical rows carry "" — read that as "K" via
+    # market_of(), never as unknown. The two markets are SEPARATE
+    # PRODUCTS (operator directive 2026-08-24): no aggregate, page, or
+    # published number may ever blend them, and the identity of a pick
+    # is (game_pk, pitcher_id, market, line) — the current
+    # non-collision of K lines (3.5-8.5) and outs lines (13.5-19.5) is
+    # an accident, not a guarantee.
+    "market",
     # How this row's grade was settled: "starter_relieved" (the pitcher
     # was pulled, so his total can no longer change) or "game_final".
     # Early grades are reconciled against Statcast overnight by
@@ -81,6 +91,15 @@ FIELDS = [
     "graded_source",
     "notes",
 ]
+
+
+def market_of(row: dict) -> str:
+    """The market a ledger row belongs to. Blank = "K": every row
+    written before 2026-08-24 predates the column and is a strikeouts
+    pick by construction (no other market has ever written a row).
+    Consumers must aggregate through this — never the raw column — so
+    a missing value can't silently become its own category."""
+    return (row.get("market") or "K").strip().upper() or "K"
 
 
 def _write_rows(path: Path, rows: list[dict]) -> None:

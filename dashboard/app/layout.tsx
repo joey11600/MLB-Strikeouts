@@ -63,6 +63,12 @@ export default function RootLayout({
                 >
                   Model
                 </Link>
+                <Link
+                  href="/outs"
+                  className="rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-2 hover:text-ink sm:px-3"
+                >
+                  Outs
+                </Link>
               </nav>
             </header>
             <main className="pb-16">{children}</main>

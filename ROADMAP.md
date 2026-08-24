@@ -438,20 +438,24 @@ strikeouts model, not a variant of it.
 - [ ] Per-PA on-base stage. Given perfect BF, outs still has residual
   sd 2.30; given perfect BF *and* reached-base count it collapses to
   0.76. That gap is the model.
-- [ ] `market` column in the ledger + identity key
-  `(game_pk, pitcher_id, market, line)` — the current non-collision
-  (K 3.5–8.5 vs outs 13.5–19.5) is an accident, not a guarantee
-- [ ] Market filter on `/model`, `/performance` and the headline P&L
-  **before** any outs pick enters the ledger — those aggregate the whole
-  ledger with no market filter today, so the first outs row silently
-  blends two markets into every published number
+- [x] `market` column in the ledger + identity key
+  `(game_pk, pitcher_id, market, line)` (2026-08-24) — blank legacy
+  rows read as "K" via `tracker.market_of`; the strikeouts pipeline
+  writes and matches only market="K"
+- [x] Market filter on `/model`, `/performance` and the headline P&L
+  **before** any outs pick enters the ledger (2026-08-24) — the filter
+  lives at `dashboard_data._load_picks`, the single choke point every
+  strikeouts aggregate reads through, and `pl_calc` reports per market
+  with no combined figure. Verified byte-identical output on the live
+  ledger
 - [ ] Re-key the correlation haircut. It fires on repeated `game_pk`
   (cross-pitcher outs corr **+0.02** — nothing) and misses same-pitcher
   K-vs-outs (**+0.50**, joint lift 1.21–1.61). Simplest safe v1: one bet
   per pitcher per slate, larger edge wins.
-- [ ] `dashboard/app/outs/page.tsx` + its own payload artifact, added to
-  `DATA_ONLY_PATHS` in `scripts/vercel-ignore-build.sh` or every outs
-  data commit resumes burning full Next builds (the A-023 regression)
+- [x] `dashboard/app/outs/page.tsx` + nav link shipped (2026-08-24) — a
+  static separation page until the model earns a board — and the
+  future payload path `dashboard/public/outs.json` pre-registered in
+  `DATA_ONLY_PATHS` so the first outs data commit can't regress A-023
 
 ### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
 - [x] Per-start outs table, 13,170 regular-season starts 2024–2026

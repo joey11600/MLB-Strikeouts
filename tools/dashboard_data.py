@@ -83,10 +83,17 @@ def _tag(v: float) -> dict:
 
 
 def _load_picks() -> list[dict]:
+    """The STRIKEOUTS ledger view. This file builds the strikeouts
+    site's payload, and the outs market is a separate product with its
+    own future payload (Phase 10; operator directive 2026-08-24) — so
+    the market filter lives HERE, at the single point every aggregate
+    reads through. Without it, the first outs row would silently blend
+    two markets into every published number on the site."""
+    from tracker import market_of
     if not PICKS_PATH.exists():
         return []
     with open(PICKS_PATH, encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+        return [r for r in csv.DictReader(f) if market_of(r) == "K"]
 
 
 def _pick_payload(row: dict) -> dict:

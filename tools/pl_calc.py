@@ -14,29 +14,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from tracker import _calc_pnl, PICKS_PATH
+from tracker import _calc_pnl, PICKS_PATH, market_of
+
+MARKET_LABELS = {"K": "STRIKEOUTS", "OUTS": "OUTS RECORDED"}
 
 
-def main():
-    if not PICKS_PATH.exists():
-        print(f"No picks file at {PICKS_PATH}")
-        return
-
-    rows = []
-    with open(PICKS_PATH, encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-
-    if not rows:
-        print("No picks found.")
-        return
-
+def _summarize(rows: list[dict], drifts: list[dict]) -> dict:
     total_pnl = 0.0
-    wins = 0
-    losses = 0
-    voids = 0
-    pushes = 0
-    drifts = []
-
+    wins = losses = voids = pushes = 0
     for row in rows:
         graded = (row.get("graded_result") or "").strip().upper()
         if graded == "WIN":
@@ -61,13 +46,45 @@ def main():
                     "computed": computed,
                 }
             )
+    return {"pnl": total_pnl, "wins": wins, "losses": losses,
+            "voids": voids, "pushes": pushes}
 
-    graded_total = wins + losses
-    hit_rate = (wins / graded_total * 100) if graded_total > 0 else 0
 
-    print(f"Record: {wins}W-{losses}L ({hit_rate:.1f}%)")
-    print(f"Voids: {voids} | Pushes: {pushes}")
-    print(f"P&L: {total_pnl:+.2f} units")
+def main():
+    if not PICKS_PATH.exists():
+        print(f"No picks file at {PICKS_PATH}")
+        return
+
+    rows = []
+    with open(PICKS_PATH, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    if not rows:
+        print("No picks found.")
+        return
+
+    # The two markets are SEPARATE PRODUCTS (operator directive
+    # 2026-08-24): P&L is reported per market and NEVER as a combined
+    # figure — a blended number would be quoted, and once quoted it
+    # exists. While only strikeouts rows exist the output is unchanged.
+    by_market: dict[str, list[dict]] = {}
+    for row in rows:
+        by_market.setdefault(market_of(row), []).append(row)
+
+    drifts: list[dict] = []
+    multi = len(by_market) > 1
+    for mkt in sorted(by_market):
+        s = _summarize(by_market[mkt], drifts)
+        graded_total = s["wins"] + s["losses"]
+        hit_rate = (s["wins"] / graded_total * 100) if graded_total > 0 else 0
+        if multi:
+            print(f"=== {MARKET_LABELS.get(mkt, mkt)} (separate market — "
+                  f"never combine) ===")
+        print(f"Record: {s['wins']}W-{s['losses']}L ({hit_rate:.1f}%)")
+        print(f"Voids: {s['voids']} | Pushes: {s['pushes']}")
+        print(f"P&L: {s['pnl']:+.2f} units")
+        if multi:
+            print()
 
     if drifts:
         print(f"\n*** DRIFT DETECTED in {len(drifts)} rows ***")
