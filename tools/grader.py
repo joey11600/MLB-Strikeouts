@@ -338,6 +338,17 @@ def run_grader(
 
     summary = {"graded": graded_count, "skipped": skipped_count, "errors": error_count}
     print(f"\nGrading complete: {graded_count} graded, {skipped_count} not final, {error_count} errors")
+
+    # A-050: archive the day's home-plate umpires while we're already
+    # in post-game territory. Non-fatal — a failed capture never costs
+    # a grade.
+    if target_date:
+        try:
+            from tools.umpires import record_umpires_for_date
+            record_umpires_for_date(target_date)
+        except Exception as exc:
+            print(f"  (umpire capture failed: {exc})")
+
     return summary
 
 

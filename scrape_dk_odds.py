@@ -1011,6 +1011,107 @@ def fetch_dk_strikeout_props(
     )
 
 
+GAME_LINE_MARKETS = {"Moneyline", "Run Line", "Total"}
+
+
+def fetch_dk_game_lines(retries: int = 3, backoff: float = 2.0,
+                        iso_date: str | None = None) -> list[dict]:
+    """Fetch the MLB Game Lines board: moneyline, run line, total.
+
+    A-049: game odds are the market's own forecast of game SCRIPT — a
+    lopsided moneyline or a fat total is blowout risk, and blowouts
+    shorten starts (the c14 feature has been untestable since Phase 6
+    because nothing ingested these). Capture-only: rows land in
+    data/odds/game_lines_*.csv via tools/closing_odds.py; nothing
+    prices off them.
+
+    The league ROOT endpoint (no category path) serves the featured
+    Game Lines board directly: markets named Moneyline / Run Line /
+    Total, two selections each. Live only — no snapshot fallback; a
+    missing capture is a gap in a diagnostic series, not a pricing
+    input, and a stale game line laundered in as fresh would be worse
+    (A-011's shape).
+
+    Returns rows: date, event_id, event_name, start_time_utc,
+    home_team, away_team, market, side (selection label / Over/Under),
+    line ('' for moneyline), odds (American, ASCII minus).
+    """
+    url = f"{DK_BASE}/leagues/{MLB_LEAGUE_ID}"
+    sess, _use_curl = _build_session()
+    if sess is None:
+        data = _fetch_via_urllib(url, retries=retries, backoff=backoff)
+    else:
+        _warmup(sess)
+        last_exc = None
+        data = None
+        try:
+            for attempt in range(retries):
+                try:
+                    resp = sess.get(url, timeout=(10, 45))
+                    resp.raise_for_status()
+                    data = resp.json()
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt < retries - 1:
+                        time.sleep(backoff ** attempt)
+        finally:
+            sess.close()
+        if data is None:
+            raise last_exc if last_exc else RuntimeError("DK game lines fetch failed")
+
+    events = {e.get("id"): e for e in data.get("events", [])}
+    selections_by_market: dict = {}
+    for s in data.get("selections", []):
+        selections_by_market.setdefault(s.get("marketId"), []).append(s)
+
+    rows = []
+    for m in data.get("markets", []):
+        mname = (m.get("marketType") or {}).get("name") or m.get("name") or ""
+        if mname not in GAME_LINE_MARKETS:
+            continue
+        ev = events.get(m.get("eventId"))
+        if not ev:
+            continue
+        date_iso = utc_iso_to_et_date(ev.get("startEventDate", ""))
+        if iso_date and date_iso != iso_date:
+            continue
+
+        home_abbr = away_abbr = ""
+        for p in ev.get("participants", []):
+            short = normalize_abbr((p.get("metadata") or {}).get("shortName", ""))
+            role = (p.get("venueRole") or "").lower()
+            if role == "home":
+                home_abbr = short
+            elif role == "away":
+                away_abbr = short
+
+        for sel in selections_by_market.get(m.get("id"), []):
+            odds = str(((sel.get("displayOdds") or {}).get("american"))
+                       or "").replace("−", "-").replace("+", "+").strip()
+            points = sel.get("points")
+            if points is None:
+                # totals/run lines sometimes carry the number only in the
+                # label ("Over 8.5" / "TB Rays +1.5")
+                import re as _re
+                mnum = _re.search(r"[-+]?\d+(?:\.\d+)?\s*$",
+                                  str(sel.get("label", "")))
+                points = mnum.group(0).strip() if mnum and mname != "Moneyline" else ""
+            rows.append({
+                "date": date_iso,
+                "event_id": ev.get("id", ""),
+                "event_name": ev.get("name", ""),
+                "start_time_utc": ev.get("startEventDate", "") or "",
+                "home_team": home_abbr,
+                "away_team": away_abbr,
+                "market": mname,
+                "side": sel.get("label", ""),
+                "line": points if points is not None else "",
+                "odds": odds,
+            })
+    return rows
+
+
 def fetch_dk_outs_props(
     retries: int = 3,
     backoff: float = 2.0,

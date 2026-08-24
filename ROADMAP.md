@@ -509,7 +509,13 @@ this phase is aimed at that gap, not at the naive comparison.
 - [ ] Attack the early-hook tail (A-042) — the named mechanism behind
   the OVER bias, and the failure Stage A cannot currently produce.
   Candidates already in the repo: bullpen rest, blowout risk, innings
-  caps (`data/manual_pitch_limits.csv`)
+  caps (`data/manual_pitch_limits.csv`).
+  **2026-08-24 (A-050): the inputs now flow** — game lines (blowout
+  risk) captured morning + close; beat-note pitch-limit suggestions
+  written daily to `data/pitch_limit_suggestions.csv` for operator
+  confirmation into the manual CSV; weather per venue in the sidecar
+  `wx` field; home-plate umpires archived nightly + 2026 backfill.
+  All capture-only until gated
 - [ ] Do NOT raise `MAX_STAKE_UNITS`, relax the edge threshold, promote
   a recalibration, or add leverage until a market-scored sample says
   the model wins

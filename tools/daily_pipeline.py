@@ -617,6 +617,8 @@ def _write_slate_sidecar(game_date: str, predictions: list,
             "h2_line_move": pred.get("h2_line_move"),
             "h2_fair_move": pred.get("h2_fair_move"),
             "h2_n_captures": pred.get("h2_n_captures"),
+            # A-050: pre-game weather forecast for the venue (or null).
+            "wx": pred.get("wx"),
             "k_dist": [round(float(x), 6) for x in (k_dist if k_dist is not None else [])],
             "ladder": rungs,
         })
@@ -668,6 +670,108 @@ def _write_slate_sidecar(game_date: str, predictions: list,
     print(f"  Slate sidecar written: {out_path} ({len(pitchers)} pitchers"
           + (f", {carried} carried from an earlier run" if carried else "")
           + ")")
+
+
+# A-050: phrases that ANNOUNCE a limit. Deliberately narrow — "threw 95
+# pitches last time out" must never match, so every pattern anchors on
+# limit/cap/build-up phrasing rather than a bare number-of-pitches.
+_LIMIT_PATTERNS = [
+    re.compile(r"pitch (?:limit|count) (?:of |around |near |about )?(\d{2,3})", re.I),
+    re.compile(r"limit(?:ed)? (?:him )?to (?:about |around |roughly |~)?(\d{2,3})\s*(?:-\s*(\d{2,3}))?\s*pitches", re.I),
+    re.compile(r"capped at (?:about |around |roughly |~)?(\d{2,3})\s*pitches", re.I),
+    re.compile(r"(?:around|about|roughly|~)\s*(\d{2,3})\s*(?:-\s*(\d{2,3}))?\s*pitches", re.I),
+]
+_LIMIT_EXCLUDE = re.compile(
+    r"(threw|thrown|toss(?:ed)?|last (?:time|outing|start)|previous)", re.I)
+
+
+def _match_pitch_limit(note: str) -> tuple[int, str] | None:
+    """(suggested_limit, excerpt) from one beat note, or None.
+
+    Pure so the regex layer is testable: false positives here would put
+    a phantom cap in front of the operator daily, and a miss is just a
+    note the operator reads themselves.
+    """
+    if not note:
+        return None
+    for pat in _LIMIT_PATTERNS:
+        m = pat.search(note)
+        if not m:
+            continue
+        window = note[max(0, m.start() - 40):m.end() + 40]
+        if _LIMIT_EXCLUDE.search(window):
+            continue
+        nums = [int(x) for x in m.groups() if x]
+        limit = min(nums)              # a range suggests its floor
+        if not (30 <= limit <= 130):
+            continue
+        return limit, window.strip().replace("\n", " ")[:160]
+    return None
+
+
+def _scan_pitch_limit_notes(reg_games: list[dict], iso_date: str) -> int:
+    """Parse probable-pitcher notes for announced pitch limits and write
+    SUGGESTIONS (never the live cap) to data/pitch_limit_suggestions.csv.
+
+    Union-merged by (date, pitcher_id), atomic write. The operator
+    reviews and copies confirmed rows into manual_pitch_limits.csv —
+    the same trust boundary as manual odds overrides: a parser guess
+    must not become a pricing input without a human seeing it.
+    """
+    suggestions = []
+    now = datetime.now(UTC).isoformat()
+    for g in reg_games:
+        for side in ("home", "away"):
+            note = g.get(f"{side}_probable_note") or ""
+            pid = g.get(f"{side}_probable_id")
+            pname = g.get(f"{side}_probable_name") or ""
+            if not note or not pid:
+                continue
+            hit = _match_pitch_limit(note)
+            if hit is None:
+                continue
+            limit, excerpt = hit
+            suggestions.append({
+                "date": iso_date,
+                "game_pk": g.get("game_pk", ""),
+                "pitcher_id": pid,
+                "pitcher_name": pname,
+                "suggested_limit": limit,
+                "note_excerpt": excerpt,
+                "captured_at": now,
+            })
+            print(f"    NOTE {pname}: suggested pitch limit {limit} "
+                  f"(\"{excerpt[:70]}...\")")
+
+    if not suggestions:
+        return 0
+
+    path = Path(__file__).parent.parent / "data" / "pitch_limit_suggestions.csv"
+    fields = ["date", "game_pk", "pitcher_id", "pitcher_name",
+              "suggested_limit", "note_excerpt", "captured_at"]
+    existing = []
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            existing = list(csv.DictReader(f))
+    merged = {(r.get("date"), str(r.get("pitcher_id"))): r for r in existing}
+    for s in suggestions:
+        merged[(s["date"], str(s["pitcher_id"]))] = s
+    rows = sorted(merged.values(), key=lambda r: (r["date"], str(r["pitcher_name"])))
+
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            w.writeheader()
+            w.writerows(rows)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    return len(suggestions)
 
 
 def _load_pitch_limits(iso_date: str) -> dict:
@@ -751,6 +855,34 @@ def run_daily(
         lu = "lineups" if g.get("home_lineup") else "no lineups"
         print(f"    {g['away_team_abbr']} @ {g['home_team_abbr']}: {ap} vs {hp} ({lu})")
 
+    # A-050: pre-game weather forecast per venue (clients existed since
+    # Phase 0 with zero callers). Capture-only — rides the sidecar as a
+    # diagnostic; None stays None (A-007).
+    wx_by_gamepk = {}
+    try:
+        from data.game_context import game_weather
+        for g in reg_games:
+            wx = game_weather(g.get("venue_id"), g.get("game_date") or "")
+            if wx is not None:
+                wx_by_gamepk[g.get("game_pk")] = wx
+        if wx_by_gamepk:
+            print(f"  weather forecasts: {len(wx_by_gamepk)}/{len(reg_games)} venues")
+    except Exception as exc:
+        print(f"  (weather capture failed: {exc})")
+
+    # A-050: scan the probable-pitcher beat notes for announced pitch
+    # limits — the information data/manual_pitch_limits.csv has waited
+    # on since birth (A-024a). SUGGESTIONS ONLY: the serve-time cap
+    # still reads the manual CSV, which the operator confirms by hand.
+    try:
+        n_sugg = _scan_pitch_limit_notes(reg_games, game_date)
+        if n_sugg:
+            print(f"  !! {n_sugg} pitch-limit suggestion(s) written to "
+                  f"data/pitch_limit_suggestions.csv — review and confirm "
+                  f"into data/manual_pitch_limits.csv")
+    except Exception as exc:
+        print(f"  (pitch-limit note scan failed: {exc})")
+
     # 2. Fetch DK odds — primary O/U + milestone alt lines
     print("\n[2/8] Fetching DraftKings strikeout props...")
     try:
@@ -774,6 +906,16 @@ def run_daily(
         print(f"  (intraday odds archive failed: {exc})")
         intraday = {}
         movement_features = None
+
+    # A-050: the OPEN game lines (moneyline / run line / total) — the
+    # close job snapshots them too; this captures the morning state.
+    try:
+        from tools.closing_odds import capture_game_lines
+        n_gl = capture_game_lines(game_date, datetime.now(UTC).isoformat())
+        if n_gl:
+            print(f"  game lines captured: {n_gl} rows")
+    except Exception as exc:
+        print(f"  (game-lines capture failed: {exc})")
 
     snap = [p for p in today_props if p.get("odds_source") == "snapshot"]
     if snap:
@@ -1078,6 +1220,7 @@ def run_daily(
         # nothing). Uses this pitcher's own capture series for the day.
         mkt = (movement_features(intraday.get(_normalize_name(pitcher_name)))
                if movement_features else {})
+        wx = wx_by_gamepk.get(entry.get("game_pk"))
 
         entry_result = {
             **entry,
@@ -1086,6 +1229,7 @@ def run_daily(
             "model_prob_over_raw": result["per_line_raw"][dk_line],
             "p_over_hookmix": p_over_hookmix,
             "p_over_prior": p_over_prior,
+            "wx": wx,
             **mkt,
             "expected_k": result["expected_k"],
             "expected_bf": result["expected_bf"],

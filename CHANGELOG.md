@@ -1,6 +1,44 @@
 
 # Changelog
 
+## 2026-08-24 - The market's missing information channels, capture-first (A-050)
+
+A-032's screen concluded 16-18% of the line's variance lives OUTSIDE
+the pitch cache. Four of those channels now flow, all capture-only —
+nothing prices off any of them until it earns its way through the
+gauntlet on a market-scored sample:
+
+- **Game lines** (`fetch_dk_game_lines` + `capture_game_lines`):
+  moneyline / run line / total from the DK league root, snapshotted to
+  `data/odds/game_lines_YYYY-MM-DD.csv` by the morning pipeline AND
+  every close job. Game odds are the market's own forecast of game
+  script — the blowout-risk input (c14) has been untestable since
+  Phase 6 because nothing ingested them. Live-verified: 60 rows.
+- **Weather** (`data/game_context.py::game_weather`): the Open-Meteo
+  client existed since Phase 0 with zero callers. Now each slate
+  carries a per-venue forecast (temp, humidity, wind, gusts, pressure,
+  cloud) for the hourly slot nearest first pitch, in the sidecar `wx`
+  field. Venue coordinates cached to `data/venue_coords.json`.
+  Forecast-not-observation (Gate 1); None stays None (A-007).
+- **Announced pitch limits** (`_match_pitch_limit` +
+  `_scan_pitch_limit_notes`): the schedule hydration has requested
+  `probablePitcher(note)` all along and `build_game_context` dropped
+  it. Beat notes are now parsed with deliberately narrow patterns
+  (announced-limit phrasing only; "threw 95 pitches last start" can
+  never match) into `data/pitch_limit_suggestions.csv` — SUGGESTIONS.
+  The serve-time cap still reads only `manual_pitch_limits.csv`,
+  which the operator confirms by hand (same trust boundary as manual
+  odds overrides). That CSV has been empty since birth (A-024a); now
+  the information it waited on arrives daily.
+- **Umpires** (`tools/umpires.py`): home-plate assignment per finished
+  game to `data/umpires.csv`, hooked into the nightly grader and
+  backfillable (2026 backfill run at ship time). Post-game capture —
+  it cannot feed a same-day price, but it builds the as-of umpire
+  K-tendency history a future candidate needs, and crew rotation
+  makes tomorrow's plate umpire predictable from today's archive.
+
+Tests: `tests/test_pitch_limit_notes.py` (3). Suite: 220 passed.
+
 ## 2026-08-24 - Intraday odds archive + line-movement features (A-049 H1/H2)
 
 The audit's cheapest information channel: the model loses even to the

@@ -32,6 +32,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scrape_dk_odds import (
+    fetch_dk_game_lines,
     fetch_dk_outs_props,
     fetch_dk_strikeout_alts,
     fetch_dk_strikeout_props,
@@ -52,6 +53,27 @@ ALT_FIELDS = [
     "captured_at", "date", "pitcher_name", "team", "milestone",
     "odds", "event_id", "start_time_utc",
 ]
+GAME_LINE_FIELDS = [
+    "captured_at", "date", "event_id", "event_name", "start_time_utc",
+    "home_team", "away_team", "market", "side", "line", "odds",
+]
+
+
+def capture_game_lines(iso_date: str, captured_at: str) -> int:
+    """Snapshot the Game Lines board (moneyline / run line / total).
+
+    A-049: game odds are the market's forecast of game SCRIPT — the
+    blowout-risk input (c14) has been untestable since Phase 6 because
+    nothing ingested them. Capture-only; nothing prices off these.
+    Live-only for the same laundering reason as the boards above.
+    """
+    rows = []
+    for g in fetch_dk_game_lines(iso_date=iso_date):
+        rows.append({"captured_at": captured_at, **g})
+    if rows:
+        _append_rows_atomic(
+            ODDS_DIR / f"game_lines_{iso_date}.csv", GAME_LINE_FIELDS, rows)
+    return len(rows)
 
 
 def _append_rows_atomic(path: Path, fields: list[str], new_rows: list[dict]) -> None:
@@ -169,11 +191,22 @@ def capture_closing(iso_date: str | None = None) -> dict:
         print(f"  outs board unavailable ({type(exc).__name__}: {exc}) "
               f"-- strikeout closing lines still captured")
 
+    # Game lines (A-049) — same perishability argument as outs; same
+    # isolation so a failure here can't cost the strikeout board.
+    n_gl = 0
+    try:
+        n_gl = capture_game_lines(iso_date, captured_at)
+        print(f"  {n_gl} game-line rows (ML / run line / total)")
+    except Exception as exc:
+        print(f"  game-lines board unavailable ({type(exc).__name__}: {exc}) "
+              f"-- strikeout closing lines still captured")
+
     print(f"  Snapshot appended to {ODDS_DIR}")
     return {
         "primary": len(primary_rows),
         "alts": len(alt_rows),
         "outs": len(outs_rows),
+        "game_lines": n_gl,
     }
 
 

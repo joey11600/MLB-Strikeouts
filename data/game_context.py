@@ -12,7 +12,7 @@ import json
 import time
 import urllib.request
 import urllib.error
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 CACHE_DIR = Path(__file__).parent / "game_context_cache"
@@ -104,6 +104,83 @@ def fetch_weather_forecast(lat: float, lon: float, game_hour_utc: int = 23) -> d
         return json.loads(resp.read().decode("utf-8"))
 
 
+_COORDS_CACHE_PATH = Path(__file__).parent / "venue_coords.json"
+
+
+def _load_coords_cache() -> None:
+    """Warm VENUE_COORDS from disk so the worker doesn't re-ask the MLB
+    API for the same 30 static ballpark locations every boot."""
+    try:
+        with open(_COORDS_CACHE_PATH, encoding="utf-8") as f:
+            for k, v in json.load(f).items():
+                VENUE_COORDS[int(k)] = tuple(v)
+    except (OSError, ValueError):
+        pass
+
+
+def _save_coords_cache() -> None:
+    try:
+        with open(_COORDS_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump({str(k): list(v) for k, v in VENUE_COORDS.items()}, f)
+    except OSError:
+        pass
+
+
+def game_weather(venue_id: int, start_time_utc: str) -> dict | None:
+    """Compact pre-game weather forecast for one venue: the Open-Meteo
+    hourly slot nearest first pitch (A-050 — the clients above sat
+    unwired since Phase 0; no weather of any kind reached the system).
+
+    FORECAST, not observation (Gate 1). Returns None on any failure —
+    weather is a diagnostic capture today, and a missing value must
+    stay missing (A-007), so callers store None rather than a default.
+    """
+    if not venue_id or not start_time_utc:
+        return None
+    try:
+        if not VENUE_COORDS:
+            _load_coords_cache()
+        coords = get_venue_coords(venue_id)
+        if coords is None:
+            return None
+        _save_coords_cache()
+        raw = fetch_weather_forecast(*coords)
+        hourly = raw.get("hourly", {})
+        times = hourly.get("time", [])
+        if not times:
+            return None
+        # Open-Meteo returns local (America/New_York) hourly stamps;
+        # convert first pitch to that clock and take the nearest slot.
+        from zoneinfo import ZoneInfo
+        ts = start_time_utc.strip().replace("Z", "+00:00")
+        if "." in ts:
+            # drop fractional seconds (".0000000") but keep the offset
+            head, frac = ts.split(".", 1)
+            ts = head + (frac[frac.index("+"):] if "+" in frac else "+00:00")
+        start = datetime.fromisoformat(ts).astimezone(
+            ZoneInfo("America/New_York"))
+        target = start.strftime("%Y-%m-%dT%H:00")
+        idx = times.index(target) if target in times else None
+        if idx is None:
+            return None
+        def _at(key):
+            vals = hourly.get(key, [])
+            return vals[idx] if idx < len(vals) else None
+        return {
+            "temp_f": _at("temperature_2m"),
+            "humidity_pct": _at("relative_humidity_2m"),
+            "dew_point_f": _at("dew_point_2m"),
+            "pressure_hpa": _at("pressure_msl"),
+            "wind_mph": _at("wind_speed_10m"),
+            "wind_dir_deg": _at("wind_direction_10m"),
+            "gusts_mph": _at("wind_gusts_10m"),
+            "cloud_pct": _at("cloud_cover"),
+            "forecast_hour_local": target,
+        }
+    except Exception:
+        return None
+
+
 def fetch_nws_forecast(lat: float, lon: float) -> dict:
     """Fetch weather from NWS (license-clean fallback)."""
     url = f"https://api.weather.gov/points/{lat},{lon}"
@@ -168,6 +245,13 @@ def build_game_context(game_data: dict) -> dict:
         "home_probable_name": home_probable.get("fullName"),
         "away_probable_id": away_probable.get("id"),
         "away_probable_name": away_probable.get("fullName"),
+        # The beat-writer note the schedule hydration already requests
+        # (probablePitcher(note)) and this dict silently dropped — it is
+        # where announced pitch limits live ("expected to throw around
+        # 75 pitches"), the exact information manual_pitch_limits.csv
+        # has waited on since birth (A-024a / A-050).
+        "home_probable_note": home_probable.get("note"),
+        "away_probable_note": away_probable.get("note"),
         "home_lineup": home_lineup,
         "away_lineup": away_lineup,
         "lineup_source": "confirmed" if home_lineup else "none",
