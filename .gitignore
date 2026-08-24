@@ -30,3 +30,6 @@ data/game_context_cache/
 .vercel
 __pycache__/
 *.pyc
+
+# regenerable outs-calibrator OOS cache (delete to force refit)
+data/_outs_cal_oos.parquet
