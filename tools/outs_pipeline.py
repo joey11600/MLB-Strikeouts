@@ -18,7 +18,9 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+
+import pandas as pd
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -34,8 +36,31 @@ SCORECARD_PATH = Path(__file__).parent.parent / "data" / "outs_scorecard.csv"
 PAYLOAD_DATES = 7
 
 
-def _refresh_dataset() -> None:
+def _refresh_dataset(force: bool = False) -> None:
+    """Rebuild the per-start table when it is behind, else skip.
+
+    The rebuild reads every cached Statcast day across all three
+    seasons (~2M PAs) and is the heaviest thing the worker runs —
+    measured 1.47 GB peak / 16 s warm for a full pricing pass, most of
+    it here and again in the feature build. It only has anything to
+    learn once Savant publishes the previous day (A-022: 0 pitches at
+    03:21 ET, 3,530 by 08:59), so the morning pass refreshes and the
+    16:45 re-price skips. Halves the memory-and-time cost of every
+    pass that cannot possibly gain a row.
+    """
     from tools.build_outs_dataset import build, OUT_PATH, atomic_write_parquet
+
+    yesterday = (datetime.now(ET) - timedelta(days=1)).date()
+    if not force and OUT_PATH.exists():
+        try:
+            have = pd.read_parquet(OUT_PATH, columns=["game_date"])["game_date"].max()
+            if pd.notna(have) and pd.Timestamp(have).date() >= yesterday:
+                print(f"  dataset already current through "
+                      f"{pd.Timestamp(have).date()} — skipping rebuild")
+                return
+        except Exception as exc:
+            print(f"  (could not read the cached dataset: {exc}; rebuilding)")
+
     df = build(verbose=False)
     atomic_write_parquet(df, OUT_PATH)
     print(f"  dataset refreshed: {len(df):,} starts through "
@@ -108,6 +133,8 @@ def build_payload() -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=None)
+    ap.add_argument("--force-refresh", action="store_true",
+                    help="rebuild the dataset even if current")
     ap.add_argument("--grade", action="store_true",
                     help="grade + payload only (no pricing)")
     a = ap.parse_args()
@@ -115,7 +142,7 @@ def main() -> int:
 
     print(f"OUTS PIPELINE — {iso} (shadow only; nothing here is a bet)")
     print("[1/4] refreshing dataset...")
-    _refresh_dataset()
+    _refresh_dataset(force=a.force_refresh)
 
     if not a.grade:
         print("[2/4] pricing today's board...")

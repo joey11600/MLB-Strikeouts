@@ -31,10 +31,19 @@ with today's 20-pitcher board, `jobs_run_today` showing the outs tasks
 scheduled, and today's board committed to git so tomorrow's lookback
 holds even if the worker never prices it itself.
 
-Tests: `tests/test_outs_serve.py` grows 4 cases (dedupe, checkout-only
-date survives a rebuild, state dir wins on conflict, and a source
-assertion that the worker persists AND commits the outs paths).
-Suite: 253 passed.
+Also measured and cut the pipeline's cost, since it is now the
+heaviest job the worker runs (it loads all three seasons, ~4x the
+strikeouts pipeline): a full pricing pass peaks at 1.47 GB / 16 s, and
+the per-start rebuild inside it can only learn something once Savant
+publishes the previous day (A-022). `_refresh_dataset` now skips when
+the dataset already reaches yesterday — measured 0.56 GB / 8 s ->
+0.14 GB / 1 s on a pass that cannot gain a row, so the 16:45 re-price
+no longer pays for a rebuild. `--force-refresh` overrides.
+
+Tests: `tests/test_outs_serve.py` grows 6 cases (dedupe, checkout-only
+date survives a rebuild, state dir wins on conflict, a source
+assertion that the worker persists AND commits the outs paths, and
+both refresh-skip branches). Suite: 255 passed.
 
 ## 2026-08-24 - The outs model serves: shadow board, refused calibrators, an even market baseline (A-052)
 

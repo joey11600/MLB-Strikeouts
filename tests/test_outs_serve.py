@@ -212,3 +212,45 @@ def test_log_dates_scores_and_never_shrinks(tmp_path, monkeypatch):
     rows2 = list(__import__("csv").DictReader(
         open(tmp_path / "log.csv", encoding="utf-8")))
     assert len(rows2) == 1
+
+
+# ------------------------------------------------- dataset refresh cost
+def test_refresh_skips_when_dataset_is_current(tmp_path, monkeypatch, capsys):
+    """The rebuild reads ~2M PAs across three seasons (measured 1.47 GB
+    peak for a full pass). It can only learn something once Savant
+    publishes the previous day, so a pass whose dataset already reaches
+    yesterday must NOT pay for it."""
+    import pandas as pd
+    import tools.outs_pipeline as OP
+    import tools.build_outs_dataset as BOD
+
+    from datetime import timedelta
+    yesterday = (OP.datetime.now(OP.ET) - timedelta(days=1)).date()
+    parquet = tmp_path / "starts.parquet"
+    pd.DataFrame({"game_date": [pd.Timestamp(yesterday)]}).to_parquet(parquet)
+    monkeypatch.setattr(BOD, "OUT_PATH", parquet)
+
+    called = []
+    monkeypatch.setattr(BOD, "build", lambda **k: called.append(1))
+    OP._refresh_dataset()
+    assert not called, "rebuilt a dataset that was already current"
+    assert "already current" in capsys.readouterr().out
+
+
+def test_refresh_runs_when_dataset_is_stale(tmp_path, monkeypatch):
+    import pandas as pd
+    import tools.outs_pipeline as OP
+    import tools.build_outs_dataset as BOD
+
+    from datetime import timedelta
+    stale = (OP.datetime.now(OP.ET) - timedelta(days=5)).date()
+    parquet = tmp_path / "starts.parquet"
+    pd.DataFrame({"game_date": [pd.Timestamp(stale)]}).to_parquet(parquet)
+    monkeypatch.setattr(BOD, "OUT_PATH", parquet)
+
+    built = pd.DataFrame({"game_date": [pd.Timestamp(stale)]})
+    calls = []
+    monkeypatch.setattr(BOD, "build", lambda **k: (calls.append(1), built)[1])
+    monkeypatch.setattr(BOD, "atomic_write_parquet", lambda df, p: None)
+    OP._refresh_dataset()
+    assert calls, "a stale dataset was not rebuilt"
