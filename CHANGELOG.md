@@ -1,6 +1,41 @@
 
 # Changelog
 
+## 2026-08-24 - Outs artifacts get persistence, a git mirror, and a multi-source payload
+
+Found by the operator's question "will I be able to look back at
+today's results tomorrow?" — the honest answer was NOT RELIABLY, for
+three reasons, all latent until day two:
+
+- `PERSISTED` omitted `outs_slates`, `outs_model_log.csv` and
+  `outs_scorecard.csv`: every outs board and grade would have been
+  lost on the next Railway redeploy.
+- `commit_and_push` staged none of them: the volume was a single
+  point of failure and no other host (local, CI) could see the outs
+  evidence at all.
+- `build_payload` read only the worker's own state directory, so a
+  rebuild on a worker that had not itself priced yesterday would
+  DROP yesterday's board — the date stepper empty on the first
+  morning it mattered.
+
+Fixed: outs entries added to `PERSISTED` (the seeding pass is a
+per-file gap-fill merge — a board committed elsewhere reaches the
+volume on the next boot, and the volume's own copy always wins) and to
+the worker's git-add list; `tools/outs_serve.py` grows `slate_dirs()`
+/ `available_dates()` / `load_slate()`, which read the state dir AND
+the git checkout (deduped when they are the same path off-worker), so
+a synced board is on the page immediately.
+
+Verified against the live services: worker `/outs.json` serving 200
+with today's 20-pitcher board, `jobs_run_today` showing the outs tasks
+scheduled, and today's board committed to git so tomorrow's lookback
+holds even if the worker never prices it itself.
+
+Tests: `tests/test_outs_serve.py` grows 4 cases (dedupe, checkout-only
+date survives a rebuild, state dir wins on conflict, and a source
+assertion that the worker persists AND commits the outs paths).
+Suite: 253 passed.
+
 ## 2026-08-24 - The outs model serves: shadow board, refused calibrators, an even market baseline (A-052)
 
 Phase 10's production layer, shadow-first — the model prices a

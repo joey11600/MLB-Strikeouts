@@ -25,8 +25,8 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools.outs_serve import (
-    OUTS_LOG_PATH, OUTS_SLATES_DIR, _write_json_atomic, load_outs_calibrator,
-    log_dates, price_board, write_slate)
+    OUTS_LOG_PATH, OUTS_SLATES_DIR, _write_json_atomic, available_dates,
+    load_outs_calibrator, load_slate, log_dates, price_board, write_slate)
 
 ET = ZoneInfo("America/New_York")
 PAYLOAD_PATH = Path(__file__).parent.parent / "dashboard" / "public" / "outs.json"
@@ -61,14 +61,16 @@ def build_payload() -> dict:
     settled results merged in, plus the latest market-scorecard row."""
     import csv
 
-    dates = sorted((p.stem for p in OUTS_SLATES_DIR.glob("*.json")),
-                   reverse=True)[:PAYLOAD_DATES]
+    # Every source, so a board committed from another host is on the
+    # page as soon as the repo syncs — a payload rebuilt from one
+    # directory would silently DROP yesterday's board (the exact way
+    # the date stepper would come up empty tomorrow morning).
+    dates = available_dates()[:PAYLOAD_DATES]
     actual = _actuals()
     slates = {}
     for d in sorted(dates):
-        try:
-            slate = json.loads((OUTS_SLATES_DIR / f"{d}.json").read_text("utf-8"))
-        except (OSError, ValueError):
+        slate = load_slate(d)
+        if slate is None:
             continue
         board = []
         for r in slate.get("board", []):

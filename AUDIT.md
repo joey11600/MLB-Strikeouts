@@ -292,6 +292,27 @@ Tracks open items, resolved items, and known risks.
   `data/outs_scorecard.csv`; re-scored weekly by the scorecard task.
   Indistinguishable is not edge: z must go NEGATIVE on a serious
   sample before the threshold question is even asked.
+- **Amended 2026-08-24 (same day, found by the operator asking "will I
+  be able to look back at today's results tomorrow?"): the outs
+  artifacts had NO persistence or mirror path.** Three defects, all
+  latent until the second day: `PERSISTED` omitted `outs_slates`,
+  `outs_model_log.csv` and `outs_scorecard.csv`, so every outs board
+  and grade would vanish on the next container redeploy;
+  `commit_and_push` staged none of them, so the volume was a single
+  point of failure and no other host could ever see the evidence; and
+  `build_payload` read only the state dir, so a payload rebuilt on a
+  worker that had not itself priced yesterday would silently DROP
+  yesterday's board — the date stepper would come up empty on exactly
+  the first morning it was supposed to work. Fixed: outs entries added
+  to `PERSISTED` (the seeding pass is a per-file gap-fill merge, so a
+  board committed from another host reaches the volume on the next
+  boot and the volume's own copy always wins) and to the
+  `commit_and_push` stage list; `slate_dirs()` / `available_dates()` /
+  `load_slate()` read the state dir AND the git checkout, so a synced
+  board is on the page immediately rather than at the next redeploy.
+- **Generalises to:** a new product's artifacts are not shipped until
+  they are on the SAME persistence, mirror and merge paths the old
+  ones use. Serving them correctly once proves nothing about day two.
 - **Generalises to:** capture prices before building the model, and
   the model's first market scorecard is free. And a calibration map
   must always face a holdout gate that can refuse it — both markets

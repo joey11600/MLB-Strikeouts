@@ -42,6 +42,45 @@ from tracker import DATA_STATE_DIR
 CALIBRATOR_PATH = Path(__file__).parent.parent / "models" / "outs_calibrator.pkl"
 OUTS_SLATES_DIR = DATA_STATE_DIR / "outs_slates"
 OUTS_LOG_PATH = DATA_STATE_DIR / "outs_model_log.csv"
+# The git checkout's copy. On the worker DATA_STATE_DIR is the volume,
+# so a slate committed from ANOTHER host (or by CI) lands here first
+# and only reaches the volume at the next boot's seeding pass. Reading
+# both means a board is on the page as soon as the repo syncs, instead
+# of disappearing from the site until a redeploy.
+REPO_SLATES_DIR = Path(__file__).parent.parent / "data" / "outs_slates"
+
+
+def slate_dirs() -> list[Path]:
+    """Every directory that may hold outs sidecars, freshest first.
+    Deduplicated: off the worker both paths are the same directory."""
+    seen, out = set(), []
+    for d in (OUTS_SLATES_DIR, REPO_SLATES_DIR):
+        r = d.resolve()
+        if r not in seen and d.exists():
+            seen.add(r)
+            out.append(d)
+    return out
+
+
+def available_dates() -> list[str]:
+    """Sidecar dates across every source, newest first."""
+    dates = set()
+    for d in slate_dirs():
+        dates.update(p.stem for p in d.glob("*.json"))
+    return sorted(dates, reverse=True)
+
+
+def load_slate(iso_date: str) -> dict | None:
+    """One day's sidecar, preferring the state dir (the worker's own,
+    freshest copy) over the checkout."""
+    for d in slate_dirs():
+        p = d / f"{iso_date}.json"
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+    return None
 
 LOG_FIELDS = [
     "date", "game_pk", "pitcher_id", "pitcher_name", "pitcher_team",
@@ -275,9 +314,7 @@ def log_dates(targets: list[str] | None = None) -> int:
     evidence log (union by key, never shrinking — the model_log rules)."""
     from tools.build_outs_dataset import load_outs_starts
 
-    if not OUTS_SLATES_DIR.exists():
-        return 0
-    dates = sorted(p.stem for p in OUTS_SLATES_DIR.glob("*.json"))
+    dates = sorted(available_dates())
     if targets:
         dates = [d for d in dates if d in targets]
     if not dates:
@@ -290,9 +327,8 @@ def log_dates(targets: list[str] | None = None) -> int:
     now = datetime.now(timezone.utc).isoformat()
     fresh = []
     for d in dates:
-        try:
-            slate = json.loads((OUTS_SLATES_DIR / f"{d}.json").read_text("utf-8"))
-        except (OSError, ValueError):
+        slate = load_slate(d)
+        if slate is None:
             continue
         for r in slate.get("board", []):
             got = actual.get((int(r.get("game_pk", 0)),

@@ -104,6 +104,81 @@ def test_write_slate_merges_newest_wins(tmp_path, monkeypatch):
     assert slate["market"] == "OUTS"
 
 
+# ------------------------------------------------- multi-source slates
+def test_slate_dirs_dedupe_when_paths_match(tmp_path, monkeypatch):
+    """Off the worker, state dir and checkout are the same directory —
+    it must be listed once, not twice."""
+    monkeypatch.setattr(OS, "OUTS_SLATES_DIR", tmp_path)
+    monkeypatch.setattr(OS, "REPO_SLATES_DIR", tmp_path)
+    assert len(OS.slate_dirs()) == 1
+
+
+def test_payload_keeps_a_date_only_the_checkout_has(tmp_path, monkeypatch):
+    """The worker's volume (state) has today; the git checkout has
+    yesterday, committed from another host. Both must survive — a
+    payload rebuilt from the state dir alone would DROP yesterday and
+    the date stepper would come up empty."""
+    state = tmp_path / "state"
+    repo = tmp_path / "repo"
+    state.mkdir()
+    repo.mkdir()
+    (repo / "2026-08-24.json").write_text(json.dumps(
+        {"date": "2026-08-24", "board": [{"pitcher_id": 1,
+                                          "pitcher_name": "Yesterday Arm",
+                                          "line": 16.5, "p_over_cal": 0.5,
+                                          "fair_over": 0.5}]}),
+        encoding="utf-8")
+    (state / "2026-08-25.json").write_text(json.dumps(
+        {"date": "2026-08-25", "board": [{"pitcher_id": 2,
+                                          "pitcher_name": "Today Arm",
+                                          "line": 17.5, "p_over_cal": 0.5,
+                                          "fair_over": 0.5}]}),
+        encoding="utf-8")
+    monkeypatch.setattr(OS, "OUTS_SLATES_DIR", state)
+    monkeypatch.setattr(OS, "REPO_SLATES_DIR", repo)
+
+    assert OS.available_dates() == ["2026-08-25", "2026-08-24"]
+
+    import tools.outs_pipeline as OP
+    monkeypatch.setattr(OP, "available_dates", OS.available_dates)
+    monkeypatch.setattr(OP, "load_slate", OS.load_slate)
+    monkeypatch.setattr(OP, "_actuals", lambda: {("2026-08-24", 1): 19})
+    payload = OP.build_payload()
+    assert set(payload["slates"]) == {"2026-08-24", "2026-08-25"}
+    # and yesterday's settled result is merged in for the lookback
+    assert payload["slates"]["2026-08-24"]["board"][0]["actual_outs"] == 19
+
+
+def test_state_dir_wins_when_both_have_the_date(tmp_path, monkeypatch):
+    state = tmp_path / "state"
+    repo = tmp_path / "repo"
+    state.mkdir()
+    repo.mkdir()
+    for d, who in ((state, "volume"), (repo, "checkout")):
+        (d / "2026-08-24.json").write_text(
+            json.dumps({"date": "2026-08-24", "source": who, "board": []}),
+            encoding="utf-8")
+    monkeypatch.setattr(OS, "OUTS_SLATES_DIR", state)
+    monkeypatch.setattr(OS, "REPO_SLATES_DIR", repo)
+    assert OS.load_slate("2026-08-24")["source"] == "volume"
+
+
+def test_worker_persists_and_commits_outs_artifacts():
+    """The worker must both PERSIST the outs state across redeploys and
+    MIRROR it to git — without either, tomorrow's lookback is one
+    container restart away from empty."""
+    import re
+    src = (Path(__file__).parent.parent / "tools" / "railway_worker.py").read_text(
+        encoding="utf-8")
+    persisted = re.search(r"PERSISTED = \[(.*?)\]", src, re.S).group(1)
+    for name in ("outs_slates", "outs_model_log.csv", "outs_scorecard.csv"):
+        assert name in persisted, f"{name} missing from PERSISTED"
+    add = re.search(r'"git", "add",(.*?)\]', src, re.S).group(1)
+    for path in ("data/outs_slates", "data/outs_model_log.csv",
+                 "dashboard/public/outs.json"):
+        assert path in add, f"{path} never committed by the worker"
+
+
 # ------------------------------------------------------------ log rules
 def test_log_dates_scores_and_never_shrinks(tmp_path, monkeypatch):
     monkeypatch.setattr(OS, "OUTS_SLATES_DIR", tmp_path / "slates")

@@ -59,6 +59,14 @@ PERSISTED = [
     "model_log.csv",
     "slates",
     "odds",
+    # The outs market's own state (Phase 10). Separate product, same
+    # persistence rules: without these the volume loses every outs
+    # board and grade on redeploy, and a slate committed from another
+    # host never reaches the worker. The seeding merge is per-file
+    # gap-fill, so a board the worker already has always wins.
+    "outs_slates",
+    "outs_model_log.csv",
+    "outs_scorecard.csv",
 ]
 VOLUME_STATE = STATE_DIR / "state"
 
@@ -1148,9 +1156,15 @@ def commit_and_push(context: str) -> None:
         # model_log.csv rides along: it is the evidence table the /model
         # page and the shadow portfolio are scored from, and it is
         # produced on the volume like everything else here.
+        # The outs artifacts ride along for the same reason: they are
+        # produced on the volume, and git is the only backup + the only
+        # way another host sees them. Omitting them left the outs
+        # evidence log a single point of failure.
         ["git", "add", "data/picks_2026.csv", "data/model_log.csv",
          "data/slates", "data/pick_changes.csv", "data/odds",
-         "dashboard/public/data.json"],
+         "dashboard/public/data.json",
+         "data/outs_slates", "data/outs_model_log.csv",
+         "data/outs_scorecard.csv", "dashboard/public/outs.json"],
         cwd=REPO, capture_output=True,
     )
     staged = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO)
