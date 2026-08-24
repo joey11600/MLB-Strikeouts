@@ -1244,6 +1244,19 @@ Tracks open items, resolved items, and known risks.
   strikeouts it is the most valuable term (dropping it costs
   +1.85/+2.84/+1.08% OOS RMSE) and the shipped +1.06479 is ~12% light
   against refits of +1.213 to +1.223. Reweighting is open work.
+- **Correction to the correction (2026-08-24): the "12% light" claim
+  does not survive a like-for-like refit.** The 1.213–1.223 figures
+  come from `tools/factor_screen_k.py::deep_stage_b`, which fits on the
+  SCREEN's own feature definitions (`a_kpct`, `b_k_pct` — its own
+  shrinkage), not on production's w=70/w=60 shrunk rates. A logistic
+  coefficient rescales with its input's spread, so coefficients are not
+  comparable across different shrinkage configurations. Refit fresh on
+  production features (backtest eval fit, train 2024+2025):
+  `logit_batter_k = +1.0565` — the shipped +1.06479 is what this
+  design fits to, not an underweight. Reweighting is NOT open work;
+  the real upgrade path for the opponent term is the screen's own
+  swap test (batter whiff-per-swing vs batter K%), which goes through
+  the gauntlet like any other factor.
 
 ### A-031: the shadow tool declared a money decision ready on the wrong count
 - **Filed/Resolved:** 2026-08-09

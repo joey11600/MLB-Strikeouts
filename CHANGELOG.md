@@ -1,6 +1,28 @@
 
 # Changelog
 
+## 2026-08-24 - Stage B batter-weight "underfit" measured and closed as not-a-defect (A-032 amendment)
+
+A-032's correction paragraph left "reweighting is open work" on the
+books: shipped `logit_batter_k = +1.06479` vs quoted refits of
++1.213/+1.223. Measured today with a like-for-like refit before
+touching any pickle:
+
+- Cross-season validation re-run first (repo rule): +3.9% / +4.9% /
+  +3.2% vs naive over 12,653 OOS starts — unchanged from A-032.
+- The eval fit on production features (train 2024+2025) lands
+  `logit_batter_k = +1.0565` — the shipped value, not 1.21.
+- The 1.213–1.223 figures came from the factor screen's
+  `deep_stage_b`, which fits on the screen's OWN shrinkage
+  (`b_k_pct`), not production's w=60 shrunk rate. Logistic
+  coefficients rescale with input spread; the comparison was
+  apples-to-oranges.
+
+No pickle changed (a refit reproduces the shipped weights). AUDIT
+A-032 amended. The genuine upgrade path for the opponent term is the
+screen's swap test (batter whiff-per-swing vs batter K%), which enters
+via the gauntlet like any other factor.
+
 ## 2026-08-24 - Ladder un-deadened, haircut re-keyed to the pitcher, two loud-failure guards (A-047)
 
 Four money-code fixes from the full-model audit, none of which changes
