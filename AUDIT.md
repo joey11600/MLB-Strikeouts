@@ -258,6 +258,51 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-051: structural round — rate random effect KEEP; TTO-4 and damping measured and rejected
+- **Filed:** 2026-08-24 (full-model audit)  **Status:** RE shadowing
+- **The defect:** on the full 2026 backtest the served distribution is
+  ~10% short of realized K variance (implied 6.03 vs actual 6.66) and
+  the actual over-rate exceeds the model's at EVERY line (mean
+  -1.2pp). The Poisson-binomial is exactly binomial-dispersed at fixed
+  BF; a real pitcher's true rate varies game to game around his
+  season estimate, and the compound had no term for it.
+- **The fix:** `compound_k_distribution_re` — a per-start latent
+  effect p_i(u) = sigmoid(logit(p_i) + delta_i + sigma*u), u~N(0,1),
+  5-point Gauss-Hermite, with delta_i solved numerically so the
+  conditional mean is EXACTLY preserved (the A-042 load-bearing rule;
+  pinned by test to 2e-3). Single-pass prefix-capture DP vectorized
+  across nodes.
+- **Gate (`tools/gate_rate_re.py`), scored on the distribution's own
+  NLL because 6-line Brier barely sees width:** sigma* = 0.15 / 0.15 /
+  0.10 across the three splits — interior argmin, identical in both
+  cross directions, NLL gain positive everywhere. Brier at the 6-line
+  grid: neutral (as expected). Mean per-line bias: relieved modestly
+  (-1.86 -> -1.78, -1.16 -> -1.09pp), confirming width was only part
+  of the tail story — the left-tail hook (A-042) is the rest.
+  **KEEP** -> `RATE_RE_SIGMA = 0.15` ships as the nightly `p_over_re`
+  shadow column only; production still serves sigma = 0.
+- **Also measured, both REJECTED on the repo's own bar**
+  (`tools/measure_design_variants.py`, PA-level, both cross
+  directions):
+  - TTO-4 split out of tto_3: fitted coefficient sensible (-0.25/-0.23)
+    but OOS value is +/-0.01e-4 NLL — TTO-4 is 0.42% of PA and the
+    fold costs nothing detectable. Not worth a design change.
+  - High-end damping relu(lp_c+lb_c)^2: the sign matchup.py predicted
+    (negative, both fits) but OOS value flips direction (-0.12e-4 /
+    +0.24e-4) and the magnitude is unstable (-0.28 vs -0.08). The
+    live confident-OVER failure (A-041) is evidently the market
+    information story, not an in-sample curvature a refit can buy.
+- **Deferred with rationale:** BF↔K coupling (a shared latent between
+  Stage A's leash and Stage B's rate — "dealing goes deeper / burning
+  pitches shortens"). Needs a jointly fitted latent across both
+  stages; the measured defect this round was the marginal K variance,
+  which sigma addresses. Revisit only if the RE shadow shows residual
+  shape error concentrated in long-outing tails.
+- **Generalises to:** judge a WIDTH parameter on likelihood, not on a
+  handful-of-lines Brier — and preserve the mean numerically, not by
+  hope, when adding any mixture or latent to a calibrated point
+  estimate.
+
 ### A-049: Tier A factor round — first cross-season KEEPs; two features to shadow
 - **Filed:** 2026-08-24 (full-model audit)  **Status:** shadowing
 - **Context:** the audit located the model's market deficit in the

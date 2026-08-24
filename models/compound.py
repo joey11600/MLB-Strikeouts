@@ -16,6 +16,12 @@ Do NOT:
 """
 import numpy as np
 
+# A-051: cross-season argmin of the compound's own NLL over the sigma
+# grid (tools/gate_rate_re.py): 0.15 in BOTH temporal directions
+# (identical), 0.10 on the decision split. Shadow-only until its
+# 2-week shadow (p_over_re) reports; production serves sigma = 0.
+RATE_RE_SIGMA = 0.15
+
 
 def poisson_binomial_dp(probs: np.ndarray) -> np.ndarray:
     """Exact Poisson-binomial PMF via DP.
@@ -40,6 +46,77 @@ def poisson_binomial_dp(probs: np.ndarray) -> np.ndarray:
             new_dp[k] = dp[k] * (1 - p) + dp[k - 1] * p
         dp = new_dp
     return dp
+
+
+def compound_k_distribution_re(
+    bf_dist: np.ndarray,
+    per_batter_probs: np.ndarray,
+    sigma: float,
+    n_quad: int = 5,
+) -> np.ndarray:
+    """Compound with a per-start latent "stuff today" random effect.
+
+    A-051: measured on the full 2026 backtest the served distribution is
+    ~10% short of the realized K variance (6.03 vs 6.66) and the actual
+    over-rate exceeds the model's at EVERY line (mean -1.2pp) — the
+    Poisson-binomial's conditional dispersion is exactly binomial while
+    real pitchers vary game to game around their season rate. This adds
+    the missing between-start variance:
+
+        p_i(u) = sigmoid(logit(p_i) + delta_i + sigma * u),  u ~ N(0,1)
+
+    integrated by n_quad-point Gauss-Hermite quadrature. delta_i is a
+    per-batter recentering solved numerically so E_u[p_i(u)] = p_i —
+    THE CONDITIONAL MEAN IS PRESERVED, the same load-bearing rule as
+    the hook mixture (A-042): sigma widens the distribution without
+    moving the unbiased point estimate.
+
+    sigma = 0 reproduces compound_k_distribution exactly. The DP runs
+    once over batters with the quadrature nodes as columns, capturing
+    the prefix PMF at each n — O(n^2 * n_quad) total.
+    """
+    if sigma <= 0:
+        return compound_k_distribution(bf_dist, per_batter_probs)
+
+    nodes, w = np.polynomial.hermite_e.hermegauss(n_quad)
+    w = w / w.sum()
+
+    p = np.clip(np.asarray(per_batter_probs, dtype=float), 1e-9, 1 - 1e-9)
+    logits = np.log(p / (1 - p))
+
+    # Recenter so the mixture mean matches p_i per batter (two Newton
+    # steps on delta; the objective is monotone in delta so this
+    # converges fast and safely).
+    delta = np.zeros_like(logits)
+    for _ in range(3):
+        z = logits[:, None] + delta[:, None] + sigma * nodes[None, :]
+        pu = 1.0 / (1.0 + np.exp(-z))
+        mean = pu @ w
+        grad = (pu * (1 - pu)) @ w
+        delta -= (mean - p) / np.maximum(grad, 1e-12)
+
+    z = logits[:, None] + delta[:, None] + sigma * nodes[None, :]
+    P = 1.0 / (1.0 + np.exp(-z))                     # (n_max, J)
+
+    max_bf = len(bf_dist)
+    J = n_quad
+    dp = np.zeros((max_bf, J))
+    dp[0, :] = 1.0
+    out = np.zeros((max_bf, J))
+    out[0, :] = bf_dist[0]                            # BF=0 -> K=0
+
+    for i in range(1, max_bf):
+        pi = P[i - 1, :][None, :]                     # batter i, (1, J)
+        # numpy evaluates the RHS before assignment, so the shifted
+        # slice read is safe.
+        dp[1:i + 1, :] = dp[1:i + 1, :] * (1 - pi) + dp[0:i, :] * pi
+        dp[0, :] = dp[0, :] * (1 - pi[0, :])
+        if bf_dist[i] >= 1e-12:
+            out += bf_dist[i] * dp
+
+    k_dist = out @ w
+    s = k_dist.sum()
+    return k_dist / s if s > 0 else k_dist
 
 
 def compound_k_distribution(

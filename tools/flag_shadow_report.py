@@ -158,18 +158,44 @@ def report_candidate(df: pd.DataFrame) -> None:
     print(f"  VERDICT: {'evidence window complete — decide' if ready else f'NOT YET ({n_dates}/{MIN_SHADOW_DATES} dates)'}\n")
 
 
+def report_re(df: pd.DataFrame) -> None:
+    print("=" * 74)
+    print("RATE RANDOM EFFECT (A-051: sigma*=0.15, mean-preserving) — shadow")
+    print("=" * 74)
+    d = df.dropna(subset=["p_over_re", "p_over_raw", "over_hit"])
+    if d.empty:
+        print("  no rows with the shadow column yet — wired 2026-08-24\n")
+        return
+    n_dates = d["date"].nunique()
+    y = d["over_hit"].values.astype(float)
+    re_p = _num(d, "p_over_re").values
+    raw = _num(d, "p_over_raw").values
+    m, se, z = _paired(re_p, raw, y)
+    print(f"  rows {len(d)} over {n_dates} date(s)   "
+          f"[{MIN_SHADOW_DATES}+ dates required before deciding]")
+    print(f"  paired Brier, RE minus production: {m:+.5f} +/- {se:.5f} "
+          f"(z={z:+.2f})")
+    print(f"  mean |p-0.5|: production {np.abs(raw-0.5).mean():.4f}  "
+          f"RE {np.abs(re_p-0.5).mean():.4f}  (the RE should be LESS "
+          f"extreme — that is the point)")
+    ready = n_dates >= MIN_SHADOW_DATES
+    print(f"  VERDICT: {'evidence window complete — decide' if ready else f'NOT YET ({n_dates}/{MIN_SHADOW_DATES} dates)'}\n")
+
+
 def main() -> int:
     if not LOG_PATH.exists():
         print("no model log yet")
         return 1
     df = pd.read_csv(LOG_PATH)
-    for c in ("p_over_hookmix", "p_over_prior", "p_over_candidate"):
+    for c in ("p_over_hookmix", "p_over_prior", "p_over_candidate",
+              "p_over_re"):
         if c not in df.columns:
             df[c] = np.nan
     live = df[df["reconstructed"] == 0].copy()
     report_hookmix(live)
     report_prior(live)
     report_candidate(live)
+    report_re(live)
     print("Promotion rules unchanged (CLAUDE.md): a flag flips only after "
           "the shadow window, on this evidence, by operator decision. "
           "Nothing in this tool writes state.")

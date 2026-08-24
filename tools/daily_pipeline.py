@@ -613,6 +613,8 @@ def _write_slate_sidecar(game_date: str, predictions: list,
                              if pred.get("p_over_prior") is not None else None),
             "p_over_candidate": (round(float(pred["p_over_candidate"]), 4)
                                  if pred.get("p_over_candidate") is not None else None),
+            "p_over_re": (round(float(pred["p_over_re"]), 4)
+                          if pred.get("p_over_re") is not None else None),
             # H1/H2 (A-049): the day's own market movement for this arm.
             "h1_open_line": pred.get("h1_open_line"),
             "h1_open_fair_over": pred.get("h1_open_fair_over"),
@@ -1243,6 +1245,20 @@ def run_daily(
         except Exception as exc:
             print(f"      (prior-season shadow failed: {exc})")
 
+        # p_over_re (A-051): the production distribution re-compounded
+        # with the mean-preserving per-start rate random effect at the
+        # cross-season sigma*. Shadow only.
+        p_over_re = None
+        try:
+            from models.compound import (
+                compound_k_distribution_re as _ckdre,
+                prob_k_geq as _pkg_re, RATE_RE_SIGMA)
+            re_kd = _ckdre(result["bf_dist"], result["per_batter_probs"],
+                           RATE_RE_SIGMA)
+            p_over_re = float(_pkg_re(re_kd, dk_line))
+        except Exception as exc:
+            print(f"      (rate-RE shadow failed: {exc})")
+
         # p_over_candidate: production Stage A distribution, candidate
         # Stage B rates (core + p5_pitches + is_home). Shadow only.
         p_over_candidate = None
@@ -1286,6 +1302,7 @@ def run_daily(
             "p_over_hookmix": p_over_hookmix,
             "p_over_prior": p_over_prior,
             "p_over_candidate": p_over_candidate,
+            "p_over_re": p_over_re,
             "wx": wx,
             **mkt,
             "expected_k": result["expected_k"],

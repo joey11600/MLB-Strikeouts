@@ -1,6 +1,35 @@
 
 # Changelog
 
+## 2026-08-24 - Rate random effect KEEP at sigma=0.15; TTO-4 and damping rejected (A-051)
+
+The structural round from the audit, all three measured cross-season:
+
+- **Per-start rate random effect: KEEP, shadowing.**
+  `compound_k_distribution_re` adds the between-start rate variance
+  the compound was missing (measured ~10% variance shortfall; actual
+  over-rate above the model at every backtest line). Mean-preserving
+  by numerical recentering (pinned to 2e-3 by test); 5-point
+  Gauss-Hermite; single-pass DP vectorized across nodes.
+  `tools/gate_rate_re.py` scored a sigma grid on the compound's own
+  NLL: argmin 0.15 in BOTH cross directions (identical), 0.10 on the
+  decision split, interior everywhere. 6-line Brier neutral (width
+  lives in the tails); per-line bias relieved modestly. Ships as the
+  nightly `p_over_re` shadow column at `RATE_RE_SIGMA = 0.15`;
+  production still serves sigma = 0.
+- **TTO-4 split: measured, rejected.** Coefficient sensible, OOS
+  value +/-0.01e-4 NLL on 0.42% of PA. The fold into tto_3 costs
+  nothing detectable.
+- **High-end damping: measured, rejected.** matchup.py's predicted
+  negative sign appears in both fits, but OOS value flips direction
+  and the magnitude is unstable. A-041's confident-OVER failure is
+  the market-information story, not an in-sample curvature.
+- BF↔K coupling documented as deferred with rationale (needs a joint
+  latent across stages; revisit if the RE shadow shows residual
+  long-outing shape error).
+
+Tests: `tests/test_rate_re.py` (5). Suite: 225 passed.
+
 ## 2026-08-24 - First cross-season KEEPs: p5_pitches + is_home enter shadow (A-049)
 
 The audit's factor round, end to end:

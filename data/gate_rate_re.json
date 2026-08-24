@@ -1,0 +1,135 @@
+{
+ "harness": "cross-season as-of NLL grid (A-051)",
+ "verdict": "KEEP",
+ "splits": [
+  {
+   "split": "24to25",
+   "n_starts": 4807,
+   "grid": {
+    "0.0": {
+     "nll": 2.16424,
+     "brier": 0.14805,
+     "mean_bias_pp": -1.863
+    },
+    "0.05": {
+     "nll": 2.16401,
+     "brier": 0.14805,
+     "mean_bias_pp": -1.854
+    },
+    "0.1": {
+     "nll": 2.16346,
+     "brier": 0.14806,
+     "mean_bias_pp": -1.826
+    },
+    "0.15": {
+     "nll": 2.163,
+     "brier": 0.14808,
+     "mean_bias_pp": -1.782
+    },
+    "0.2": {
+     "nll": 2.1632,
+     "brier": 0.14813,
+     "mean_bias_pp": -1.725
+    },
+    "0.25": {
+     "nll": 2.16461,
+     "brier": 0.14824,
+     "mean_bias_pp": -1.659
+    },
+    "0.3": {
+     "nll": 2.16768,
+     "brier": 0.14841,
+     "mean_bias_pp": -1.589
+    }
+   },
+   "sigma_star": 0.15,
+   "nll_gain_vs_zero": 0.00124
+  },
+  {
+   "split": "25to24",
+   "n_starts": 4713,
+   "grid": {
+    "0.0": {
+     "nll": 2.16373,
+     "brier": 0.14969,
+     "mean_bias_pp": 0.26
+    },
+    "0.05": {
+     "nll": 2.16357,
+     "brier": 0.14969,
+     "mean_bias_pp": 0.264
+    },
+    "0.1": {
+     "nll": 2.16323,
+     "brier": 0.14969,
+     "mean_bias_pp": 0.276
+    },
+    "0.15": {
+     "nll": 2.16309,
+     "brier": 0.1497,
+     "mean_bias_pp": 0.295
+    },
+    "0.2": {
+     "nll": 2.16368,
+     "brier": 0.14975,
+     "mean_bias_pp": 0.317
+    },
+    "0.25": {
+     "nll": 2.16552,
+     "brier": 0.14985,
+     "mean_bias_pp": 0.341
+    },
+    "0.3": {
+     "nll": 2.16903,
+     "brier": 0.15002,
+     "mean_bias_pp": 0.363
+    }
+   },
+   "sigma_star": 0.15,
+   "nll_gain_vs_zero": 0.00063
+  },
+  {
+   "split": "2425to26",
+   "n_starts": 3133,
+   "grid": {
+    "0.0": {
+     "nll": 2.15244,
+     "brier": 0.14904,
+     "mean_bias_pp": -1.157
+    },
+    "0.05": {
+     "nll": 2.15232,
+     "brier": 0.14904,
+     "mean_bias_pp": -1.149
+    },
+    "0.1": {
+     "nll": 2.1521,
+     "brier": 0.14905,
+     "mean_bias_pp": -1.125
+    },
+    "0.15": {
+     "nll": 2.15217,
+     "brier": 0.14908,
+     "mean_bias_pp": -1.087
+    },
+    "0.2": {
+     "nll": 2.15303,
+     "brier": 0.14915,
+     "mean_bias_pp": -1.039
+    },
+    "0.25": {
+     "nll": 2.15521,
+     "brier": 0.14927,
+     "mean_bias_pp": -0.984
+    },
+    "0.3": {
+     "nll": 2.15912,
+     "brier": 0.14947,
+     "mean_bias_pp": -0.926
+    }
+   },
+   "sigma_star": 0.1,
+   "nll_gain_vs_zero": 0.00034
+  }
+ ]
+}

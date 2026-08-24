@@ -80,6 +80,10 @@ FIELDS = [
     # + is_home — the first cross-season re-gauntlet KEEPs), production
     # Stage A distribution. Shadow only; blank before 2026-08-24.
     "p_over_candidate",
+    # A-051: production distribution re-compounded with the
+    # mean-preserving per-start rate random effect (sigma*=0.15, the
+    # cross-season NLL argmin in both directions). Shadow only.
+    "p_over_re",
     # A-049 H1/H2: the day's own market movement for this arm — open
     # line, movement to the last capture before this row's slate entry.
     # Diagnostics + future market-screen inputs; nothing prices off
@@ -164,6 +168,7 @@ def _row_from_pitcher(d: str, p: dict, abf: int, ak: int,
         "p_over_hookmix": p.get("p_over_hookmix"),
         "p_over_prior": p.get("p_over_prior"),
         "p_over_candidate": p.get("p_over_candidate"),
+        "p_over_re": p.get("p_over_re"),
         "h1_open_line": p.get("h1_open_line"),
         "h2_line_move": p.get("h2_line_move"),
         "h2_fair_move": p.get("h2_fair_move"),
