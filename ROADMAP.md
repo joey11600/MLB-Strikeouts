@@ -456,6 +456,12 @@ strikeouts model, not a variant of it.
   static separation page until the model earns a board — and the
   future payload path `dashboard/public/outs.json` pre-registered in
   `DATA_ONLY_PATHS` so the first outs data commit can't regress A-023
+- [x] **CI staged into the outs payload's mirror path (2026-08-25,
+  second A-052 amendment).** The daily jobs race between the worker
+  and CI; CI won the 08-25 morning run and discarded the rebuilt
+  `outs.json` because the workflow's commit step never staged it — the
+  live page served the prior day's payload with 0/20 results. One-line
+  fix in `.github/workflows/daily.yml`; payload rebuilt same day
 
 ### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
 - [x] Per-start outs table, 13,170 regular-season starts 2024–2026

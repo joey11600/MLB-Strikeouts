@@ -310,9 +310,24 @@ Tracks open items, resolved items, and known risks.
   `commit_and_push` stage list; `slate_dirs()` / `available_dates()` /
   `load_slate()` read the state dir AND the git checkout, so a synced
   board is on the page immediately rather than at the next redeploy.
+- **Amended again 2026-08-25 (operator: "all the results from the
+  total outs page arent there"): the first amendment fixed the worker's
+  mirror paths but not CI's.** The daily jobs race between the worker
+  and CI; CI won the 08-25 morning run, graded all 20 of yesterday's
+  rows into `outs_model_log.csv` (staged, via `git add -A data/`),
+  rebuilt `dashboard/public/outs.json` — and threw the payload away,
+  because the workflow's commit step staged `dashboard/public/data.json`
+  but not `outs.json`. The worker then served the last committed copy:
+  the 08-24 15:10 ET payload, one date, 0/20 results. Fixed: CI's
+  commit step stages `outs.json`; payload rebuilt and pushed same day
+  (08-24 at 20/20, log unchanged at 20 rows).
 - **Generalises to:** a new product's artifacts are not shipped until
   they are on the SAME persistence, mirror and merge paths the old
-  ones use. Serving them correctly once proves nothing about day two.
+  ones use — on EVERY host that can run the pipeline. The worker's
+  stage list, the volume's `PERSISTED` seed and CI's `git add` are
+  three separate copies of the same contract; auditing one of them
+  proves nothing about the others. Serving them correctly once proves
+  nothing about day two.
 - **Generalises to:** capture prices before building the model, and
   the model's first market scorecard is free. And a calibration map
   must always face a holdout gate that can refuse it — both markets

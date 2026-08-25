@@ -1,6 +1,37 @@
 
 # Changelog
 
+## 2026-08-25 - CI joins the outs payload's mirror path (second A-052 amendment)
+
+Found by the operator: "all the results from the total outs page arent
+there." Measured, not assumed: the live worker's `/outs.json` was
+serving a payload generated 2026-08-24 15:10 ET — one date, 0/20
+`actual_outs` — while `data/outs_model_log.csv` in git already held
+all 20 of yesterday's graded rows, logged by CI at 09:54 ET today.
+
+Mechanism: the daily jobs race between the Railway worker and CI, and
+whichever host runs them must commit every artifact it rebuilt. The
+2026-08-24 amendment put `dashboard/public/outs.json` on the WORKER's
+stage list, but CI's commit step in `.github/workflows/daily.yml`
+staged only `data/` and `dashboard/public/data.json`. On 08-24 the
+worker ran the jobs and the page worked; on 08-25 CI won the morning
+race, graded the results, priced the board, rebuilt the payload — and
+discarded it with the ephemeral runner. The worker then kept serving
+the previous day's committed copy: a stale board with no results.
+
+Fixed: CI's commit step now stages `dashboard/public/outs.json`
+alongside `data.json`, and the payload was rebuilt and pushed so the
+page recovers now rather than at tomorrow's first worker-run job.
+Verified: rebuilt payload carries 2026-08-24 at 20/20 actual_outs and
+today's 26-pitcher board; the evidence log stayed at exactly 20 rows
+(the grading union is keyed and refuses to shrink).
+
+The A-052 lesson, now with the third host: a new product's artifacts
+are not shipped until EVERY host that can run the pipeline is on the
+same persistence and mirror paths — the worker's stage list, the
+volume's `PERSISTED` seed, and CI's `git add` are three separate
+copies of the same contract.
+
 ## 2026-08-24 - Outs artifacts get persistence, a git mirror, and a multi-source payload
 
 Found by the operator's question "will I be able to look back at

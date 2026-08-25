@@ -174,6 +174,12 @@ jobs:
             exit 0
           fi
           git add dashboard/public/data.json 2>/dev/null || true
+          # The outs page's OWN payload (A-052). The worker's stage list
+          # already carries it; omitting it here meant a CI-run morning
+          # job graded results and priced the board but threw the
+          # rebuilt payload away with the runner — the live page then
+          # served the previous day's copy with no results at all.
+          git add dashboard/public/outs.json 2>/dev/null || true
           git commit -m "chore(ci): $(TZ=America/New_York date '+%Y-%m-%d %H:%M ET') automated run"
           # Another runner (or the Railway worker) may have pushed while
           # this job ran. Rebase rather than force: the ledger is
