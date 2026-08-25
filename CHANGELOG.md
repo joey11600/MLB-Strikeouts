@@ -1,6 +1,27 @@
 
 # Changelog
 
+## 2026-08-25 - Watchdog watches the outs page
+
+The 08-25 outs outage (stale payload, 0/20 results served) ran under a
+watchdog reporting 17 ok — none of its checks covered the outs
+product. `check_outs_page_current` adds two rows, both against the
+SERVED /outs.json rather than local state (so no local Statcast-cache
+caveat applies):
+
+- **outs board served** — when the repo has priced today's outs board,
+  the worker must serve that exact board (content-derived slate stamp,
+  not the payload wrapper; publish-window grace mirrors the strikeouts
+  check; worker-ahead-of-checkout reads ok).
+- **outs results present** — yesterday's served board must carry
+  results: 0-of-N is a WARN before 13:00 ET (Savant publish lag) and a
+  FAIL after, same clock as the strikeouts twin.
+
+Verified both ways: green against the live worker (08-25 current with
+27 pitchers, 08-24 serving 20/20 results), and replayed against the
+actual stale payload captured before this morning's fix — both rows
+FAIL with the diagnosis in one line each.
+
 ## 2026-08-25 - Outs board grades its own leans (✓/✗ marker)
 
 Operator request ("why does it not say WIN or LOSS"): the outs page

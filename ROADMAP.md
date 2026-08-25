@@ -456,6 +456,10 @@ strikeouts model, not a variant of it.
   static separation page until the model earns a board — and the
   future payload path `dashboard/public/outs.json` pre-registered in
   `DATA_ONLY_PATHS` so the first outs data commit can't regress A-023
+- [x] **Watchdog watches the outs page (2026-08-25).** Two checks
+  against the SERVED /outs.json: today's board current (slate stamp,
+  publish-window grace) and yesterday's results present (13:00 ET
+  clock). Replayed against the morning's stale payload: both FAIL
 - [x] **Outs board grades its own leans (2026-08-25).** "Model lean"
   column on `/outs`: settled rows badge ✓ right / ✗ wrong on whether
   the gap's side matched the settlement, PUSH neutral on exact lands.

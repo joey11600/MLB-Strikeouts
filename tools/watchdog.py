@@ -1150,6 +1150,107 @@ def check_statcast_days_complete(r: Report) -> None:
         r.warn("statcast days complete", "no recent settled days in cache")
 
 
+def check_outs_page_current(r: Report) -> None:
+    """The outs page's SERVED payload must carry today's board and
+    yesterday's results.
+
+    A-052's second amendment: the payload is rebuilt by whichever host
+    wins the daily-job race, and on 2026-08-25 CI rebuilt it, never
+    committed it, and the worker kept serving the previous day's copy —
+    one date, 0/20 results — while every strikeouts check stayed green.
+    The operator found it by eye. These rows watch the outs product the
+    way "served board is current" watches the strikeouts one: against
+    the payload the worker actually serves, not local state, so they
+    read the same on any host (no local Statcast-cache caveat applies).
+
+    Same lesson as the strikeouts check: compare the SLATE's own
+    content-derived generated_at, never the payload wrapper's.
+    """
+    import urllib.request
+
+    from tools.outs_serve import available_dates, load_slate
+
+    dates = available_dates()
+    if not dates:
+        r.ok("outs board served", "no outs slates exist yet")
+        return
+    try:
+        payload = json.loads(urllib.request.urlopen(
+            f"{WORKER_URL}/outs.json", timeout=25).read())
+    except Exception as exc:
+        r.warn("outs board served",
+               f"worker unreachable ({type(exc).__name__}) — the page is "
+               f"on the bundled fallback")
+        return
+    served = payload.get("slates") or {}
+
+    today = _today().isoformat()
+    slate = load_slate(today) if today in dates else None
+    if slate is None:
+        r.ok("outs board served", f"no outs board priced for {today} yet")
+    else:
+        want = slate.get("generated_at")
+        got = (served.get(today) or {}).get("generated_at")
+        try:
+            want_dt = datetime.fromisoformat(want)
+            avail = (datetime.now(ET) - want_dt).total_seconds() / 60
+        except (TypeError, ValueError):
+            want_dt, avail = None, None
+        got_dt = None
+        try:
+            got_dt = datetime.fromisoformat(got) if got else None
+        except (TypeError, ValueError):
+            pass
+        n = len((served.get(today) or {}).get("board") or [])
+        if got == want:
+            r.ok("outs board served",
+                 f"{today}: worker serving the current board ({n} pitchers)")
+        elif want_dt and got_dt and got_dt >= want_dt:
+            # The worker re-priced and pushed after this checkout's pull;
+            # the repo is the stale side, not the site.
+            r.ok("outs board served",
+                 f"{today}: worker ahead of this checkout ({n} pitchers)")
+        elif avail is not None and avail <= GRACE_MIN:
+            r.ok("outs board served",
+                 f"{today}: board published {avail:.1f} min ago — within "
+                 f"the publish window")
+        else:
+            r.fail("outs board served",
+                   f"{today}: repo board stamped {want}, worker serving "
+                   f"{got or 'no slate for today'}",
+                   "the outs page is showing a stale or missing board — "
+                   "check that the host that priced it committed "
+                   "dashboard/public/outs.json")
+
+    y = (_today() - timedelta(days=1)).isoformat()
+    if y not in dates:
+        r.ok("outs results present", f"no outs board existed for {y}")
+        return
+    yslate = served.get(y)
+    if yslate is None:
+        r.fail("outs results present",
+               f"{y} board exists in the repo but the served payload "
+               f"does not carry it",
+               "yesterday's outs board fell off the page")
+        return
+    board = yslate.get("board") or []
+    have = sum(1 for row in board if row.get("actual_outs") is not None)
+    if board and have == 0:
+        msg = f"{y}: 0/{len(board)} results on the served board"
+        if datetime.now(ET).hour < 13:
+            r.warn("outs results present",
+                   msg + " — Savant publishes mid-morning",
+                   "blanks are normal until the morning grade lands")
+        else:
+            r.fail("outs results present", msg,
+                   "the outs page is showing a finished slate with no "
+                   "results; the payload was never regraded, or the host "
+                   "that regraded it never committed it")
+    else:
+        r.ok("outs results present",
+             f"{y}: {have}/{len(board)} results served")
+
+
 CHECKS = [
     check_calibrator_actually_applied,
     check_models_fitted,
@@ -1170,6 +1271,7 @@ CHECKS = [
     check_param_bounds,
     check_dashboard_matches_ledger,
     check_served_board_is_current,
+    check_outs_page_current,
 ]
 
 

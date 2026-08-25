@@ -320,7 +320,10 @@ Tracks open items, resolved items, and known risks.
   but not `outs.json`. The worker then served the last committed copy:
   the 08-24 15:10 ET payload, one date, 0/20 results. Fixed: CI's
   commit step stages `outs.json`; payload rebuilt and pushed same day
-  (08-24 at 20/20, log unchanged at 20 rows).
+  (08-24 at 20/20, log unchanged at 20 rows). Same-day follow-up: the
+  watchdog gained `check_outs_page_current` (served-board currency +
+  served-results presence), replay-verified against the stale payload,
+  so this class fails red instead of waiting for the operator's eye.
 - **Generalises to:** a new product's artifacts are not shipped until
   they are on the SAME persistence, mirror and merge paths the old
   ones use — on EVERY host that can run the pipeline. The worker's
