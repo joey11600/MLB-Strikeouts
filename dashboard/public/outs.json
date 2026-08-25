@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-25T21:33:18.104638+00:00",
+ "generated_at": "2026-08-25T21:43:17.544286+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-25",
@@ -1081,6 +1081,42 @@
   "brier_market": "0.24433",
   "z_raw_vs_market": "0.647",
   "z_cal_vs_market": "0.647"
+ },
+ "paper_tracks": {
+  "policies": {
+   "gates": {
+    "bets": 1,
+    "wins": 1,
+    "losses": 0,
+    "pushes": 0,
+    "voids": 0,
+    "staked": 2.0,
+    "pl": 2.22,
+    "dates": 1
+   },
+   "gold_capped": {
+    "bets": 5,
+    "wins": 4,
+    "losses": 1,
+    "pushes": 0,
+    "voids": 0,
+    "staked": 10.0,
+    "pl": 5.67,
+    "dates": 1
+   },
+   "gold_uncapped": {
+    "bets": 6,
+    "wins": 4,
+    "losses": 2,
+    "pushes": 0,
+    "voids": 0,
+    "staked": 33.77,
+    "pl": 17.73,
+    "dates": 1
+   }
+  },
+  "since": "2026-08-24",
+  "basis": "flat units, 100u bankroll per slate, non-compounding"
  },
  "calibration": "gate5: both candidate maps refused on the 2026 holdout; serving raw + clamp"
 }
