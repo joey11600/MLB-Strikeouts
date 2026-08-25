@@ -1,6 +1,38 @@
 
 # Changelog
 
+## 2026-08-25 - Outs paper tracks: three staking rules, graded nightly, no money
+
+Operator request, born from the 08-24 slate where three plausible
+rules disagreed by 8x on the same board. `tools/outs_paper.py` scores
+every settled slate under:
+
+- **gates** — production entry gates as written; ¼-Kelly on the
+  half-trust blend; quantized; 2u cap; portfolio daily cap
+- **gold_capped** — every |raw gap| >= 8pp row (the page's amber
+  threshold, `GOLD_GAP`); sized exactly like `gates`
+- **gold_uncapped** — same rows; raw ¼-Kelly on the uncalibrated
+  model probability; no quantize, no caps
+
+Fidelity: entries and stakes go through `models/edge.py` /
+`models/staking.py` (the shadow.py rule — no reimplementations). Bets
+derive from the pre-game sidecar; settlement follows the prop rules
+(VOID when a bet's pitcher has no graded actual, PUSH on exact
+whole-line lands). `data/outs_paper_tracks.csv` is append-only and a
+(date, policy) pair FREEZES on first write — locked picks, applied to
+paper. Rows are computed only for dates strictly before today, so the
+payload still cannot carry an actionable pick. Cumulative flat-basis
+totals (named basis: flat units, 100u bankroll per slate,
+non-compounding) ride `outs.json` as `paper_tracks` and render as a
+card on /outs.
+
+New artifact on every mirror path at birth (the A-052 lesson): worker
+`PERSISTED` seed, worker stage list, CI's `git add -A data/`.
+
+Pinned by `tests/test_outs_paper.py` to the day that created it:
+08-24 scores +2.22u / +5.67u / +17.73u under the three policies, the
+daily cap zeroes Ashcraft in gold_capped, and reruns write 0 rows.
+
 ## 2026-08-25 - Watchdog watches the outs page
 
 The 08-25 outs outage (stale payload, 0/20 results served) ran under a

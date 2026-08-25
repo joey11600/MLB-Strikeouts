@@ -456,6 +456,13 @@ strikeouts model, not a variant of it.
   static separation page until the model earns a board — and the
   future payload path `dashboard/public/outs.json` pre-registered in
   `DATA_ONLY_PATHS` so the first outs data commit can't regress A-023
+- [x] **Outs paper tracks (2026-08-25).** Three staking policies
+  (gates-as-written / gold-board capped / gold-board uncapped) graded
+  on every settled slate through the real edge+staking code into
+  append-only `data/outs_paper_tracks.csv`; frozen per (date, policy);
+  cumulative flat-basis totals on /outs. The decision data for whether
+  the entry gates are too tight — revisit once the tracks hold ~4
+  weeks of dates
 - [x] **Watchdog watches the outs page (2026-08-25).** Two checks
   against the SERVED /outs.json: today's board current (slate stamp,
   publish-window grace) and yesterday's results present (13:00 ET

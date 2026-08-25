@@ -116,6 +116,8 @@ def build_payload() -> dict:
         if rows:
             scorecard = rows[-1]
 
+    from tools.outs_paper import paper_summary
+
     cal = load_outs_calibrator()
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -124,6 +126,7 @@ def build_payload() -> dict:
         "latest_date": dates[0] if dates else None,
         "slates": slates,
         "scorecard": scorecard,
+        "paper_tracks": paper_summary(),
         "calibration": ("gate5: both candidate maps refused on the 2026 "
                         "holdout; serving raw + clamp" if cal is None
                         else f"gate5: {cal['kind']} shipped"),
@@ -162,6 +165,10 @@ def main() -> int:
     print("[3/4] grading settled sidecar rows...")
     n = log_dates()
     print(f"  {n} row(s) scored into {OUTS_LOG_PATH.name}")
+
+    from tools.outs_paper import PAPER_PATH, log_paper_tracks
+    np_ = log_paper_tracks()
+    print(f"  {np_} paper-track row(s) scored into {PAPER_PATH.name}")
 
     print("[4/4] rebuilding outs payload...")
     payload = build_payload()

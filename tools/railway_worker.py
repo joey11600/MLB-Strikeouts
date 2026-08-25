@@ -67,6 +67,7 @@ PERSISTED = [
     "outs_slates",
     "outs_model_log.csv",
     "outs_scorecard.csv",
+    "outs_paper_tracks.csv",
 ]
 VOLUME_STATE = STATE_DIR / "state"
 
@@ -1164,7 +1165,8 @@ def commit_and_push(context: str) -> None:
          "data/slates", "data/pick_changes.csv", "data/odds",
          "dashboard/public/data.json",
          "data/outs_slates", "data/outs_model_log.csv",
-         "data/outs_scorecard.csv", "dashboard/public/outs.json"],
+         "data/outs_scorecard.csv", "data/outs_paper_tracks.csv",
+         "dashboard/public/outs.json"],
         cwd=REPO, capture_output=True,
     )
     staged = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO)

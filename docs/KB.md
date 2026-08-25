@@ -751,9 +751,22 @@ labels proven inert), the board lands in `data/outs_slates/`, settled
 results in `data/outs_model_log.csv`, and the page payload in
 `dashboard/public/outs.json` (worker serves `/outs.json`; the /outs
 page falls back to the bundled copy). NOTHING computes an edge, side,
-or stake — the payload cannot carry a pick by construction, and the
-strikeouts ledger/aggregates are market-filtered so the two products
-can never blend.
+or stake for an ACTIONABLE game — the payload cannot carry a pick for
+today by construction, and the strikeouts ledger/aggregates are
+market-filtered so the two products can never blend.
+
+Paper tracks (`tools/outs_paper.py`, since 2026-08-25): three staking
+policies — production gates-as-written, gold-board (8pp+ gap) with the
+v1 caps, gold-board uncapped raw quarter-Kelly — are scored on every
+SETTLED slate through the real `models/edge.py` + `models/staking.py`
+code and appended to `data/outs_paper_tracks.csv` (append-only; a
+(date, policy) pair freezes on first write, the locked-picks rule).
+Bets derive from the pre-game sidecar, settle by the prop rules
+(VOID on no actual, PUSH on exact whole-line lands), and are computed
+ONLY for dates strictly before today — retrospective evidence, never a
+pick. Cumulative flat-basis totals ride the payload's `paper_tracks`
+and render as a card on /outs. Purpose: settle "should the gates be
+looser?" with a graded record instead of an argument.
 
 Calibration: Gate 5 measured to a refusal (A-052) — Platt, isotonic,
 and per-line Platt all degraded per-line calibration on the untouched

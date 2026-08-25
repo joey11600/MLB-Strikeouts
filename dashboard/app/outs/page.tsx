@@ -28,13 +28,37 @@ type OutsRow = {
   odds_source: string;
 };
 
+type PaperPolicy = {
+  bets: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  voids: number;
+  staked: number;
+  pl: number;
+  dates: number;
+};
+
 type OutsPayload = {
   generated_at: string;
   latest_date: string | null;
   slates: Record<string, { generated_at: string; board: OutsRow[] }>;
   scorecard: Record<string, string> | null;
+  paper_tracks: {
+    policies: Record<string, PaperPolicy>;
+    since: string;
+    basis: string;
+  } | null;
   calibration: string;
 };
+
+// Display order + wording for the three paper policies. Keys must
+// match tools/outs_paper.py POLICIES.
+const PAPER_POLICIES: [string, string, string][] = [
+  ["gates", "Gates as written", "production entry bar · ¼-Kelly · 2u cap"],
+  ["gold_capped", "Gold board, capped", "every 8pp+ gap · ¼-Kelly · 2u cap"],
+  ["gold_uncapped", "Gold board, uncapped", "every 8pp+ gap · raw ¼-Kelly · no caps"],
+];
 
 function useOutsData() {
   const [data, setData] = useState<OutsPayload | null>(null);
@@ -169,6 +193,65 @@ export default function OutsPage() {
             <div className="text-[11px] text-ink-muted">
               calibration gate not passed
             </div>
+          </div>
+        </div>
+      )}
+
+      {data?.paper_tracks && (
+        <div className="rounded-xl border border-line bg-surface p-3.5">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-ink-muted">
+              paper tracks
+            </span>
+            <span className="text-[11px] text-ink-muted">
+              three staking rules graded on every settled slate —
+              hypothetical, no bets placed
+            </span>
+          </div>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wider text-ink-muted">
+                  <th className="py-1 pr-3">Policy</th>
+                  <th className="figure py-1 pr-3 text-right">Record</th>
+                  <th className="figure py-1 pr-3 text-right">Staked</th>
+                  <th className="figure py-1 text-right">P&amp;L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PAPER_POLICIES.map(([key, label, how]) => {
+                  const p = data.paper_tracks!.policies[key];
+                  if (!p) return null;
+                  return (
+                    <tr key={key} className="border-t border-line/60">
+                      <td className="py-1.5 pr-3">
+                        <div className="font-medium">{label}</div>
+                        <div className="text-[11px] text-ink-muted">{how}</div>
+                      </td>
+                      <td className="figure py-1.5 pr-3 text-right">
+                        {p.wins}-{p.losses}
+                        {p.pushes > 0 ? `-${p.pushes}P` : ""}
+                      </td>
+                      <td className="figure py-1.5 pr-3 text-right text-ink-secondary">
+                        {p.staked.toFixed(2)}u
+                      </td>
+                      <td
+                        className={cn(
+                          "figure py-1.5 text-right font-semibold",
+                          p.pl >= 0 ? "text-over" : "text-under",
+                        )}
+                      >
+                        {p.pl >= 0 ? "+" : ""}
+                        {p.pl.toFixed(2)}u
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-1.5 text-[11px] text-ink-muted">
+            since {data.paper_tracks.since} · {data.paper_tracks.basis}
           </div>
         </div>
       )}
