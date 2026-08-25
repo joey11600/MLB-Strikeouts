@@ -194,7 +194,7 @@ export default function OutsPage() {
 
       {board.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full min-w-[680px] text-sm">
+          <table className="w-full min-w-[780px] text-sm">
             <thead>
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-muted">
                 <th className="px-3 py-2.5">Pitcher</th>
@@ -205,6 +205,7 @@ export default function OutsPage() {
                 <th className="figure px-3 py-2.5 text-right">Market fair</th>
                 <th className="figure px-3 py-2.5 text-right">Gap</th>
                 <th className="figure px-3 py-2.5 text-right">Actual</th>
+                <th className="px-3 py-2.5 text-right">Model lean</th>
               </tr>
             </thead>
             <tbody>
@@ -213,6 +214,14 @@ export default function OutsPage() {
                   r.fair_over === null ? null : r.p_over_cal - r.fair_over;
                 const settled = r.actual_outs !== null;
                 const wentOver = settled && r.actual_outs! > r.line;
+                // Whole-number alternate lines can land exactly on the
+                // line — that settles neither side (the push rule).
+                const pushed = settled && r.actual_outs! === r.line;
+                const leanOver = gap === null || gap === 0 ? null : gap > 0;
+                const leanRight =
+                  settled && !pushed && leanOver !== null
+                    ? wentOver === leanOver
+                    : null;
                 return (
                   <tr
                     key={r.pitcher_id}
@@ -252,12 +261,39 @@ export default function OutsPage() {
                     <td className="figure px-3 py-2.5 text-right">
                       {settled ? (
                         <span
-                          className={wentOver ? "text-over" : "text-under"}
+                          className={
+                            pushed
+                              ? "text-ink-muted"
+                              : wentOver
+                                ? "text-over"
+                                : "text-under"
+                          }
                         >
-                          {r.actual_outs} {wentOver ? "OVER" : "UNDER"}
+                          {r.actual_outs}{" "}
+                          {pushed ? "PUSH" : wentOver ? "OVER" : "UNDER"}
                         </span>
                       ) : (
                         "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {pushed ? (
+                        <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                          push
+                        </span>
+                      ) : leanRight !== null ? (
+                        <span
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+                            leanRight
+                              ? "bg-over/15 text-over"
+                              : "bg-under/15 text-under",
+                          )}
+                        >
+                          {leanRight ? "✓ right" : "✗ wrong"}
+                        </span>
+                      ) : (
+                        <span className="text-ink-muted">—</span>
                       )}
                     </td>
                   </tr>
@@ -279,7 +315,9 @@ export default function OutsPage() {
         maps were refused on an untouched holdout (a map that doesn&rsquo;t
         calibrate is worse than none). Gaps are a research readout, not
         picks; the one-bet-per-pitcher rule spans both markets when
-        betting ever opens.{" "}
+        betting ever opens. On settled rows, ✓/✗ marks only whether the
+        side the model leaned toward matched how the line settled — no
+        bet existed behind it, so it is not a win or a loss.{" "}
         {data && (
           <span className="figure">
             payload {source} · {data.generated_at?.slice(0, 16)}Z

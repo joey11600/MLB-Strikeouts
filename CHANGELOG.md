@@ -1,6 +1,26 @@
 
 # Changelog
 
+## 2026-08-25 - Outs board grades its own leans (✓/✗ marker)
+
+Operator request ("why does it not say WIN or LOSS"): the outs page
+now carries a "Model lean" column. On settled rows it badges whether
+the side the model leaned toward (sign of the model-vs-market gap)
+matched how the line settled — ✓ right / ✗ wrong — with a neutral
+PUSH badge when a whole-number line lands exactly (the ACTUAL cell
+says PUSH too, instead of mislabelling it OVER/UNDER). Unsettled rows
+and zero-gap rows show a dash.
+
+Deliberately NOT labelled WIN/LOSS: the product is shadow-only
+(A-052), no bet exists behind any row, and the footer says so
+explicitly. Hue never carries the meaning alone — the badge carries
+the word and the mark.
+
+Verified on the built export against the live payload: 2026-08-24
+renders 20 badges, 11 right / 9 wrong, matching the evidence-log
+measurement (11/20 leans right; 4/5 on gaps >= 10pp; day Brier 0.223
+model vs 0.239 market).
+
 ## 2026-08-25 - CI joins the outs payload's mirror path (second A-052 amendment)
 
 Found by the operator: "all the results from the total outs page arent

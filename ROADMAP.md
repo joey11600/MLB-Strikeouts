@@ -456,6 +456,10 @@ strikeouts model, not a variant of it.
   static separation page until the model earns a board — and the
   future payload path `dashboard/public/outs.json` pre-registered in
   `DATA_ONLY_PATHS` so the first outs data commit can't regress A-023
+- [x] **Outs board grades its own leans (2026-08-25).** "Model lean"
+  column on `/outs`: settled rows badge ✓ right / ✗ wrong on whether
+  the gap's side matched the settlement, PUSH neutral on exact lands.
+  Explicitly not WIN/LOSS — no bet exists behind any row
 - [x] **CI staged into the outs payload's mirror path (2026-08-25,
   second A-052 amendment).** The daily jobs race between the worker
   and CI; CI won the 08-25 morning run and discarded the rebuilt
