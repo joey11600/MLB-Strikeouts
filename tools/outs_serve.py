@@ -346,6 +346,15 @@ def log_dates(targets: list[str] | None = None) -> int:
                 "logged_at": now,
             })
 
+    return union_into_log(fresh)
+
+
+def union_into_log(fresh: list[dict]) -> int:
+    """Merge graded rows into the evidence log by (date, game_pk,
+    pitcher_id) — append-mostly, atomic, refuses to shrink. Shared by
+    the Statcast grader above and the boxscore grader
+    (tools/outs_boxscore.py); a second copy of this merge would drift.
+    """
     existing = []
     if OUTS_LOG_PATH.exists():
         with open(OUTS_LOG_PATH, encoding="utf-8") as f:

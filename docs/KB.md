@@ -755,6 +755,14 @@ or stake for an ACTIONABLE game — the payload cannot carry a pick for
 today by construction, and the strikeouts ledger/aggregates are
 market-filtered so the two products can never blend.
 
+Grading is two-layered (since 2026-08-25): `tools/outs_boxscore.py`
+grades FINAL games from the public MLB boxscore the same night
+(starter-only, validated 548/548 vs Statcast, fail-soft in pipeline
+step 3), and the morning Statcast pass (`outs_serve.log_dates`)
+re-derives every value through the shared `union_into_log` merge —
+early never replaces authoritative, and both writers are one
+implementation.
+
 Paper tracks (`tools/outs_paper.py`, since 2026-08-25): three staking
 policies — production gates-as-written, gold-board (8pp+ gap) with the
 v1 caps, gold-board uncapped raw quarter-Kelly — are scored on every

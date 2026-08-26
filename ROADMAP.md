@@ -456,6 +456,11 @@ strikeouts model, not a variant of it.
   static separation page until the model earns a board — and the
   future payload path `dashboard/public/outs.json` pre-registered in
   `DATA_ONLY_PATHS` so the first outs data commit can't regress A-023
+- [x] **Same-night outs grading (2026-08-25).** `tools/outs_boxscore.py`
+  grades final games from the MLB boxscore (validated 548/548 vs
+  Statcast) inside pipeline step 3 on every host; Statcast's morning
+  pass re-derives and confirms. Board and paper tracks now fill by
+  the 03:00 job instead of 09:00
 - [x] **Outs paper tracks (2026-08-25).** Three staking policies
   (gates-as-written / gold-board capped / gold-board uncapped) graded
   on every settled slate through the real edge+staking code into

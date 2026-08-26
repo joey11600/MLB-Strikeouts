@@ -1,6 +1,37 @@
 
 # Changelog
 
+## 2026-08-25 - Same-night outs grading from the MLB boxscore (03:00 job)
+
+Operator request after watching the board sit blank all evening. The
+authoritative grader (Statcast) publishes a finished day ~09:00 ET the
+next morning; the public MLB boxscore posts final innings-pitched at
+the last out and agreed with the Statcast reconstruction on 548/548
+validated starts. `tools/outs_boxscore.py` now grades early from it:
+
+- FINAL games only; a board pitcher grades only as the game's actual
+  starter (first pitcher used) — a scratch stays ungraded and settles
+  VOID downstream.
+- Rows flow through `outs_serve.union_into_log` — the Statcast
+  grader's own merge, factored out so both writers share one
+  implementation. The morning pass re-derives the same values and
+  thereby confirms them; early never replaces authoritative.
+- Scoped to recent PAST ET dates with ungraded pitchers: a fully
+  graded slate costs zero API calls, and the in-progress slate is
+  never touched.
+- Wired as a fail-soft step in `outs_pipeline` step 3, so every host
+  that runs the pipeline (03:00 night job, 09:00 morning, CI) fills
+  the board the same night; an MLB API outage skips the step rather
+  than costing the board.
+
+With this, the paper tracks also settle overnight: by 03:00 every bet
+pitcher has a boxscore grade, so the defer-until-complete gate opens
+the same night instead of at 09:00.
+
+Covered by `tests/test_outs_boxscore.py` (final/live/scratch fixture,
+exact-land not-an-over, date scoping, zero-API on complete slates);
+the outs_serve suite passes unchanged on the factored writer.
+
 ## 2026-08-25 - Paper tracks: ET slate clock + defer-until-complete (same-day fix)
 
 Caught on day one at 22:07 ET, before push: `log_paper_tracks` dated

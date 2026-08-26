@@ -163,6 +163,17 @@ def main() -> int:
         print("[2/4] pricing skipped (--grade)")
 
     print("[3/4] grading settled sidecar rows...")
+    # Boxscore first: MLB posts final innings-pitched at the last out,
+    # so the 03:00 job fills the board the same night. Statcast
+    # (log_dates, below and every morning) re-derives the same values
+    # through the same keyed union — early never replaces authoritative.
+    # Fail-soft: an MLB API outage must not cost the board or payload.
+    try:
+        from tools.outs_boxscore import grade_recent_finals
+        nb = grade_recent_finals()
+        print(f"  {nb} row(s) graded early from final boxscores")
+    except Exception as exc:
+        print(f"  boxscore grading skipped ({type(exc).__name__}: {exc})")
     n = log_dates()
     print(f"  {n} row(s) scored into {OUTS_LOG_PATH.name}")
 
