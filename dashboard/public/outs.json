@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-26T02:08:23.963562+00:00",
+ "generated_at": "2026-08-26T02:10:16.757991+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-25",
@@ -1095,24 +1095,24 @@
     "dates": 1
    },
    "gold_capped": {
-    "bets": 13,
-    "wins": 7,
+    "bets": 5,
+    "wins": 4,
     "losses": 1,
     "pushes": 0,
-    "voids": 5,
-    "staked": 13.0,
-    "pl": 8.5,
-    "dates": 2
+    "voids": 0,
+    "staked": 10.0,
+    "pl": 5.67,
+    "dates": 1
    },
    "gold_uncapped": {
-    "bets": 15,
-    "wins": 8,
+    "bets": 6,
+    "wins": 4,
     "losses": 2,
     "pushes": 0,
-    "voids": 5,
-    "staked": 48.54,
-    "pl": 31.21,
-    "dates": 2
+    "voids": 0,
+    "staked": 33.77,
+    "pl": 17.73,
+    "dates": 1
    }
   },
   "since": "2026-08-24",

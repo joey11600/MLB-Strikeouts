@@ -1,6 +1,32 @@
 
 # Changelog
 
+## 2026-08-25 - Paper tracks: ET slate clock + defer-until-complete (same-day fix)
+
+Caught on day one at 22:07 ET, before push: `log_paper_tracks` dated
+"today" by the UTC calendar, so any run after 20:00 ET treated the
+in-progress slate as a past date and scored it mid-games — 17
+premature rows with live games graded VOID. Two fixes, both pinned by
+tests:
+
+- **ET is the slate clock** (`outs_paper.ET`), matching the rest of
+  the system; a date equal to today-in-ET never settles regardless of
+  UTC.
+- **A (date, policy) pair settles only when EVERY one of its bets has
+  a graded actual**, else it defers un-frozen and the next run
+  retries. After 2 days a missing actual is a true VOID (scratch /
+  called early). This also covers the 03:00-before-Savant window and
+  same-night boxscore grading, which both produce partial logs on
+  purpose.
+
+The premature rows were bug output, minutes old and uncommitted —
+reverted to the 12-row seeded file, not "deleted history."
+
+Also same night: 2026-08-25's 8 final games graded into the evidence
+log from the MLB boxscore API (the validate_outs_vs_mlb.py source,
+548/548 agreement with Statcast); tomorrow's 09:00 Statcast pass
+re-derives and confirms.
+
 ## 2026-08-25 - Outs paper tracks: three staking rules, graded nightly, no money
 
 Operator request, born from the 08-24 slate where three plausible

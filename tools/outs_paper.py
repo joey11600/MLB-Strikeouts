@@ -35,8 +35,9 @@ import csv
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -45,6 +46,12 @@ from models.staking import kelly_stake, portfolio_daily_cap, quantize_stake
 from tools.outs_serve import OUTS_LOG_PATH, available_dates, load_slate
 
 PAPER_PATH = OUTS_LOG_PATH.parent / "outs_paper_tracks.csv"
+
+# The slate clock is ET everywhere in this system. The first version
+# used the UTC date here, so any run after 20:00 ET treated TONIGHT as
+# a past date and scored it mid-slate — 17 premature rows (live games
+# graded VOID) written at 22:07 ET on day one, caught before push.
+ET = ZoneInfo("America/New_York")
 
 # The /outs page's amber-highlight threshold (dashboard/app/outs/
 # page.tsx uses 0.08 in the Gap cell). If one moves, move both.
@@ -147,13 +154,18 @@ def log_paper_tracks() -> int:
     Atomic write, refuses to shrink — the model_log rules.
     """
     existing, done = _existing()
-    today = datetime.now(timezone.utc).date().isoformat()
+    today_et = datetime.now(ET).date()
+    today = today_et.isoformat()
+    # After this age a bet pitcher with no graded actual is a true
+    # no-action (scratch / called early), not a grade that has simply
+    # not landed yet — the VOID rule's clock.
+    void_after = (today_et - timedelta(days=2)).isoformat()
     now = datetime.now(timezone.utc).isoformat()
 
     fresh = []
     for d in sorted(available_dates()):
         if d >= today:
-            continue                      # only finished dates settle
+            continue                      # only finished ET dates settle
         actuals = _actuals_for(d)
         if actuals is None:
             continue                      # grades have not landed yet
@@ -164,7 +176,17 @@ def log_paper_tracks() -> int:
         for policy in POLICIES:
             if (d, policy) in done:
                 continue
-            for bet in _policy_bets(policy, board):
+            bets = _policy_bets(policy, board)
+            # Partial grades happen (same-night boxscore grading, the
+            # 03:00 job running before Savant publishes). A pair only
+            # settles when EVERY bet has an actual — or the date is old
+            # enough that a missing one is a genuine VOID. Deferring
+            # leaves the pair un-done, so the next run retries.
+            unsettled = [b for b in bets
+                         if actuals.get(str(b["pitcher_id"])) is None]
+            if unsettled and d > void_after:
+                continue
+            for bet in bets:
                 result, pl = _settle(bet, actuals.get(str(bet["pitcher_id"])))
                 fresh.append({
                     "date": d, "policy": policy,

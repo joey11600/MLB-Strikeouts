@@ -83,6 +83,59 @@ def test_settle_push_and_void():
     assert _settle(bet, 17) == ("LOSS", -2.0)
 
 
+def _paper_env(tmp_path, monkeypatch, dates, actual_rows):
+    import csv
+
+    log = tmp_path / "outs_model_log.csv"
+    with open(log, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["date", "pitcher_id",
+                                          "actual_outs"])
+        w.writeheader()
+        w.writerows(actual_rows)
+    monkeypatch.setattr(outs_paper, "OUTS_LOG_PATH", log)
+    monkeypatch.setattr(outs_paper, "PAPER_PATH",
+                        tmp_path / "outs_paper_tracks.csv")
+    monkeypatch.setattr(outs_paper, "available_dates", lambda: dates)
+    monkeypatch.setattr(outs_paper, "load_slate",
+                        lambda d: {"board": GOLD_0824})
+
+
+def test_tonight_never_scores_even_after_utc_midnight(tmp_path, monkeypatch):
+    """The slate clock is ET. A date equal to today-in-ET must not
+    settle, no matter what the UTC calendar says (the 22:07 ET day-one
+    bug: UTC had rolled over and tonight scored mid-slate)."""
+    from datetime import datetime
+
+    today_et = datetime.now(outs_paper.ET).date().isoformat()
+    _paper_env(tmp_path, monkeypatch, [today_et],
+               [{"date": today_et, "pitcher_id": pid, "actual_outs": got}
+                for pid, got in ACTUALS_0824.items()])
+    assert outs_paper.log_paper_tracks() == 0
+
+
+def test_partial_grades_defer_until_complete(tmp_path, monkeypatch):
+    """A recent date with a bet pitcher still ungraded must wait — not
+    settle the missing one as VOID (the 03:00-before-Savant window and
+    same-night boxscore grading both produce partial logs)."""
+    from datetime import datetime, timedelta
+
+    d = (datetime.now(outs_paper.ET).date()
+         - timedelta(days=1)).isoformat()
+    partial = [{"date": d, "pitcher_id": pid, "actual_outs": got}
+               for pid, got in ACTUALS_0824.items()
+               if pid != "664353"]           # Urquidy not yet graded
+    _paper_env(tmp_path, monkeypatch, [d], partial)
+    assert outs_paper.log_paper_tracks() == 0    # every policy bets him
+
+    # grades complete -> the same pairs now settle in full
+    _paper_env(tmp_path, monkeypatch, [d],
+               [{"date": d, "pitcher_id": pid, "actual_outs": got}
+                for pid, got in ACTUALS_0824.items()])
+    assert outs_paper.log_paper_tracks() == 12
+    assert not any(r["result"] == "VOID"
+                   for r in outs_paper._existing()[0])
+
+
 def test_frozen_pairs_never_rescored(tmp_path, monkeypatch):
     """A (date, policy) pair is written once; reruns add nothing."""
     import csv
