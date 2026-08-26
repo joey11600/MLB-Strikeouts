@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-26T04:42:20.945104+00:00",
+ "generated_at": "2026-08-26T05:07:35.983262+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-25",
@@ -516,7 +516,7 @@
      "fair_over": 0.3949,
      "hold_pct": 0.0686,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 4
     },
     {
      "date": "2026-08-25",
@@ -868,7 +868,7 @@
      "fair_over": 0.5101,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 11
     },
     {
      "date": "2026-08-25",
@@ -1095,24 +1095,24 @@
     "dates": 1
    },
    "gold_capped": {
-    "bets": 5,
-    "wins": 4,
-    "losses": 1,
+    "bets": 13,
+    "wins": 9,
+    "losses": 4,
     "pushes": 0,
     "voids": 0,
-    "staked": 10.0,
-    "pl": 5.67,
-    "dates": 1
+    "staked": 19.0,
+    "pl": 9.75,
+    "dates": 2
    },
    "gold_uncapped": {
-    "bets": 6,
-    "wins": 4,
-    "losses": 2,
+    "bets": 15,
+    "wins": 10,
+    "losses": 5,
     "pushes": 0,
     "voids": 0,
-    "staked": 33.77,
-    "pl": 17.73,
-    "dates": 1
+    "staked": 71.08,
+    "pl": 29.35,
+    "dates": 2
    }
   },
   "since": "2026-08-24",
