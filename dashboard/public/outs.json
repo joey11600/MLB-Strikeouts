@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-26T02:10:16.757991+00:00",
+ "generated_at": "2026-08-26T02:36:28.274211+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-25",
@@ -538,7 +538,7 @@
      "fair_over": 0.4306,
      "hold_pct": 0.0702,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 15
     },
     {
      "date": "2026-08-25",
@@ -560,7 +560,7 @@
      "fair_over": 0.5192,
      "hold_pct": 0.0701,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 13
     },
     {
      "date": "2026-08-25",
@@ -692,7 +692,7 @@
      "fair_over": 0.4899,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 18
     },
     {
      "date": "2026-08-25",
@@ -956,7 +956,7 @@
      "fair_over": 0.3882,
      "hold_pct": 0.0689,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 15
     },
     {
      "date": "2026-08-25",
