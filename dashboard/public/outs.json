@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-25T21:43:17.544286+00:00",
+ "generated_at": "2026-08-26T02:08:23.963562+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-25",
@@ -472,7 +472,7 @@
      "fair_over": 0.4849,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 18
     },
     {
      "date": "2026-08-25",
@@ -582,7 +582,7 @@
      "fair_over": 0.4889,
      "hold_pct": 0.0713,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 13
     },
     {
      "date": "2026-08-25",
@@ -626,7 +626,7 @@
      "fair_over": 0.5635,
      "hold_pct": 0.0705,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 15
     },
     {
      "date": "2026-08-25",
@@ -648,7 +648,7 @@
      "fair_over": 0.4669,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 15
     },
     {
      "date": "2026-08-25",
@@ -758,7 +758,7 @@
      "fair_over": 0.5458,
      "hold_pct": 0.0688,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 16
     },
     {
      "date": "2026-08-25",
@@ -890,7 +890,7 @@
      "fair_over": 0.5677,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 14
     },
     {
      "date": "2026-08-25",
@@ -978,7 +978,7 @@
      "fair_over": 0.433,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 14
     },
     {
      "date": "2026-08-25",
@@ -1066,7 +1066,7 @@
      "fair_over": 0.4138,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": 15
     }
    ]
   }
@@ -1095,24 +1095,24 @@
     "dates": 1
    },
    "gold_capped": {
-    "bets": 5,
-    "wins": 4,
+    "bets": 13,
+    "wins": 7,
     "losses": 1,
     "pushes": 0,
-    "voids": 0,
-    "staked": 10.0,
-    "pl": 5.67,
-    "dates": 1
+    "voids": 5,
+    "staked": 13.0,
+    "pl": 8.5,
+    "dates": 2
    },
    "gold_uncapped": {
-    "bets": 6,
-    "wins": 4,
+    "bets": 15,
+    "wins": 8,
     "losses": 2,
     "pushes": 0,
-    "voids": 0,
-    "staked": 33.77,
-    "pl": 17.73,
-    "dates": 1
+    "voids": 5,
+    "staked": 48.54,
+    "pl": 31.21,
+    "dates": 2
    }
   },
   "since": "2026-08-24",
