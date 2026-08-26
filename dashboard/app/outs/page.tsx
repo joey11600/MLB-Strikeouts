@@ -3,9 +3,13 @@
 // The outs market's OWN page (Phase 10; operator directive 2026-08-24:
 // separate product, separate pages, separate numbers). Reads its own
 // payload — /outs.json from the worker, bundled copy as fallback —
-// and renders a DIAGNOSTIC board: model vs market, disagreements
-// first, settled results grading in overnight. Nothing here is a
-// pick, an edge, or a stake by construction: the payload carries none.
+// and renders the board from the MODEL'S SIDE: its probability vs the
+// market's no-vig number for whichever side it leans, the edge between
+// them, and the units the capped paper rule would stake (operator
+// direction 2026-08-26). All stakes are hypothetical — betting is
+// blocked and nothing is placed; the numbers come from the payload,
+// which computes them through the real models.edge / models.staking
+// path, never a re-derivation in the browser.
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +30,11 @@ type OutsRow = {
   fair_over: number | null;
   actual_outs: number | null;
   odds_source: string;
+  // Paper columns (2026-08-26): absent on payloads built before the
+  // worker shipped them, so every consumer tolerates undefined.
+  paper_side?: "OVER" | "UNDER" | null;
+  paper_stake_units?: number | null;
+  clears_gates?: boolean | null;
 };
 
 type PaperPolicy = {
@@ -121,7 +130,10 @@ export default function OutsPage() {
   const sc = data?.scorecard ?? null;
 
   return (
-    <div className="space-y-5">
+    // The shared layout caps every page at max-w-5xl; this board earns
+    // more columns than that, so it alone breaks out where the viewport
+    // has the room (negative margins only kick in >= xl).
+    <div className="space-y-5 xl:-mx-24 2xl:-mx-40">
       <div>
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-2xl font-bold tracking-tight">Outs Recorded</h1>
@@ -129,17 +141,18 @@ export default function OutsPage() {
             separate market
           </span>
           <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-            diagnostic only — no picks
+            paper stakes — no bets placed
           </span>
         </div>
-        <p className="mt-1 max-w-2xl text-sm text-ink-secondary">
+        <p className="mt-1 max-w-3xl text-sm text-ink-secondary">
           How many outs the starter records before the hook — a separate
           product from strikeouts with its own model, its own ledger tag,
-          and its own numbers. The board below shows where the model and
-          the book disagree, biggest gaps first, and how those
-          disagreements actually settled. It bets nothing until its
-          calibration clears the same gates the strikeouts model is held
-          to.
+          and its own numbers. Each row reads from the side the model
+          leans: its probability against the market&rsquo;s vig-free
+          number, the edge between them, and the units the paper staking
+          rule would put on it. Biggest edges first. Every stake is
+          hypothetical — nothing is bet until calibration clears the
+          same gates the strikeouts model is held to.
         </p>
       </div>
 
@@ -277,30 +290,50 @@ export default function OutsPage() {
 
       {board.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full min-w-[780px] text-sm">
+          <table className="w-full min-w-[1040px] text-sm">
             <thead>
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-ink-muted">
                 <th className="px-3 py-2.5">Pitcher</th>
                 <th className="px-3 py-2.5">Line</th>
                 <th className="figure px-3 py-2.5 text-right">O / U</th>
                 <th className="figure px-3 py-2.5 text-right">E[outs]</th>
-                <th className="figure px-3 py-2.5 text-right">Model P(over)</th>
-                <th className="figure px-3 py-2.5 text-right">Market fair</th>
-                <th className="figure px-3 py-2.5 text-right">Gap</th>
+                <th className="px-3 py-2.5 text-right">Side</th>
+                <th className="figure px-3 py-2.5 text-right">Model</th>
+                <th className="figure px-3 py-2.5 text-right">Market</th>
+                <th className="figure px-3 py-2.5 text-right">Edge</th>
+                <th className="figure px-3 py-2.5 text-right">Units</th>
                 <th className="figure px-3 py-2.5 text-right">Actual</th>
-                <th className="px-3 py-2.5 text-right">Model lean</th>
+                <th className="px-3 py-2.5 text-right">Verdict</th>
               </tr>
             </thead>
             <tbody>
               {board.map((r) => {
                 const gap =
                   r.fair_over === null ? null : r.p_over_cal - r.fair_over;
+                // The board reads from the model's side: probabilities,
+                // edge, and stake all face whichever way it leans.
+                const side =
+                  gap === null || gap === 0
+                    ? null
+                    : gap > 0
+                      ? "OVER"
+                      : "UNDER";
+                const modelSide =
+                  side === "UNDER" ? 1 - r.p_over_cal : r.p_over_cal;
+                const marketSide =
+                  r.fair_over === null
+                    ? null
+                    : side === "UNDER"
+                      ? 1 - r.fair_over
+                      : r.fair_over;
+                const edge = gap === null ? null : Math.abs(gap);
+                const stake = r.paper_stake_units ?? null;
                 const settled = r.actual_outs !== null;
                 const wentOver = settled && r.actual_outs! > r.line;
                 // Whole-number alternate lines can land exactly on the
                 // line — that settles neither side (the push rule).
                 const pushed = settled && r.actual_outs! === r.line;
-                const leanOver = gap === null || gap === 0 ? null : gap > 0;
+                const leanOver = side === null ? null : side === "OVER";
                 const leanRight =
                   settled && !pushed && leanOver !== null
                     ? wentOver === leanOver
@@ -323,23 +356,54 @@ export default function OutsPage() {
                     <td className="figure px-3 py-2.5 text-right">
                       {iso(r.expected_outs)}
                     </td>
-                    <td className="figure px-3 py-2.5 text-right">
-                      {pct(r.p_over_cal)}
+                    <td className="px-3 py-2.5 text-right">
+                      {side ? (
+                        <span
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+                            side === "OVER"
+                              ? "bg-over/15 text-over"
+                              : "bg-under/15 text-under",
+                          )}
+                        >
+                          {side}
+                        </span>
+                      ) : (
+                        <span className="text-ink-muted">—</span>
+                      )}
                     </td>
                     <td className="figure px-3 py-2.5 text-right">
-                      {pct(r.fair_over)}
+                      {pct(modelSide)}
+                    </td>
+                    <td className="figure px-3 py-2.5 text-right">
+                      {pct(marketSide)}
                     </td>
                     <td
                       className={cn(
                         "figure px-3 py-2.5 text-right",
-                        gap !== null && Math.abs(gap) >= 0.08
+                        edge !== null && edge >= 0.08
                           ? "text-accent"
                           : "text-ink-secondary",
                       )}
                     >
-                      {gap === null
-                        ? "—"
-                        : `${gap > 0 ? "+" : ""}${(gap * 100).toFixed(1)}pp`}
+                      {edge === null ? "—" : `+${(edge * 100).toFixed(1)}pp`}
+                    </td>
+                    <td className="figure px-3 py-2.5 text-right">
+                      {stake && stake > 0 ? (
+                        <div>
+                          <span className="font-semibold">{stake}u</span>
+                          {r.clears_gates ? (
+                            <div
+                              className="text-[10px] uppercase tracking-wider text-accent"
+                              title="also clears the production entry bar"
+                            >
+                              gates
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-ink-muted">—</span>
+                      )}
                     </td>
                     <td className="figure px-3 py-2.5 text-right">
                       {settled ? (
@@ -394,13 +458,21 @@ export default function OutsPage() {
       )}
 
       <p className="text-xs text-ink-muted">
-        Model probabilities are served raw — both candidate calibration
-        maps were refused on an untouched holdout (a map that doesn&rsquo;t
-        calibrate is worse than none). Gaps are a research readout, not
-        picks; the one-bet-per-pitcher rule spans both markets when
-        betting ever opens. On settled rows, ✓/✗ marks only whether the
-        side the model leaned toward matched how the line settled — no
-        bet existed behind it, so it is not a win or a loss.{" "}
+        Model and Market are both read for the side in the Side column;
+        Edge is simply their difference. Units are what the capped paper
+        rule would stake on the row — quarter-Kelly sized on a half-trust
+        blend of model and market, 2u per-bet cap, 10u daily cap with a
+        correlation haircut — which is why a bigger edge does not scale
+        the stake linearly, and why a late row on a heavy slate can show
+        an edge but no units. A &ldquo;gates&rdquo; tag means the row
+        also clears the production entry bar. Every stake is
+        hypothetical: betting is blocked until calibration passes, and
+        model probabilities are served raw — both candidate calibration
+        maps were refused on an untouched holdout. On settled rows, ✓/✗
+        marks only whether the model&rsquo;s side matched how the line
+        settled — no bet existed behind it, so it is not a win or a
+        loss. The one-bet-per-pitcher rule spans both markets when
+        betting ever opens.{" "}
         {data && (
           <span className="figure">
             payload {source} · {data.generated_at?.slice(0, 16)}Z

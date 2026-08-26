@@ -54,7 +54,7 @@ PAPER_PATH = OUTS_LOG_PATH.parent / "outs_paper_tracks.csv"
 ET = ZoneInfo("America/New_York")
 
 # The /outs page's amber-highlight threshold (dashboard/app/outs/
-# page.tsx uses 0.08 in the Gap cell). If one moves, move both.
+# page.tsx uses 0.08 in the Edge cell). If one moves, move both.
 GOLD_GAP = 0.08
 
 KELLY_FRACTION = 0.25
@@ -109,6 +109,35 @@ def _policy_bets(policy: str, board: list[dict]) -> list[dict]:
         picks = portfolio_daily_cap(picks)
         picks = [p for p in picks if p["units_risked"] > 0]
     return picks
+
+
+def board_paper_columns(board: list[dict]) -> dict[str, dict]:
+    """Per-row paper columns for one board: pitcher_id (str) ->
+    {side, stake_units, clears_gates}.
+
+    Operator direction 2026-08-26: the /outs board shows, beside each
+    row's edge, the units the capped paper rule would put on it. Both
+    run through the SAME _policy_bets path the paper ledger is scored
+    with (models.edge entry, models.staking sizing, daily cap and all)
+    — never a reimplementation — so the column cannot drift from the
+    paper record. Stakes are hypothetical by construction: betting is
+    blocked and nothing here is placed.
+    """
+    out: dict[str, dict] = {}
+    for b in _policy_bets("gold_capped", board):
+        out[str(b["pitcher_id"])] = {
+            "side": b["side"],
+            "stake_units": b["units_risked"],
+            "clears_gates": False,
+        }
+    # gates entries are usually a subset of the gold board, but the two
+    # bars are independent (blended-edge threshold vs raw 8pp gap), so
+    # a gates-only row still gets its stake rather than a blank.
+    for b in _policy_bets("gates", board):
+        row = out.setdefault(str(b["pitcher_id"]), {
+            "side": b["side"], "stake_units": b["units_risked"]})
+        row["clears_gates"] = True
+    return out
 
 
 def _settle(bet: dict, actual: int | None) -> tuple[str, float]:

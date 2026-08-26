@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-26T13:01:52.887820+00:00",
+ "generated_at": "2026-08-26T14:23:07.687071+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-26",
@@ -27,7 +27,10 @@
      "fair_over": 0.5567,
      "hold_pct": 0.0691,
      "diagnostic_only": true,
-     "actual_outs": 9
+     "actual_outs": 9,
+     "paper_side": "UNDER",
+     "paper_stake_units": 2.0,
+     "clears_gates": true
     },
     {
      "date": "2026-08-24",
@@ -49,7 +52,10 @@
      "fair_over": 0.4899,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 15
+     "actual_outs": 15,
+     "paper_side": "UNDER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -71,7 +77,10 @@
      "fair_over": 0.5967,
      "hold_pct": 0.0687,
      "diagnostic_only": true,
-     "actual_outs": 12
+     "actual_outs": 12,
+     "paper_side": "UNDER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -93,7 +102,10 @@
      "fair_over": 0.6241,
      "hold_pct": 0.0683,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": "UNDER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -115,7 +127,10 @@
      "fair_over": 0.4049,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": "UNDER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -137,7 +152,10 @@
      "fair_over": 0.5485,
      "hold_pct": 0.0699,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -159,7 +177,10 @@
      "fair_over": 0.5323,
      "hold_pct": 0.069,
      "diagnostic_only": true,
-     "actual_outs": 17
+     "actual_outs": 17,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -181,7 +202,10 @@
      "fair_over": 0.5,
      "hold_pct": 0.0698,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -203,7 +227,10 @@
      "fair_over": 0.5232,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 21
+     "actual_outs": 21,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -225,7 +252,10 @@
      "fair_over": 0.495,
      "hold_pct": 0.0718,
      "diagnostic_only": true,
-     "actual_outs": 17
+     "actual_outs": 17,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -247,7 +277,10 @@
      "fair_over": 0.6384,
      "hold_pct": 0.0676,
      "diagnostic_only": true,
-     "actual_outs": 17
+     "actual_outs": 17,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -269,7 +302,10 @@
      "fair_over": 0.3925,
      "hold_pct": 0.0705,
      "diagnostic_only": true,
-     "actual_outs": 14
+     "actual_outs": 14,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -291,7 +327,10 @@
      "fair_over": 0.6037,
      "hold_pct": 0.0691,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -313,7 +352,10 @@
      "fair_over": 0.5574,
      "hold_pct": 0.0707,
      "diagnostic_only": true,
-     "actual_outs": 16
+     "actual_outs": 16,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -335,7 +377,10 @@
      "fair_over": 0.6032,
      "hold_pct": 0.0679,
      "diagnostic_only": true,
-     "actual_outs": 15
+     "actual_outs": 15,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -357,7 +402,10 @@
      "fair_over": 0.496,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": 11
+     "actual_outs": 11,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -379,7 +427,10 @@
      "fair_over": 0.531,
      "hold_pct": 0.0715,
      "diagnostic_only": true,
-     "actual_outs": 21
+     "actual_outs": 21,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -401,7 +452,10 @@
      "fair_over": 0.4535,
      "hold_pct": 0.0705,
      "diagnostic_only": true,
-     "actual_outs": 21
+     "actual_outs": 21,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -423,7 +477,10 @@
      "fair_over": 0.4323,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": 16
+     "actual_outs": 16,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-24",
@@ -445,7 +502,10 @@
      "fair_over": 0.4496,
      "hold_pct": 0.0692,
      "diagnostic_only": true,
-     "actual_outs": 8
+     "actual_outs": 8,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     }
    ]
   },
@@ -472,7 +532,10 @@
      "fair_over": 0.4849,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": "OVER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -494,7 +557,10 @@
      "fair_over": 0.4496,
      "hold_pct": 0.0692,
      "diagnostic_only": true,
-     "actual_outs": 19
+     "actual_outs": 19,
+     "paper_side": "OVER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -516,7 +582,10 @@
      "fair_over": 0.3949,
      "hold_pct": 0.0686,
      "diagnostic_only": true,
-     "actual_outs": 4
+     "actual_outs": 4,
+     "paper_side": "UNDER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -538,7 +607,10 @@
      "fair_over": 0.4306,
      "hold_pct": 0.0702,
      "diagnostic_only": true,
-     "actual_outs": 15
+     "actual_outs": 15,
+     "paper_side": "OVER",
+     "paper_stake_units": 1.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -560,7 +632,10 @@
      "fair_over": 0.5192,
      "hold_pct": 0.0701,
      "diagnostic_only": true,
-     "actual_outs": 13
+     "actual_outs": 13,
+     "paper_side": "OVER",
+     "paper_stake_units": 0.5,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -582,7 +657,10 @@
      "fair_over": 0.4889,
      "hold_pct": 0.0713,
      "diagnostic_only": true,
-     "actual_outs": 13
+     "actual_outs": 13,
+     "paper_side": "UNDER",
+     "paper_stake_units": 0.5,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -604,7 +682,10 @@
      "fair_over": 0.4609,
      "hold_pct": 0.0689,
      "diagnostic_only": true,
-     "actual_outs": 20
+     "actual_outs": 20,
+     "paper_side": "UNDER",
+     "paper_stake_units": 0.5,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -626,7 +707,10 @@
      "fair_over": 0.5635,
      "hold_pct": 0.0705,
      "diagnostic_only": true,
-     "actual_outs": 15
+     "actual_outs": 15,
+     "paper_side": "UNDER",
+     "paper_stake_units": 0.5,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -648,7 +732,10 @@
      "fair_over": 0.4669,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": 15
+     "actual_outs": 15,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -670,7 +757,10 @@
      "fair_over": 0.504,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": 11
+     "actual_outs": 11,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -692,7 +782,10 @@
      "fair_over": 0.4899,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -714,7 +807,10 @@
      "fair_over": 0.5302,
      "hold_pct": 0.0696,
      "diagnostic_only": true,
-     "actual_outs": 12
+     "actual_outs": 12,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -736,7 +832,10 @@
      "fair_over": 0.5351,
      "hold_pct": 0.0702,
      "diagnostic_only": true,
-     "actual_outs": 17
+     "actual_outs": 17,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -758,7 +857,10 @@
      "fair_over": 0.5458,
      "hold_pct": 0.0688,
      "diagnostic_only": true,
-     "actual_outs": 16
+     "actual_outs": 16,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -780,7 +882,10 @@
      "fair_over": 0.5232,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 14
+     "actual_outs": 14,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -802,7 +907,10 @@
      "fair_over": 0.4878,
      "hold_pct": 0.069,
      "diagnostic_only": true,
-     "actual_outs": 21
+     "actual_outs": 21,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -824,7 +932,10 @@
      "fair_over": 0.5419,
      "hold_pct": 0.07,
      "diagnostic_only": true,
-     "actual_outs": 20
+     "actual_outs": 20,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -846,7 +957,10 @@
      "fair_over": 0.5221,
      "hold_pct": 0.0717,
      "diagnostic_only": true,
-     "actual_outs": 21
+     "actual_outs": 21,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -868,7 +982,10 @@
      "fair_over": 0.5101,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 11
+     "actual_outs": 11,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -890,7 +1007,10 @@
      "fair_over": 0.5677,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": 14
+     "actual_outs": 14,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -912,7 +1032,10 @@
      "fair_over": 0.4899,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -934,7 +1057,10 @@
      "fair_over": 0.6343,
      "hold_pct": 0.068,
      "diagnostic_only": true,
-     "actual_outs": 5
+     "actual_outs": 5,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -956,7 +1082,10 @@
      "fair_over": 0.3882,
      "hold_pct": 0.0689,
      "diagnostic_only": true,
-     "actual_outs": 15
+     "actual_outs": 15,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -978,7 +1107,10 @@
      "fair_over": 0.433,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 14
+     "actual_outs": 14,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -1000,7 +1132,10 @@
      "fair_over": 0.5261,
      "hold_pct": 0.0707,
      "diagnostic_only": true,
-     "actual_outs": 23
+     "actual_outs": 23,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -1022,7 +1157,10 @@
      "fair_over": 0.4759,
      "hold_pct": 0.0712,
      "diagnostic_only": true,
-     "actual_outs": 18
+     "actual_outs": 18,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -1044,7 +1182,10 @@
      "fair_over": 0.503,
      "hold_pct": 0.0719,
      "diagnostic_only": true,
-     "actual_outs": 20
+     "actual_outs": 20,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-25",
@@ -1066,7 +1207,10 @@
      "fair_over": 0.4138,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": 15
+     "actual_outs": 15,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     }
    ]
   },
@@ -1093,7 +1237,10 @@
      "fair_over": 0.502,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": "UNDER",
+     "paper_stake_units": 2.0,
+     "clears_gates": true
     },
     {
      "date": "2026-08-26",
@@ -1115,7 +1262,10 @@
      "fair_over": 0.5261,
      "hold_pct": 0.0707,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": "OVER",
+     "paper_stake_units": 2.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1137,7 +1287,10 @@
      "fair_over": 0.6051,
      "hold_pct": 0.0686,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": "UNDER",
+     "paper_stake_units": 1.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1159,7 +1312,10 @@
      "fair_over": 0.4496,
      "hold_pct": 0.0692,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": "UNDER",
+     "paper_stake_units": 0.5,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1181,7 +1337,10 @@
      "fair_over": 0.469,
      "hold_pct": 0.0715,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": "OVER",
+     "paper_stake_units": 0.5,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1203,7 +1362,10 @@
      "fair_over": 0.5331,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": "UNDER",
+     "paper_stake_units": 0.5,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1225,7 +1387,10 @@
      "fair_over": 0.4829,
      "hold_pct": 0.0705,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1247,7 +1412,10 @@
      "fair_over": 0.5841,
      "hold_pct": 0.0685,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1269,7 +1437,10 @@
      "fair_over": 0.505,
      "hold_pct": 0.0718,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1291,7 +1462,10 @@
      "fair_over": 0.4323,
      "hold_pct": 0.0708,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1313,7 +1487,10 @@
      "fair_over": 0.497,
      "hold_pct": 0.0719,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1335,7 +1512,10 @@
      "fair_over": 0.509,
      "hold_pct": 0.0715,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1357,7 +1537,10 @@
      "fair_over": 0.5438,
      "hold_pct": 0.0694,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1379,7 +1562,10 @@
      "fair_over": 0.5212,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1401,7 +1587,10 @@
      "fair_over": 0.496,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1423,7 +1612,10 @@
      "fair_over": 0.5465,
      "hold_pct": 0.0705,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1445,7 +1637,10 @@
      "fair_over": 0.4788,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1467,7 +1662,10 @@
      "fair_over": 0.4698,
      "hold_pct": 0.0696,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1489,7 +1687,10 @@
      "fair_over": 0.5081,
      "hold_pct": 0.0694,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1511,7 +1712,10 @@
      "fair_over": 0.3716,
      "hold_pct": 0.0679,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1533,7 +1737,10 @@
      "fair_over": 0.4878,
      "hold_pct": 0.069,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1555,7 +1762,10 @@
      "fair_over": 0.5142,
      "hold_pct": 0.0688,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1577,7 +1787,10 @@
      "fair_over": 0.4919,
      "hold_pct": 0.0694,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1599,7 +1812,10 @@
      "fair_over": 0.496,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1621,7 +1837,10 @@
      "fair_over": 0.5101,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1643,7 +1862,10 @@
      "fair_over": 0.3629,
      "hold_pct": 0.0681,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     },
     {
      "date": "2026-08-26",
@@ -1665,7 +1887,10 @@
      "fair_over": 0.502,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": null
+     "actual_outs": null,
+     "paper_side": null,
+     "paper_stake_units": 0.0,
+     "clears_gates": false
     }
    ]
   }

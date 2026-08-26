@@ -1,6 +1,42 @@
 
 # Changelog
 
+## 2026-08-26 - /outs board reads from the model's side: Edge + paper Units columns
+
+Operator direction. The board's probabilities were over-only — an
+UNDER lean rendered as "Model P(over) 32.0%, gap -18.2pp" and had to
+be flipped in the reader's head — and the page carried no edge or
+stake columns. Reworked:
+
+- **Side-oriented rows.** A Side chip (OVER/UNDER, gradient palette),
+  then Model and Market probabilities for THAT side, then Edge as
+  their difference — always positive toward the lean, amber at the
+  8pp gold bar as before. The over-only "Gap" column is retired.
+- **Units column.** The stake the capped paper rule would put on the
+  row, attached to the payload by new
+  `outs_paper.board_paper_columns` — the SAME `_policy_bets` path the
+  paper ledger is scored with (models.edge entry, models.staking
+  quarter-Kelly on the half-trust blend, 2u per-bet cap, 10u daily
+  cap with correlation haircut), never a browser reimplementation.
+  Rows that also clear the production entry bar carry a "gates" tag.
+  All stakes are hypothetical: betting stays blocked, nothing is
+  placed, and the page says so in the badge, the intro, and the
+  footnote.
+- **Wider.** The page breaks out of the shared max-w-5xl shell on
+  xl+ viewports (negative margins; board min-width 1040px) — 11
+  columns earned the room. Other pages untouched.
+- **Payload schema.** Board rows gain `paper_side`,
+  `paper_stake_units`, `clears_gates`; the page tolerates their
+  absence, so the worker's pre-deploy payload renders "—" in Units
+  rather than breaking.
+
+This deliberately retires the "payload cannot carry a pick for
+today" construction from 2026-08-24 (KB updated): the board now shows
+tonight's paper side and stake, clearly labeled as paper. Pinned by
+`test_board_paper_columns_match_the_policies` on the frozen 08-24
+fixtures (five gold stakes, the daily-cap victim blank, the one gates
+row flagged).
+
 ## 2026-08-25 - Same-night outs grading from the MLB boxscore (03:00 job)
 
 Operator request after watching the board sit blank all evening. The

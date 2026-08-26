@@ -750,10 +750,17 @@ ride the SAME leakage-safe feature builder training uses (placeholder
 labels proven inert), the board lands in `data/outs_slates/`, settled
 results in `data/outs_model_log.csv`, and the page payload in
 `dashboard/public/outs.json` (worker serves `/outs.json`; the /outs
-page falls back to the bundled copy). NOTHING computes an edge, side,
-or stake for an ACTIONABLE game — the payload cannot carry a pick for
-today by construction, and the strikeouts ledger/aggregates are
-market-filtered so the two products can never blend.
+page falls back to the bundled copy). Since 2026-08-26 (operator
+direction, superseding the "payload cannot carry a pick for today"
+construction) every payload board row carries `paper_side` /
+`paper_stake_units` / `clears_gates`, computed by
+`outs_paper.board_paper_columns` through the same `_policy_bets` path
+the paper ledger is scored with — so /outs shows tonight's side,
+edge, and paper stake per row. They are hypothetical and labeled as
+such: no bet-placement path exists for this market, betting stays
+blocked behind the calibration gate, and the strikeouts
+ledger/aggregates are market-filtered so the two products can never
+blend.
 
 Grading is two-layered (since 2026-08-25): `tools/outs_boxscore.py`
 grades FINAL games from the public MLB boxscore the same night

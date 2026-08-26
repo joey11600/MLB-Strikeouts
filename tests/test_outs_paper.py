@@ -75,6 +75,19 @@ def test_gold_uncapped_all_six_full_kelly():
     assert pl == pytest.approx(17.73, abs=0.05)
 
 
+def test_board_paper_columns_match_the_policies():
+    """The /outs board's Units column runs through the same code as the
+    paper ledger: gold rows carry the capped stake, the daily-cap
+    victim carries none, and the gates entry is flagged."""
+    cols = outs_paper.board_paper_columns(GOLD_0824)
+    assert len(cols) == 5                          # 6 gold, cap cuts one
+    assert "677952" not in cols                    # Ashcraft: daily cap
+    assert all(c["stake_units"] == 2.0 for c in cols.values())
+    assert cols["664353"]["side"] == "UNDER"       # Urquidy
+    assert cols["664353"]["clears_gates"] is True  # the one gates entry
+    assert sum(1 for c in cols.values() if c["clears_gates"]) == 1
+
+
 def test_settle_push_and_void():
     bet = {"line": 18.0, "odds": +100, "side": "OVER", "units_risked": 2.0}
     assert _settle(bet, 18) == ("PUSH", 0.0)      # exact land, whole line

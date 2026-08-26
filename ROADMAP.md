@@ -476,6 +476,14 @@ strikeouts model, not a variant of it.
   column on `/outs`: settled rows badge ✓ right / ✗ wrong on whether
   the gap's side matched the settlement, PUSH neutral on exact lands.
   Explicitly not WIN/LOSS — no bet exists behind any row
+- [x] **Board reads from the model's side (2026-08-26, operator
+  direction).** Side chip + side-oriented Model/Market/Edge columns,
+  plus a Units column carrying the capped paper rule's stake per row
+  (`outs_paper.board_paper_columns`, the paper ledger's own code
+  path; "gates" tag when the production bar also clears). Page breaks
+  out of the max-w-5xl shell on xl+. Retires the payload's
+  no-pick-for-today construction — stakes stay paper until the
+  calibration gate opens
 - [x] **CI staged into the outs payload's mirror path (2026-08-25,
   second A-052 amendment).** The daily jobs race between the worker
   and CI; CI won the 08-25 morning run and discarded the rebuilt

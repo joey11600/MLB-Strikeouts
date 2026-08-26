@@ -90,6 +90,8 @@ def build_payload() -> dict:
     # page as soon as the repo syncs — a payload rebuilt from one
     # directory would silently DROP yesterday's board (the exact way
     # the date stepper would come up empty tomorrow morning).
+    from tools.outs_paper import board_paper_columns
+
     dates = available_dates()[:PAYLOAD_DATES]
     actual = _actuals()
     slates = {}
@@ -97,10 +99,18 @@ def build_payload() -> dict:
         slate = load_slate(d)
         if slate is None:
             continue
+        # Side / stake / gates flags through the paper-track code path
+        # itself (operator direction 2026-08-26) — hypothetical numbers
+        # on a blocked market, but computed by the code money would use.
+        paper = board_paper_columns(slate.get("board", []))
         board = []
         for r in slate.get("board", []):
             row = {k: v for k, v in r.items() if k != "pmf"}
             row["actual_outs"] = actual.get((d, int(r.get("pitcher_id", 0))))
+            pcols = paper.get(str(r.get("pitcher_id")))
+            row["paper_side"] = pcols["side"] if pcols else None
+            row["paper_stake_units"] = pcols["stake_units"] if pcols else 0.0
+            row["clears_gates"] = bool(pcols and pcols.get("clears_gates"))
             board.append(row)
         # biggest model-vs-market disagreement first — the page's point
         # is watching the disagreements get graded, not implying picks
