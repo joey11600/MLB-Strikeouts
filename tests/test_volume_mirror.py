@@ -116,3 +116,137 @@ def test_missing_volume_is_survivable(worker):
     import shutil
     shutil.rmtree(worker.VOLUME_STATE)
     assert worker.mirror_volume_to_repo() == 0
+
+
+# --- the outs market's half of the same loop (2026-08-27) -------------
+#
+# outs_paper_tracks.csv was in PERSISTED (so it lived on the volume) but
+# in neither _MERGE_KEYS nor the mirror. The outs jobs are DISPATCHED to
+# GitHub Actions, so every row log_paper_tracks() ever wrote landed in
+# the repo, while the container served the volume copy it was seeded
+# with on 2026-08-25 and never refreshed -- seed_volume_state() only
+# fills gaps. For three days the /outs board showed 08-25 and 08-26
+# graded while the paper P&L beside it read "5 bets, 1 date": 15 gold
+# plays missing, including 08-26's losing 3-4, so the published total
+# was biased toward the one winning day it did count.
+
+OUTS_PAPER_FIELDS = ["date", "policy", "game_pk", "pitcher_id",
+                     "pitcher_name", "side", "line", "odds",
+                     "stake_units", "result", "pl_units", "logged_at"]
+
+
+def _paper(date: str, policy: str, pid: str, result: str, pl: str) -> dict:
+    return {"date": date, "policy": policy, "game_pk": "1",
+            "pitcher_id": pid, "pitcher_name": "P", "side": "UNDER",
+            "line": "17.5", "odds": "-110", "stake_units": "2.0",
+            "result": result, "pl_units": pl, "logged_at": "2026-08-27T00:00:00+00:00"}
+
+
+def test_reconcile_carries_ci_paper_tracks_into_the_volume(worker):
+    """CI appends the graded slate; the container must serve it."""
+    repo_paper = worker.REPO / "data" / "outs_paper_tracks.csv"
+    vol_paper = worker.VOLUME_STATE / "outs_paper_tracks.csv"
+
+    _write_csv(vol_paper, [_paper("2026-08-24", "gold_capped", "1", "WIN", "1.85")],
+               OUTS_PAPER_FIELDS)
+    _write_csv(repo_paper, [
+        _paper("2026-08-24", "gold_capped", "1", "WIN", "1.85"),
+        _paper("2026-08-25", "gold_capped", "2", "WIN", "1.09"),
+        _paper("2026-08-26", "gold_capped", "3", "LOSS", "-2.0"),
+    ], OUTS_PAPER_FIELDS)
+
+    worker.reconcile_ledger()
+
+    dates = {r["date"] for r in _read(vol_paper)}
+    assert dates == {"2026-08-24", "2026-08-25", "2026-08-26"}, (
+        "the served paper P&L froze at its seed date again")
+
+
+def test_reconcile_never_drops_a_frozen_paper_row(worker):
+    """A (date, policy) pair is written once and FROZEN. The union may
+    add to the volume; it must never remove what the volume already
+    settled, or a published P&L would move after the fact."""
+    repo_paper = worker.REPO / "data" / "outs_paper_tracks.csv"
+    vol_paper = worker.VOLUME_STATE / "outs_paper_tracks.csv"
+
+    _write_csv(vol_paper, [_paper("2026-08-26", "gold_capped", "9", "LOSS", "-2.0")],
+               OUTS_PAPER_FIELDS)
+    _write_csv(repo_paper, [_paper("2026-08-24", "gold_capped", "1", "WIN", "1.85")],
+               OUTS_PAPER_FIELDS)
+
+    worker.reconcile_ledger()
+
+    rows = _read(vol_paper)
+    assert {(r["date"], r["pitcher_id"]) for r in rows} == {
+        ("2026-08-26", "9"), ("2026-08-24", "1")}
+
+
+def test_reconcile_carries_outs_evidence_and_boards(worker):
+    outs_log = worker.VOLUME_STATE / "outs_model_log.csv"
+    _write_csv(worker.REPO / "data" / "outs_model_log.csv", [
+        {"date": "2026-08-26", "pitcher_id": "7", "actual_outs": "18"},
+    ], ["date", "pitcher_id", "actual_outs"])
+    (worker.REPO / "data" / "outs_slates").mkdir()
+    (worker.REPO / "data" / "outs_slates" / "2026-08-26.json").write_text(
+        '{"generated_at": "2026-08-26T20:00:00+00:00"}', encoding="utf-8")
+
+    worker.reconcile_ledger()
+
+    assert _read(outs_log)[0]["actual_outs"] == "18"
+    assert (worker.VOLUME_STATE / "outs_slates" / "2026-08-26.json").exists()
+
+
+def test_mirror_carries_outs_grades_back_to_the_checkout(worker):
+    """outs-live grades the VOLUME every five minutes. Without this
+    direction those grades reach git only when CI re-derives them from
+    Savant the next morning -- 2026-08-25's needed a hand-run sweep."""
+    _write_csv(worker.VOLUME_STATE / "outs_model_log.csv", [
+        {"date": "2026-08-26", "pitcher_id": "7", "actual_outs": "18"},
+    ], ["date", "pitcher_id", "actual_outs"])
+    (worker.VOLUME_STATE / "outs_slates").mkdir()
+    (worker.VOLUME_STATE / "outs_slates" / "2026-08-26.json").write_text(
+        "{}", encoding="utf-8")
+
+    worker.mirror_volume_to_repo()
+
+    assert (worker.REPO / "data" / "outs_model_log.csv").exists()
+    assert (worker.REPO / "data" / "outs_slates" / "2026-08-26.json").exists()
+
+
+def test_mirror_refuses_to_shrink_a_ledger(worker):
+    """reconcile_ledger() catches its own exceptions and returns, so the
+    volume can legitimately be BEHIND the checkout. The mirror copy is
+    blind, so without a guard one bad pass overwrites a complete ledger
+    with a stale one -- "never delete rows" broken by a backup path."""
+    repo_paper = worker.REPO / "data" / "outs_paper_tracks.csv"
+    vol_paper = worker.VOLUME_STATE / "outs_paper_tracks.csv"
+
+    _write_csv(repo_paper, [
+        _paper("2026-08-24", "gold_capped", "1", "WIN", "1.85"),
+        _paper("2026-08-25", "gold_capped", "2", "WIN", "1.09"),
+        _paper("2026-08-26", "gold_capped", "3", "LOSS", "-2.0"),
+    ], OUTS_PAPER_FIELDS)
+    # the frozen volume copy, as it stood on 2026-08-27
+    _write_csv(vol_paper, [_paper("2026-08-24", "gold_capped", "1", "WIN", "1.85")],
+               OUTS_PAPER_FIELDS)
+
+    worker.mirror_volume_to_repo()
+
+    assert len(_read(repo_paper)) == 3, "the mirror ate the checkout's ledger"
+
+
+def test_mirror_still_carries_an_equal_or_longer_ledger(worker):
+    """The guard must not block the case it exists to protect."""
+    repo_log = worker.REPO / "data" / "outs_model_log.csv"
+    fields = ["date", "pitcher_id", "actual_outs"]
+    _write_csv(repo_log, [{"date": "2026-08-26", "pitcher_id": "7", "actual_outs": ""}],
+               fields)
+    _write_csv(worker.VOLUME_STATE / "outs_model_log.csv", [
+        {"date": "2026-08-26", "pitcher_id": "7", "actual_outs": "18"},
+        {"date": "2026-08-26", "pitcher_id": "8", "actual_outs": "15"},
+    ], fields)
+
+    worker.mirror_volume_to_repo()
+
+    rows = _read(repo_log)
+    assert len(rows) == 2 and rows[0]["actual_outs"] == "18"

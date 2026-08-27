@@ -728,12 +728,38 @@ def mirror_volume_to_repo() -> int:
         return 0
 
     copied = 0
-    for name in ("picks_2026.csv", "model_log.csv", "pick_changes.csv"):
+    # The outs names ride along for the same reason the strikeouts ones
+    # do: outs-live grades the VOLUME every five minutes, so without
+    # this direction a start graded at 21:40 reaches git only when CI
+    # re-derives it from Savant the next morning -- and 2026-08-25's
+    # grades needed a hand-run sweep to land at all. Safe for the same
+    # reason as the rest: reconcile_ledger() unions repo -> volume
+    # first, so the volume is a superset by the time we copy back.
+    for name in ("picks_2026.csv", "model_log.csv", "pick_changes.csv",
+                 "outs_model_log.csv", "outs_paper_tracks.csv",
+                 "outs_scorecard.csv"):
         src = VOLUME_STATE / name
-        if src.exists():
-            shutil.copy2(src, REPO / "data" / name)
-            copied += 1
-    for sub in ("slates", "odds"):
+        if not src.exists():
+            continue
+        dest = REPO / "data" / name
+        # ENFORCE the superset claim above; do not merely assert it.
+        # reconcile_ledger() catches its own exceptions and returns, so
+        # a half-finished merge leaves the volume legitimately BEHIND
+        # the checkout -- and this copy is blind. One bad pass would
+        # then overwrite a complete ledger with a stale one, which is
+        # the "never delete rows" rule broken by a backup path. Cheap
+        # to check, and the skip is loud: the next pass re-merges and
+        # the mirror proceeds normally.
+        vol_rows, _ = _read_csv(src)
+        repo_rows, _ = _read_csv(dest)
+        if len(vol_rows) < len(repo_rows):
+            log(f"mirror SKIPPED {name}: volume has {len(vol_rows)} row(s), "
+                f"checkout has {len(repo_rows)} — reconcile has not caught "
+                f"up, and this copy would drop rows")
+            continue
+        shutil.copy2(src, dest)
+        copied += 1
+    for sub in ("slates", "odds", "outs_slates"):
         src_dir = VOLUME_STATE / sub
         if not src_dir.is_dir():
             continue
@@ -831,6 +857,25 @@ LAST_RECONCILE: dict = {"ok": None, "at": None, "error": None,
 _MERGE_KEYS = {
     "picks_2026.csv": ("date", "game_pk", "pitcher_id", "line"),
     "model_log.csv": ("date", "pitcher_id"),
+    # The outs market's ledgers (Phase 10). PERSISTED put them on the
+    # volume; nothing merged CI's copy back in, and the outs jobs are
+    # DISPATCHED to GitHub Actions -- so every outs_pipeline write
+    # landed in the repo while the container kept serving the volume
+    # copy it was seeded with. outs_paper_tracks.csv froze at its
+    # 2026-08-24 seed for three days: the /outs board showed 08-25 and
+    # 08-26 graded (load_slate reads both dirs, and outs-live grades
+    # the volume directly) while the paper P&L beside it still said
+    # "5 bets, 1 date". 15 gold plays -- including yesterday's 3-4,
+    # -2.39u -- were silently absent from the totals, which biased them
+    # toward the one winning day. seed_volume_state() cannot fix this:
+    # it only fills gaps, so a file that already exists is frozen for
+    # the life of the volume.
+    "outs_model_log.csv": ("date", "pitcher_id"),
+    # A (date, policy) pair is written once and FROZEN, so same-key
+    # rows are byte-identical and the union is a genuine no-op on
+    # anything already recorded.
+    "outs_paper_tracks.csv": ("date", "policy", "pitcher_id"),
+    "outs_scorecard.csv": ("run_at",),
 }
 
 
@@ -1041,7 +1086,11 @@ def reconcile_ledger() -> None:
         for name, key in _MERGE_KEYS.items():
             _merge_csv(name, key)
         _merge_journal("pick_changes.csv")
-        for name in ("slates", "odds"):
+        # outs_slates for the same reason as the CSVs above. The board
+        # survived without it only because outs_serve.load_slate reads
+        # the checkout too; the merge makes the volume itself correct
+        # rather than leaving the page dependent on that fallback.
+        for name in ("slates", "odds", "outs_slates"):
             _merge_dir(name)
     except Exception as exc:
         # A reconcile failure must not take the slate down. The job can

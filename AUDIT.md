@@ -372,6 +372,45 @@ Tracks open items, resolved items, and known risks.
   The class: a shared definition that documents itself as THE
   definition is not shared until every market actually imports it —
   a second market inherits the docs, not the behaviour.
+- **Amended a fifth time 2026-08-27 (operator: "it didnt count a lot
+  of the games from yesterday that were highlighted gold"): the paper
+  P&L beside the board had been frozen at 2026-08-24 for three days.**
+  The first amendment put the outs artifacts on `PERSISTED` and on
+  `commit_and_push`. It did not put them on the other two copies of the
+  same contract: `_MERGE_KEYS` / `reconcile_ledger()` (repo -> volume)
+  and `mirror_volume_to_repo()` (volume -> repo). Because the outs jobs
+  are DISPATCHED to GitHub Actions, `log_paper_tracks()` only ever ran
+  on CI and only ever appended to the REPO copy, while the container
+  served the volume copy — and `seed_volume_state()` is gap-fill, so a
+  file that already exists is frozen for the life of the volume.
+  Measured on the served payload at 10:06 ET: `gold_capped` reported
+  **5 bets / 1 date / +5.67u** against a repo ledger holding **20 bets
+  / 3 dates / +7.36u**. 15 gold plays absent, and the omission was not
+  neutral — 08-26 went **3-4 for -2.39u**, so the published total was
+  biased toward the one winning day it did count. Fixed: the three outs
+  CSVs and `outs_slates` added to both directions, with tests that fail
+  without them.
+- **Why every neighbouring check stayed green.** The BOARD self-heals —
+  `load_slate` reads the checkout too (the third amendment's fix) and
+  `outs-live` grades the volume directly — so the page showed 08-25 and
+  08-26 with results while the tracker printed beside them counted
+  neither. `check_outs_page_current` asks whether the served board is
+  current and whether yesterday's results are present; both were true.
+  New `check_outs_paper_tracks_served` counts the served bets against
+  the repo ledger's rows, asymmetric on purpose (the volume may run
+  AHEAD of the checkout, so only served < repo is a finding). It fails
+  red on the live payload today and goes green on deploy.
+- **Generalises to:** a frozen counter and a quiet one are
+  indistinguishable from the outside. Every check on this page asked
+  "is this fresh?" of things that get REWRITTEN; nothing asked "is this
+  complete?" of a thing that only ever GROWS. For an append-only
+  ledger, currency is not the invariant — row count against the source
+  of truth is.
+- **Generalises to:** "the artifact is persisted" is four separate
+  contracts, not one — seed, reconcile, mirror, and stage. A-052's own
+  first amendment wrote that lesson down after fixing two of them, and
+  the other two still took three days and the operator's eye to find.
+  A list that must be edited in four places will be edited in fewer.
 - **Generalises to:** the watchdog checked that the served board was
   CURRENT and that YESTERDAY's results were present — neither of which
   can fail while tonight's results are simply never collected. A

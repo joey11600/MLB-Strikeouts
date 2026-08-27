@@ -1,6 +1,81 @@
 
 # Changelog
 
+## 2026-08-27 - The outs paper P&L was frozen at its seed date
+
+Operator: "something is wrong with the bets profit tracker. it didnt
+count a lot of the games from yesterday that were highlighted gold."
+
+Correct. The /outs paper tracker had counted nothing since 2026-08-24.
+
+`data/outs_paper_tracks.csv` lives on the Railway volume (it is in
+`PERSISTED`), but the outs jobs are DISPATCHED to GitHub Actions -- so
+`log_paper_tracks()` only ever ran on CI and only ever appended to the
+REPO copy. Nothing merged that back: the file was in neither
+`_MERGE_KEYS` (repo -> volume) nor `mirror_volume_to_repo()` (volume ->
+repo). `seed_volume_state()` cannot cover the gap, because it only
+fills gaps -- a file that already exists is frozen for the life of the
+volume.
+
+Measured on the served payload at 10:06 ET:
+
+| policy | served | actual (repo ledger) |
+|---|---|---|
+| gold_capped | 5 bets, 1 date, +5.67u | **20 bets, 3 dates, +7.36u** |
+| gold_uncapped | 6 bets, 1 date, +17.73u | **22 bets, 3 dates, +20.73u** |
+
+15 gold plays missing, and the omission was not neutral: 08-25 went
+5-3 (+4.08u) and 08-26 went **3-4 (-2.39u)**, so the published total
+was biased toward the one winning day it did count.
+
+- `_MERGE_KEYS` gains `outs_model_log.csv` (`date`, `pitcher_id`),
+  `outs_paper_tracks.csv` (`date`, `policy`, `pitcher_id`) and
+  `outs_scorecard.csv` (`run_at`); `reconcile_ledger()`'s directory
+  loop gains `outs_slates`. Union-only, as ever -- a (date, policy)
+  pair is FROZEN once written, so same-key rows are byte-identical and
+  the merge is a genuine no-op on anything already settled.
+- `mirror_volume_to_repo()` carries the same four back the other way.
+  Without it a start graded at 21:40 by `outs-live` reached git only
+  when CI re-derived it from Savant the next morning -- 2026-08-25's
+  grades needed a hand-run sweep to land at all. Safe for the same
+  reason as the rest: reconcile unions repo -> volume first, so the
+  volume is a superset by the time we copy back.
+- No data is rewritten. The repo ledger was always correct; the
+  container was serving a stale copy of it. The page self-corrects
+  within one publish pass (~5 min) of the deploy.
+
+### The check that should have caught it
+
+Every neighbouring watchdog row was green. The BOARD self-heals --
+`load_slate` reads the checkout too, and `outs-live` grades the volume
+directly -- so the page showed 08-25 and 08-26 graded while the tracker
+printed beside them counted neither. `check_outs_page_current` asks
+whether the served board is CURRENT and whether yesterday's results are
+PRESENT; both were true.
+
+New `check_outs_paper_tracks_served` counts served bets against the
+repo ledger's rows. Asymmetric on purpose: the volume may legitimately
+run AHEAD of the checkout (the worker settles before it pushes), so
+served > repo is fine and only served < repo is a finding. Replayed
+against the live payload it fails red with the exact gap
+("gold_capped serves 5 of 20 bet(s) across 2026-08-24..2026-08-26").
+
+### And the guard the mirror was missing
+
+`mirror_volume_to_repo()` copies volume -> repo blind, on the stated
+assumption that reconcile has already made the volume a superset.
+`reconcile_ledger()` catches its own exceptions and returns, so that
+assumption can be false — and on the very first pass after this deploy
+it WOULD have been dangerous: the volume's paper ledger is 31 rows
+behind the repo's. A half-finished merge followed by a blind copy
+overwrites a complete ledger with a stale one, which is "never delete
+rows" broken by a backup path. The mirror now compares row counts and
+skips loudly rather than shrinking a ledger; the next pass re-merges
+and it proceeds normally.
+
+Six tests in `tests/test_volume_mirror.py`, each verified to fail
+without the fix.
+
 ## 2026-08-26 - A start settles when the starter is pulled, not when the game ends
 
 Operator: "some of the pitchers are taken out, so the bet should be

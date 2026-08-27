@@ -836,6 +836,17 @@ volume:
 - **Key:** `(date, game_pk, pitcher_id, line)` — the same key
   `daily_pipeline._load_existing_picks` uses. Unique across the ledger
   including ladder rungs, whose `line` is `6+` rather than `6.5`.
+- **Covered files:** `picks_2026.csv`, `model_log.csv`,
+  `pick_changes.csv`, and the outs market's `outs_model_log.csv`,
+  `outs_paper_tracks.csv`, `outs_scorecard.csv` -- plus the `slates`,
+  `odds` and `outs_slates` directories. Both directions
+  (`reconcile_ledger` repo -> volume, `mirror_volume_to_repo` volume ->
+  repo) carry the same list. **"The artifact is persisted" is four
+  separate contracts** -- `PERSISTED` (seed), `_MERGE_KEYS`
+  (reconcile), the mirror list, and `commit_and_push`'s `git add`.
+  Editing fewer than four is how `outs_paper_tracks.csv` served a P&L
+  frozen at its seed date for three days (AUDIT A-052, fifth
+  amendment). Anything a job WRITES belongs on all four.
 - **Files (slates, odds):** compare `generated_at` / `captured_at` read
   from *inside* the file. Never mtime — git checkout resets it on every
   deploy, which is the same trap as the odds staleness clock.
@@ -860,6 +871,10 @@ reach the dashboard but not git.
    mixes. Compare excess-over-floor instead.
 9. The volume ledger and the git ledger are merged, never replaced.
    Any reconcile is union-only and may not drop or downgrade a row.
+   The MIRROR (volume -> repo) is a blind copy that relies on
+   reconcile having run first; since reconcile catches its own
+   exceptions and returns, the mirror enforces the superset claim
+   with a row-count check rather than assuming it.
 10. **The worker image must contain `.git`.** Railway is the clock and
     CI is the hands; git is the only wire between them. `.dockerignore`
     must never exclude `.git/` — without it every git call in the

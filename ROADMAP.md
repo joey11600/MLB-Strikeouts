@@ -507,6 +507,18 @@ strikeouts model, not a variant of it.
   starter ungraded. Now grades on `Final OR starter_is_relieved`,
   importing the strikeouts side's shared definition rather than
   restating it. 21/28 settle on the replayed slate, up from 11
+- [x] **Outs ledgers joined the reconcile and mirror paths (2026-08-27,
+  operator: "it didnt count a lot of the games from yesterday that
+  were highlighted gold").** `outs_paper_tracks.csv` was on
+  `PERSISTED` and on `commit_and_push` but on neither `_MERGE_KEYS`
+  nor `mirror_volume_to_repo`, and the outs jobs are dispatched to CI
+  — so `log_paper_tracks()` only ever appended to the repo while the
+  container served the gap-fill seed it booted with. The paper P&L
+  froze at 2026-08-24: served 5 bets / 1 date against a ledger holding
+  20 bets / 3 dates, with 08-26's losing 3-4 (-2.39u) among the 15
+  omitted. All three outs CSVs and `outs_slates` now merge both
+  directions; new watchdog row `outs paper tracks served` counts
+  served bets against the repo ledger (served < repo only)
 
 ### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
 - [x] Per-start outs table, 13,170 regular-season starts 2024–2026

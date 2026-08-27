@@ -1305,6 +1305,73 @@ def check_outs_page_current(r: Report) -> None:
              f"{y}: {have}/{len(board)} results served")
 
 
+def check_outs_paper_tracks_served(r: Report) -> None:
+    """The served paper P&L must count every settled slate the repo has.
+
+    2026-08-27: outs_paper_tracks.csv was PERSISTED (volume-resident)
+    but in neither the reconcile table nor the mirror, and the outs jobs
+    are dispatched to CI — so log_paper_tracks() only ever appended to
+    the REPO copy while the container served the volume copy it had been
+    seeded with. It froze at 2026-08-24 for three days.
+
+    Nothing caught it because every neighbouring row was green: the
+    BOARD self-heals (outs_serve.load_slate reads the checkout too, and
+    outs-live grades the volume directly), so the page showed 08-25 and
+    08-26 with results while the paper P&L printed beside them still
+    said "5 bets, 1 date". 15 gold plays absent — including 08-26's
+    losing 3-4 — which biased the published total toward the one winning
+    day it did count. A frozen tracker and a quiet one look identical;
+    only counting the rows tells them apart.
+
+    Asymmetric on purpose. The volume may legitimately run AHEAD of the
+    checkout (the worker settles before it pushes), so served > repo is
+    fine and only served < repo is a finding.
+    """
+    import urllib.request
+
+    from tools.outs_paper import PAPER_PATH, POLICIES
+
+    repo_csv = Path(__file__).parent.parent / "data" / "outs_paper_tracks.csv"
+    src = repo_csv if repo_csv.exists() else PAPER_PATH
+    if not src.exists():
+        r.ok("outs paper tracks served", "no paper tracks recorded yet")
+        return
+    with open(src, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        r.ok("outs paper tracks served", "no paper tracks recorded yet")
+        return
+
+    try:
+        payload = json.loads(urllib.request.urlopen(
+            f"{WORKER_URL}/outs.json", timeout=25).read())
+    except Exception as exc:
+        r.warn("outs paper tracks served",
+               f"worker unreachable ({type(exc).__name__}) — the page is "
+               f"on the bundled fallback")
+        return
+
+    served = ((payload.get("paper_tracks") or {}).get("policies") or {})
+    behind = []
+    for policy in POLICIES:
+        want = [x for x in rows if x.get("policy") == policy]
+        if not want:
+            continue
+        got = int((served.get(policy) or {}).get("bets") or 0)
+        if got < len(want):
+            missing = sorted({x["date"] for x in want})
+            behind.append(f"{policy} serves {got} of {len(want)} bet(s) "
+                          f"across {missing[0]}..{missing[-1]}")
+    if behind:
+        r.fail("outs paper tracks served", "; ".join(behind),
+               "the worker is serving a stale outs_paper_tracks.csv — "
+               "check that reconcile_ledger() merges it into the volume")
+    else:
+        n = len({x["date"] for x in rows})
+        r.ok("outs paper tracks served",
+             f"{len(rows)} paper row(s) over {n} date(s) all counted")
+
+
 CHECKS = [
     check_calibrator_actually_applied,
     check_models_fitted,
@@ -1326,6 +1393,7 @@ CHECKS = [
     check_dashboard_matches_ledger,
     check_served_board_is_current,
     check_outs_page_current,
+    check_outs_paper_tracks_served,
 ]
 
 
