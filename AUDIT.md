@@ -324,6 +324,33 @@ Tracks open items, resolved items, and known risks.
   watchdog gained `check_outs_page_current` (served-board currency +
   served-results presence), replay-verified against the stale payload,
   so this class fails red instead of waiting for the operator's eye.
+- **Amended a third time 2026-08-26 (operator: "the total outs are not
+  auto updating like they should be"): the payload reached the page and
+  then stopped moving.** Two independent cuts, both measured at 20:46
+  ET. (1) `outs.json` is written only by `outs_pipeline.py`, which the
+  worker runs at 09:00, 16:45 and 03:00 — so the /outs page's 60-second
+  poll spent every evening re-fetching a file that could not change;
+  the served payload was stamped 16:46 ET, four hours old. (2)
+  `grade_recent_finals` scoped itself to `dd < today`, so tonight's
+  slate was excluded by construction — 12 of the 27 board pitchers were
+  in games the schedule already called Final, with MLB's final
+  innings-pitched published, and none of them could grade until the ET
+  date rolled. Fixed: today is in scope (`dd <= today`; FINAL-only
+  discipline unchanged in `boxscore_rows`, and the paper ledger's
+  `if d >= today: continue` is a separate guard that still refuses to
+  settle a live date), new `outs_pipeline.py --live` grades and
+  republishes without the dataset rebuild or a re-price, and the
+  worker's five-minute `publish_pass` runs it. `outs.json` joins
+  `data.json` in that pass's `drop-derived` checkout, since a
+  now-always-dirty derived file would otherwise be autostashed into a
+  pop conflict against CI's copy. Verified same night: 11 finished
+  starters graded onto a board that had shown an empty Actual column
+  for four hours.
+- **Generalises to:** the watchdog checked that the served board was
+  CURRENT and that YESTERDAY's results were present — neither of which
+  can fail while tonight's results are simply never collected. A
+  freshness check anchored to a rebuild that only happens three times a
+  day cannot see a gap that lives between the rebuilds.
 - **Generalises to:** a new product's artifacts are not shipped until
   they are on the SAME persistence, mirror and merge paths the old
   ones use — on EVERY host that can run the pipeline. The worker's

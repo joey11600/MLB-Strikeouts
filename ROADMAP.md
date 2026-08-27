@@ -490,6 +490,17 @@ strikeouts model, not a variant of it.
   `outs.json` because the workflow's commit step never staged it — the
   live page served the prior day's payload with 0/20 results. One-line
   fix in `.github/workflows/daily.yml`; payload rebuilt same day
+- [x] **Outs results fill in live (2026-08-26, operator report).** Two
+  cuts stopped tonight's board from ever moving: the payload was
+  rebuilt only at 09:00 / 16:45 / 03:00, and `grade_recent_finals`
+  scoped itself to `dd < today`. Measured at 20:46 ET: served payload
+  four hours old, 0/28 results, while 12 board pitchers were already
+  in FINAL games. Today is now in grading scope (FINAL-only unchanged;
+  the paper ledger's own ET guard untouched), new
+  `outs_pipeline.py --live` does the cheap grade+republish, and the
+  worker's five-minute `publish_pass` runs it — so /outs fills as the
+  games end rather than at 03:00. `outs.json` joins `data.json` in the
+  pass's `drop-derived` checkout
 
 ### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
 - [x] Per-start outs table, 13,170 regular-season starts 2024–2026

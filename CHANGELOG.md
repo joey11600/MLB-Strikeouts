@@ -1,6 +1,59 @@
 
 # Changelog
 
+## 2026-08-26 - Outs results fill in while the games finish, not at 03:00
+
+Operator report: "the total outs are not auto updating like they
+should be." They were not, and for two independent reasons that both
+had to go.
+
+- **The payload could not change all evening.** `outs.json` is only
+  written by `tools/outs_pipeline.py`, which the worker runs at 09:00
+  (morning), 16:45 (lineups) and 03:00 (night). The /outs page polls
+  every 60 s, so from the last re-price until the small hours it was
+  re-fetching a file physically incapable of moving. Measured at
+  20:46 ET on 08-26: the served payload was stamped 16:46 ET, four
+  hours old, with 0 of 28 rows carrying a result.
+- **Today's slate was excluded from grading by construction.**
+  `outs_boxscore.grade_recent_finals` scoped itself to `dd < today`,
+  so a start that ended at 22:10 ET was not gradeable until the ET
+  date rolled - even though MLB had published its final
+  innings-pitched at the last out. At 20:46 ET, 12 of the 27 board
+  pitchers were in games the schedule already called Final.
+
+Fixed:
+
+- **`grade_recent_finals` now includes today** (`dd <= today`).
+  FINAL-only discipline is unchanged and enforced where it always was,
+  in `boxscore_rows` - a live game is still never graded, and a
+  starter who is not his game's first pitcher still stays ungraded and
+  settles VOID downstream. The paper ledger's stricter ET-clock guard
+  is a separate check in `tools/outs_paper.py` (`if d >= today:
+  continue`) and is untouched, so tonight's grades cannot settle a
+  paper track early.
+- **New `tools/outs_pipeline.py --live`.** The cheap half of
+  `--grade`: boxscore-grade the recent slates, rebuild the payload,
+  and nothing else - no dataset rebuild (the 1.47 GB pass that has
+  nothing to learn until Savant publishes tomorrow) and no re-pricing
+  (the board's numbers are fixed at lineup lock; only results move).
+  A slate with nothing missing costs zero API calls.
+- **Wired into the worker's five-minute publish pass**
+  (`publish_pass`), not a new schedule slot - that loop already runs
+  all day and already mirrors and pushes the outs artifacts.
+  `outs.json` now also gets the `drop-derived` checkout `data.json`
+  has had since A-029: it is a derived file, and left dirty it would
+  be autostashed by the pull and re-applied over CI's copy, with a pop
+  conflict leaving conflict markers in a file the page fetches as
+  JSON.
+
+Verified on tonight's live slate: `--live` graded 11 finished starters
+(Cantillo 18, Lodolo 12, E. Rodriguez 21, Chandler 17, Melton 21,
+Peralta 18, Woo 12, Luzardo 21, G. Rodriguez 17, Boyd 18, Vasquez 15)
+into a board that had been showing an empty Actual column for four
+hours. The old behaviour's test is rewritten as
+`test_grade_recent_finals_grades_today_but_only_finals`: today's final
+grades, today's live game does not, a complete date costs zero calls.
+
 ## 2026-08-26 - /outs board reads from the model's side: Edge + paper Units columns
 
 Operator direction. The board's probabilities were over-only — an

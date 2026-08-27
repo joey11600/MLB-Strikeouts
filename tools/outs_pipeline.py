@@ -14,6 +14,7 @@ pipeline's evidence half with the money half absent:
 Usage:
     python tools/outs_pipeline.py            # full daily pass
     python tools/outs_pipeline.py --grade    # grade + payload only
+    python tools/outs_pipeline.py --live     # tonight's finals, republish
 """
 import argparse
 import json
@@ -143,6 +144,36 @@ def build_payload() -> dict:
     }
 
 
+def live_refresh() -> int:
+    """Fill tonight's board from MLB boxscores and republish, now.
+
+    The gap this closes: the payload is rebuilt at 09:00 and 16:45 and
+    graded at 03:00, so through the whole evening -- exactly when the
+    games are played -- an open /outs tab polled a file that could not
+    change, and the Actual column sat empty on starts that had been
+    over for hours.
+
+    Deliberately the cheap half of --grade: no dataset rebuild (the
+    heaviest thing the worker runs, and it has nothing to learn until
+    Savant publishes tomorrow morning) and no re-pricing (the board's
+    numbers are fixed at lineup lock; only results move). Grading is
+    FINAL-only and idempotent, so a pass with nothing new costs zero
+    API calls and writes nothing -- which is what makes this safe on
+    the live watcher's cadence.
+
+    The payload is rebuilt unconditionally, exactly as
+    tools/dashboard_data.py rebuilds data.json on the same pass: the
+    file is DERIVED, the worker drops it before every pull, and a pass
+    that declined to rewrite it would serve the checkout's older copy.
+    Returns rows graded, for the log line.
+    """
+    from tools.outs_boxscore import grade_recent_finals
+
+    n = grade_recent_finals()
+    _write_json_atomic(PAYLOAD_PATH, build_payload())
+    return n
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=None)
@@ -150,8 +181,16 @@ def main() -> int:
                     help="rebuild the dataset even if current")
     ap.add_argument("--grade", action="store_true",
                     help="grade + payload only (no pricing)")
+    ap.add_argument("--live", action="store_true",
+                    help="boxscore-grade tonight's finals and republish")
     a = ap.parse_args()
     iso = a.date or datetime.now(ET).strftime("%Y-%m-%d")
+
+    if a.live:
+        n = live_refresh()
+        print(f"OUTS LIVE - {n} row(s) graded from final boxscores; "
+              f"payload republished")
+        return 0
 
     print(f"OUTS PIPELINE — {iso} (shadow only; nothing here is a bet)")
     print("[1/4] refreshing dataset...")

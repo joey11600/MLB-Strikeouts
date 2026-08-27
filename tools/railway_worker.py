@@ -773,8 +773,15 @@ def publish_pass() -> None:
     -- and the stale copy wins every single time.
     """
     try:
+        # outs.json is derived on exactly the same terms as data.json
+        # -- rebuilt below from the volume's slates and evidence log --
+        # so it gets the same treatment. Left dirty it would be
+        # autostashed by the pull and re-applied over CI's copy, and a
+        # pop conflict would leave conflict markers in a file the /outs
+        # page fetches as JSON.
         _run("drop-derived",
-             ["git", "checkout", "--", "dashboard/public/data.json"], 60)
+             ["git", "checkout", "--", "dashboard/public/data.json",
+              "dashboard/public/outs.json"], 60)
         sync_repo()
         # Push half. sync_repo() has just unioned the pulled rows into the
         # volume, so the volume is now a superset of the checkout -- copy
@@ -785,6 +792,14 @@ def publish_pass() -> None:
         if n:
             log(f"mirrored {n} ledger file(s) from the volume into the checkout")
         _run("dashboard-data", [PYTHON, "tools/dashboard_data.py"], 900)
+        # The outs market's own results, on the same five-minute pass.
+        # Its board used to move only at 09:00, 16:45 and 03:00, so all
+        # evening the /outs page polled a file that could not change and
+        # the Actual column stayed empty on starts that had been over
+        # for hours. --live is the cheap half of --grade: FINAL-only
+        # boxscore grading (zero API calls once a slate is complete),
+        # no dataset rebuild, no re-pricing.
+        _run("outs-live", [PYTHON, "tools/outs_pipeline.py", "--live"], 900)
         # No-ops when nothing changed ("git: nothing to commit"), so this
         # is cheap to run every pass and only speaks when there is news.
         commit_and_push("live grades")

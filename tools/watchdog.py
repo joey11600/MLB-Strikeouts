@@ -1150,6 +1150,58 @@ def check_statcast_days_complete(r: Report) -> None:
         r.warn("statcast days complete", "no recent settled days in cache")
 
 
+def _check_outs_keeping_up(r: Report, tslate: dict, today: str) -> None:
+    """TONIGHT's finished starters must already be on the served board.
+
+    A-052's third amendment. The two rows above cannot see this class:
+    "board current" compares the slate's PRICING stamp, which stops
+    moving at the 16:45 re-price and is supposed to, and "results
+    present" looks at YESTERDAY. Between them sat the whole evening,
+    where the payload was rebuilt three times a day, today's slate was
+    excluded from grading by construction, and every check stayed
+    green while the Actual column sat empty on starts that had been
+    over for hours.
+
+    So: ask MLB which of tonight's games are FINAL, and require the
+    served board to carry a result for those starters. Scratches never
+    grade, so a small shortfall is normal and only a total blank on a
+    non-empty set of finals is a failure.
+    """
+    board = tslate.get("board") or []
+    if not board:
+        r.ok("outs results keep up", f"{today}: no served board yet")
+        return
+    try:
+        from tools.outs_boxscore import SCHED_URL, _fetch_json
+        sched = _fetch_json(SCHED_URL.format(today))
+    except Exception as exc:
+        r.warn("outs results keep up",
+               f"MLB schedule unreachable ({type(exc).__name__})")
+        return
+    final = {g["gamePk"] for d in sched.get("dates", [])
+             for g in d.get("games", [])
+             if g.get("status", {}).get("abstractGameState") == "Final"}
+    settled = [row for row in board if row.get("game_pk") in final]
+    if not settled:
+        r.ok("outs results keep up", f"{today}: no games final yet")
+        return
+    have = sum(1 for row in settled if row.get("actual_outs") is not None)
+    if have == 0:
+        r.fail("outs results keep up",
+               f"{today}: {len(settled)} start(s) in FINAL games, 0 graded "
+               f"on the served board",
+               "the evening refresh is not running — check that "
+               "publish_pass still runs outs_pipeline.py --live and that "
+               "grade_recent_finals still covers today")
+    elif have < len(settled):
+        r.ok("outs results keep up",
+             f"{today}: {have}/{len(settled)} final start(s) graded "
+             f"(ungraded = scratches or a game that just ended)")
+    else:
+        r.ok("outs results keep up",
+             f"{today}: all {have} final start(s) graded")
+
+
 def check_outs_page_current(r: Report) -> None:
     """The outs page's SERVED payload must carry today's board and
     yesterday's results.
@@ -1221,6 +1273,8 @@ def check_outs_page_current(r: Report) -> None:
                    "the outs page is showing a stale or missing board — "
                    "check that the host that priced it committed "
                    "dashboard/public/outs.json")
+
+    _check_outs_keeping_up(r, served.get(today) or {}, today)
 
     y = (_today() - timedelta(days=1)).isoformat()
     if y not in dates:

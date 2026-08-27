@@ -17,8 +17,14 @@ Discipline:
 - Rows go through outs_serve.union_into_log — append-mostly, atomic,
   never shrinking. A later Statcast overwrite is bit-identical on
   agreement, and disagreement surfaces in the log's history.
-- Only recent past ET dates are touched; the in-progress slate is
-  never graded (the paper tracks' ET-clock rule, same clock).
+- TODAY grades too, but only games the schedule already calls Final.
+  A starter's outs stop moving at his last out and MLB posts the
+  final innings-pitched immediately, so waiting for the ET date to
+  roll left tonight's board blank until 03:00 while the answer was
+  already published. Live games are still never graded.
+- The paper ledger keeps its own, stricter ET-clock guard
+  (tools/outs_paper.py: a date settles only once it is over), so
+  grading tonight's finals early cannot settle a paper track early.
 """
 import json
 import sys
@@ -107,9 +113,11 @@ def boxscore_rows(iso_date: str, board: list[dict],
 
 
 def grade_recent_finals(days: int = 2, fetch=_fetch_json) -> int:
-    """Grade every recent past ET slate that still has ungraded
-    pitchers. Returns rows written; a slate with nothing missing costs
-    zero API calls."""
+    """Grade every recent ET slate -- today included -- that still has
+    ungraded pitchers. Returns rows written; a slate with nothing
+    missing costs zero API calls, which is what makes this cheap
+    enough to call on the live watcher's cadence rather than once a
+    night."""
     today = datetime.now(ET).date()
     total = 0
     for d in sorted(available_dates()):
@@ -117,7 +125,7 @@ def grade_recent_finals(days: int = 2, fetch=_fetch_json) -> int:
             dd = date.fromisoformat(d)
         except ValueError:
             continue
-        if not (today - timedelta(days=days) <= dd < today):
+        if not (today - timedelta(days=days) <= dd <= today):
             continue
         board = (load_slate(d) or {}).get("board") or []
         graded = _graded_ids(d)

@@ -770,6 +770,21 @@ re-derives every value through the shared `union_into_log` merge —
 early never replaces authoritative, and both writers are one
 implementation.
 
+Refresh cadence (since 2026-08-26): the board is PRICED at 09:00 and
+16:45 ET and graded at 03:00, but RESULTS now land continuously.
+`outs_pipeline.py --live` is the cheap half of `--grade` — boxscore
+grade plus payload rebuild, no dataset refresh and no re-pricing — and
+the worker's five-minute `publish_pass` runs it, so a start that ends
+at 22:10 ET is on the page within five minutes instead of at 03:00.
+Two things make that safe. `grade_recent_finals` covers today
+(`dd <= today`) but FINAL-only discipline lives in `boxscore_rows`, so
+a live game is never graded; and the paper ledger's `if d >= today:
+continue` is an independent guard, so an early grade cannot settle a
+paper track early. `outs.json` is DERIVED and rides `publish_pass`'s
+`drop-derived` checkout alongside `data.json` — left dirty, the pull's
+autostash would re-apply it over CI's copy and a pop conflict would
+put conflict markers in a file the page parses as JSON.
+
 Paper tracks (`tools/outs_paper.py`, since 2026-08-25): three staking
 policies — production gates-as-written, gold-board (8pp+ gap) with the
 v1 caps, gold-board uncapped raw quarter-Kelly — are scored on every

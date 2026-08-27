@@ -58,24 +58,34 @@ def test_exact_line_land_is_not_an_over():
     assert rows[0]["over_hit"] == 0              # 17 is not > 17.0
 
 
-def test_grade_recent_finals_scopes_and_skips(tmp_path, monkeypatch):
-    """Only recent PAST ET dates fetch; fully graded dates cost zero
-    API calls; today's slate is never touched."""
+def test_grade_recent_finals_grades_today_but_only_finals(tmp_path,
+                                                          monkeypatch):
+    """TODAY is in scope -- a slate whose games have gone final grades
+    the same night instead of waiting for the ET date to roll -- but a
+    game still LIVE on that slate does not. Fully graded dates cost
+    zero API calls; dates outside the window are never fetched."""
     import csv
     from datetime import datetime, timedelta
 
     today = datetime.now(outs_boxscore.ET).date()
+    t = today.isoformat()
     y = (today - timedelta(days=1)).isoformat()
-    board = [dict(_board_row(1001, 11, "Final Starter", 15.5), date=y)]
+    old = (today - timedelta(days=9)).isoformat()
+    boards = {
+        y: [dict(_board_row(1001, 11, "Final Starter", 15.5), date=y)],
+        t: [dict(_board_row(1001, 11, "Final Starter", 15.5), date=t),
+            dict(_board_row(1002, 22, "Live Starter", 15.5), date=t)],
+        old: [dict(_board_row(1001, 11, "Final Starter", 15.5), date=old)],
+    }
 
     log = tmp_path / "outs_model_log.csv"
     monkeypatch.setattr(outs_boxscore, "OUTS_LOG_PATH", log)
     import tools.outs_serve as srv
     monkeypatch.setattr(srv, "OUTS_LOG_PATH", log)
     monkeypatch.setattr(outs_boxscore, "available_dates",
-                        lambda: [today.isoformat(), y])
+                        lambda: sorted(boards, reverse=True))
     monkeypatch.setattr(outs_boxscore, "load_slate",
-                        lambda d: {"board": board})
+                        lambda d: {"board": boards[d]})
 
     calls = []
 
@@ -83,12 +93,19 @@ def test_grade_recent_finals_scopes_and_skips(tmp_path, monkeypatch):
         calls.append(url)
         return _fetch(url)
 
-    assert grade_recent_finals(fetch=counting_fetch) == 1
-    assert all(today.isoformat() not in u for u in calls)
+    # Yesterday's final AND today's final; today's live game does not.
+    assert grade_recent_finals(fetch=counting_fetch) == 2
+    assert any(t in u for u in calls)              # today IS in scope now
+    assert all(old not in u for u in calls)        # outside the window
     with open(log) as f:
         rows = list(csv.DictReader(f))
-    assert len(rows) == 1 and rows[0]["actual_outs"] == "17"
+    assert sorted((r["date"], r["actual_outs"]) for r in rows) == [
+        (y, "17"), (t, "17")]
 
+    # Second pass: yesterday is complete and costs nothing; today still
+    # has the live starter outstanding, so it re-checks the schedule and
+    # still refuses to grade him.
     calls.clear()
     assert grade_recent_finals(fetch=counting_fetch) == 0
-    assert calls == []                           # nothing missing, no API
+    assert all(y not in u for u in calls)
+    assert any(t in u for u in calls)
