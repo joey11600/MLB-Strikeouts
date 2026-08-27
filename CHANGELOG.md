@@ -54,6 +54,22 @@ hours. The old behaviour's test is rewritten as
 `test_grade_recent_finals_grades_today_but_only_finals`: today's final
 grades, today's live game does not, a complete date costs zero calls.
 
+**Same-night follow-up — the freshest sidecar wins.** Rebuilding the
+payload every five minutes immediately exposed a latent bug one layer
+down: `outs_serve.load_slate` preferred the state dir "the worker's
+own, freshest copy", and the volume is not always the freshest. The
+16:45 re-price runs on CI, which has no volume — it writes the sidecar
+into the checkout and commits it, and the worker's boot seeding is a
+gap-fill merge in which the volume's existing copy wins. So the volume
+held the 09:01 board (27 rows) while the checkout held the 16:46
+re-price (28 rows), and the first post-deploy publish served AND
+committed the morning's pricing. Latent until now because a payload
+rebuild had only ever happened on a host that had just written the
+sidecar itself. `load_slate` now ranks by the sidecar's own
+`generated_at`; directory order breaks ties and an unstamped sidecar
+never displaces a stamped one. Pinned by
+`test_load_slate_takes_the_freshest_sidecar_not_the_state_dir`.
+
 ## 2026-08-26 - /outs board reads from the model's side: Edge + paper Units columns
 
 Operator direction. The board's probabilities were over-only — an

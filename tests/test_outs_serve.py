@@ -254,3 +254,40 @@ def test_refresh_runs_when_dataset_is_stale(tmp_path, monkeypatch):
     monkeypatch.setattr(BOD, "atomic_write_parquet", lambda df, p: None)
     OP._refresh_dataset()
     assert calls, "a stale dataset was not rebuilt"
+
+
+def test_load_slate_takes_the_freshest_sidecar_not_the_state_dir(
+        tmp_path, monkeypatch):
+    """The volume is not automatically the newest copy: CI runs the
+    16:45 re-price, has no volume, and commits the sidecar into the
+    checkout, while the worker's boot seeding is gap-fill (volume
+    wins). Preferring the state dir served the 09:00 board all evening.
+    """
+    import json as _json
+
+    import tools.outs_serve as srv
+
+    state, repo = tmp_path / "state", tmp_path / "repo"
+    state.mkdir()
+    repo.mkdir()
+    (state / "2026-08-26.json").write_text(_json.dumps({
+        "generated_at": "2026-08-26T13:01:52.856454+00:00",
+        "board": [{"pitcher_id": 1}]}), encoding="utf-8")
+    (repo / "2026-08-26.json").write_text(_json.dumps({
+        "generated_at": "2026-08-26T20:46:28.806168+00:00",
+        "board": [{"pitcher_id": 1}, {"pitcher_id": 2}]}), encoding="utf-8")
+    monkeypatch.setattr(srv, "slate_dirs", lambda: [state, repo])
+
+    got = srv.load_slate("2026-08-26")
+    assert got["generated_at"] == "2026-08-26T20:46:28.806168+00:00"
+    assert len(got["board"]) == 2
+
+    # Ties and unstamped sidecars keep the old precedence: the state
+    # dir (first in slate_dirs) wins, and a stamped copy always beats
+    # an unstamped one wherever it sits.
+    (repo / "2026-08-25.json").write_text(_json.dumps(
+        {"board": [{"pitcher_id": 9}]}), encoding="utf-8")
+    (state / "2026-08-25.json").write_text(_json.dumps({
+        "generated_at": "2026-08-25T13:00:00+00:00",
+        "board": [{"pitcher_id": 8}]}), encoding="utf-8")
+    assert srv.load_slate("2026-08-25")["board"][0]["pitcher_id"] == 8

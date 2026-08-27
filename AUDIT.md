@@ -346,6 +346,17 @@ Tracks open items, resolved items, and known risks.
   pop conflict against CI's copy. Verified same night: 11 finished
   starters graded onto a board that had shown an empty Actual column
   for four hours.
+  Follow-up the same night: the five-minute rebuild exposed a latent
+  bug beneath it. `outs_serve.load_slate` preferred the state dir on
+  the stated assumption that the volume is the freshest copy; it is
+  not, because the 16:45 re-price runs on CI, which has no volume and
+  reaches the worker only as a committed file the gap-fill seeding
+  pass refuses to overwrite. The first post-deploy publish therefore
+  served and committed the 09:01 board (27 rows) over the 16:46
+  re-price (28 rows). `load_slate` now ranks by the sidecar's own
+  generated_at. The class: a stale-copy preference is invisible for as
+  long as only the host that wrote the copy ever reads it, and becomes
+  a regression the moment anything else rebuilds on a schedule.
 - **Generalises to:** the watchdog checked that the served board was
   CURRENT and that YESTERDAY's results were present — neither of which
   can fail while tonight's results are simply never collected. A

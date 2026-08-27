@@ -784,6 +784,11 @@ paper track early. `outs.json` is DERIVED and rides `publish_pass`'s
 `drop-derived` checkout alongside `data.json` — left dirty, the pull's
 autostash would re-apply it over CI's copy and a pop conflict would
 put conflict markers in a file the page parses as JSON.
+`load_slate()` returns the sidecar with the newest `generated_at`
+across the state dir and the checkout, NOT the state dir's copy: the
+16:45 re-price runs on CI, which has no volume, and the boot seeding
+pass is gap-fill (the volume's existing copy wins), so the volume can
+hold a stale board while the checkout holds the re-price.
 
 Paper tracks (`tools/outs_paper.py`, since 2026-08-25): three staking
 policies — production gates-as-written, gold-board (8pp+ gap) with the

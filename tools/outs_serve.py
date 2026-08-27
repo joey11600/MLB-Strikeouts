@@ -70,17 +70,53 @@ def available_dates() -> list[str]:
     return sorted(dates, reverse=True)
 
 
+def _slate_stamp(slate: dict) -> float | None:
+    """A sidecar's own generated_at as a POSIX timestamp, or None."""
+    try:
+        dt = datetime.fromisoformat(slate.get("generated_at"))
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
 def load_slate(iso_date: str) -> dict | None:
-    """One day's sidecar, preferring the state dir (the worker's own,
-    freshest copy) over the checkout."""
-    for d in slate_dirs():
+    """One day's sidecar -- the FRESHEST copy across every source.
+
+    NOT "the state dir wins", which is what this did on the assumption
+    that the volume is always the newest copy. It is not. The 16:45
+    re-price is usually run by CI, which has no volume: it writes the
+    sidecar into the checkout and commits it, and the worker's boot
+    seeding is a gap-fill merge in which the volume's existing copy
+    wins. So the volume can hold the 09:00 board while the checkout
+    holds the 16:45 one.
+
+    That was latent until the payload started being rebuilt on the
+    five-minute publish pass (2026-08-26): before, a rebuild only
+    happened on a host that had just written the sidecar itself, so
+    the two could not disagree. Afterwards the worker served -- and
+    committed -- the morning's 27-row pricing all evening while the
+    checkout held the 28-row re-price.
+
+    Ranking by the sidecar's own generated_at is what was always
+    meant. Directory order only breaks ties, and an unstamped sidecar
+    never displaces a stamped one.
+    """
+    best, best_key = None, None
+    for i, d in enumerate(slate_dirs()):
         p = d / f"{iso_date}.json"
-        if p.exists():
-            try:
-                return json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                continue
-    return None
+        if not p.exists():
+            continue
+        try:
+            slate = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        stamp = _slate_stamp(slate)
+        key = (stamp is not None, stamp or 0.0, -i)
+        if best_key is None or key > best_key:
+            best, best_key = slate, key
+    return best
 
 LOG_FIELDS = [
     "date", "game_pk", "pitcher_id", "pitcher_name", "pitcher_team",
