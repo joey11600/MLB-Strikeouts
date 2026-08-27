@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-27T01:15:53.448139+00:00",
+ "generated_at": "2026-08-27T01:18:49.203815+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-26",
@@ -1262,7 +1262,7 @@
      "fair_over": 0.5351,
      "hold_pct": 0.0702,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 12,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
      "clears_gates": false
@@ -1287,7 +1287,7 @@
      "fair_over": 0.6051,
      "hold_pct": 0.0686,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 15,
      "paper_side": "UNDER",
      "paper_stake_units": 1.0,
      "clears_gates": false
@@ -1437,7 +1437,7 @@
      "fair_over": 0.499,
      "hold_pct": 0.0719,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
@@ -1487,7 +1487,7 @@
      "fair_over": 0.499,
      "hold_pct": 0.0719,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
@@ -1562,7 +1562,7 @@
      "fair_over": 0.5253,
      "hold_pct": 0.0688,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
@@ -1612,7 +1612,7 @@
      "fair_over": 0.5359,
      "hold_pct": 0.072,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 9,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
@@ -1637,7 +1637,7 @@
      "fair_over": 0.5162,
      "hold_pct": 0.0685,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
@@ -1787,7 +1787,7 @@
      "fair_over": 0.5302,
      "hold_pct": 0.0696,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
@@ -1862,7 +1862,7 @@
      "fair_over": 0.4768,
      "hold_pct": 0.0693,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 1,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
@@ -1912,7 +1912,7 @@
      "fair_over": 0.4919,
      "hold_pct": 0.0694,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 10,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false
