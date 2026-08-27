@@ -501,6 +501,12 @@ strikeouts model, not a variant of it.
   worker's five-minute `publish_pass` runs it — so /outs fills as the
   games end rather than at 03:00. `outs.json` joins `data.json` in the
   pass's `drop-derived` checkout
+- [x] **Outs settles on the pull, not the last out (2026-08-26,
+  operator report).** `boxscore_rows` required the GAME to be Final;
+  at 21:15 ET that left 9 of 16 in-progress games with an already-out
+  starter ungraded. Now grades on `Final OR starter_is_relieved`,
+  importing the strikeouts side's shared definition rather than
+  restating it. 21/28 settle on the replayed slate, up from 11
 
 ### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
 - [x] Per-start outs table, 13,170 regular-season starts 2024–2026

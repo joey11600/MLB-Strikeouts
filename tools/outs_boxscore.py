@@ -10,7 +10,21 @@ the morning Statcast pass (outs_serve.log_dates) re-derives the same
 values through the same keyed union and thereby confirms them.
 
 Discipline:
-- FINAL games only (schedule abstractGameState), never live ones.
+- A start settles when the starter is RELIEVED -- someone has pitched
+  after him for his team -- or when the game is Final. That is the
+  same definition the strikeouts side grades on, imported from
+  workers.live_strikeouts rather than restated, so the two markets can
+  never disagree about what "finished" means. It is an already-
+  happened fact, not an inference: the boxscore lists pitchers in
+  appearance order, so anyone after him means he cannot return.
+  Innings or pitch count would be a guess, and a guess that settles a
+  bet is the failure mode this repo keeps paying for.
+- Waiting for FINAL was the old rule and it cost hours: measured
+  2026-08-26 at 21:15 ET, 9 of the 16 in-progress games had a starter
+  already out with a total that could not change, all ungraded.
+  It also disagrees with the house rules the market settles under --
+  once the pitcher is removed the action stands, and only a game
+  called BEFORE he is removed voids it (CLAUDE.md, DK house rules).
 - A board pitcher grades only when he is the game's actual starter
   (first pitcher used) with pitching stats — a scratch stays ungraded
   and settles VOID downstream.
@@ -38,6 +52,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from tools.outs_serve import (
     LOG_FIELDS, OUTS_LOG_PATH, available_dates, load_slate, union_into_log)
 from tools.validate_outs_vs_mlb import ip_to_outs
+# THE definition of "this starter's line is final", shared with
+# tools/grader.py and the live watcher. One implementation, three
+# consumers -- see the module docstring.
+from workers.live_strikeouts import starter_is_relieved
 
 ET = ZoneInfo("America/New_York")
 SCHED_URL = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={}"
@@ -79,7 +97,8 @@ def _starter_outs(box: dict, pitcher_id) -> int | None:
 
 def boxscore_rows(iso_date: str, board: list[dict],
                   fetch=_fetch_json) -> list[dict]:
-    """Graded log rows for the board pitchers whose games are FINAL."""
+    """Graded log rows for board pitchers whose line can no longer
+    move: the game is Final, or the starter has been relieved."""
     sched = fetch(SCHED_URL.format(iso_date))
     status = {}
     for d in sched.get("dates", []):
@@ -92,11 +111,18 @@ def boxscore_rows(iso_date: str, board: list[dict],
     fresh = []
     for r in board:
         gpk = r.get("game_pk")
-        if status.get(gpk) != "Final":
-            continue
+        state = status.get(gpk, "")
+        if state not in ("Final", "Live"):
+            continue                  # Preview / postponed: nothing to read
         if gpk not in boxes:
             boxes[gpk] = fetch(BOX_URL.format(gpk))
-        got = _starter_outs(boxes[gpk], r.get("pitcher_id"))
+        box = boxes[gpk]
+        pid = r.get("pitcher_id")
+        # A live game settles ONLY the starters who are already out.
+        # Everyone else stays ungraded and is re-checked next pass.
+        if state != "Final" and not starter_is_relieved(box, pid):
+            continue
+        got = _starter_outs(box, pid)
         if got is None:
             continue
         line = float(r["line"])
@@ -114,10 +140,12 @@ def boxscore_rows(iso_date: str, board: list[dict],
 
 def grade_recent_finals(days: int = 2, fetch=_fetch_json) -> int:
     """Grade every recent ET slate -- today included -- that still has
-    ungraded pitchers. Returns rows written; a slate with nothing
+    ungraded pitchers whose line can no longer move (game Final, or
+    starter relieved). Returns rows written; a slate with nothing
     missing costs zero API calls, which is what makes this cheap
-    enough to call on the live watcher's cadence rather than once a
-    night."""
+    enough to call on the five-minute publish pass rather than once a
+    night. A slate with starters still pitching re-checks each pass
+    and settles them the moment a reliever appears."""
     today = datetime.now(ET).date()
     total = 0
     for d in sorted(available_dates()):

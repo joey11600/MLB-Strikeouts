@@ -357,6 +357,21 @@ Tracks open items, resolved items, and known risks.
   generated_at. The class: a stale-copy preference is invisible for as
   long as only the host that wrote the copy ever reads it, and becomes
   a regression the moment anything else rebuilds on a schedule.
+- **Amended a fourth time 2026-08-26 (operator: "some of the pitchers
+  are taken out, so the bet should be finalized even with the game
+  still going").** With the refresh fixed, the remaining lag was the
+  SETTLEMENT DEFINITION. `boxscore_rows` required the game to be
+  Final, while the strikeouts market has settled on "a reliever has
+  pitched after him" since the live watcher shipped — a definition
+  whose own docstring calls itself THE single one, shared with
+  tools/grader.py "so early grading and live display can never
+  disagree". The outs grader simply never imported it. Measured 21:15
+  ET: 9 of 16 in-progress games had an already-out starter ungraded.
+  Now `Final OR starter_is_relieved`, one implementation and three
+  consumers; 21/28 settle on the replayed slate against 11 before.
+  The class: a shared definition that documents itself as THE
+  definition is not shared until every market actually imports it —
+  a second market inherits the docs, not the behaviour.
 - **Generalises to:** the watchdog checked that the served board was
   CURRENT and that YESTERDAY's results were present — neither of which
   can fail while tonight's results are simply never collected. A

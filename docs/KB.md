@@ -763,7 +763,11 @@ ledger/aggregates are market-filtered so the two products can never
 blend.
 
 Grading is two-layered (since 2026-08-25): `tools/outs_boxscore.py`
-grades FINAL games from the public MLB boxscore the same night
+grades settled starts from the public MLB boxscore the same night —
+since 2026-08-26 that means game Final OR
+`workers.live_strikeouts.starter_is_relieved` (someone has pitched
+after him), the same definition `tools/grader.py` settles strikeouts
+on, imported rather than restated
 (starter-only, validated 548/548 vs Statcast, fail-soft in pipeline
 step 3), and the morning Statcast pass (`outs_serve.log_dates`)
 re-derives every value through the shared `union_into_log` merge —

@@ -1,6 +1,52 @@
 
 # Changelog
 
+## 2026-08-26 - A start settles when the starter is pulled, not when the game ends
+
+Operator: "some of the pitchers are taken out, so the bet should be
+finalized even with the game still going, like the rockies game, but
+the bet isnt finalized in our dashboard."
+
+Correct, and the strikeouts side already had the right rule. A
+starter's total outs stop moving the instant he leaves the game — often
+hours before the last out — and `workers.live_strikeouts.starter_is_relieved`
+is described in its own docstring as "THE single definition of 'this
+starter's line is final', shared with tools/grader.py so early grading
+and live display can never disagree about what finished means." The
+outs grader did not use it. It required the whole GAME to be Final.
+
+Measured at 21:15 ET: of the 16 games still in progress, **9 had a
+starter already out** with a total that could not change, all showing
+an empty Actual column.
+
+- `outs_boxscore.boxscore_rows` now reads any game that has STARTED
+  and grades a board pitcher when the game is Final **or**
+  `starter_is_relieved` is true — imported from the same module
+  tools/grader.py imports it from, so the two markets share one
+  implementation rather than two definitions that can drift.
+- Still an already-happened fact, never an inference. The boxscore
+  lists pitchers in appearance order, so someone after him means he
+  cannot return. Innings and pitch count remain off-limits as
+  settlement signals.
+- Better aligned with the house rules the market settles under: once
+  the pitcher is removed the action stands, and only a game called
+  BEFORE he is removed voids it (CLAUDE.md, DK house rules). Waiting
+  for Final got that backwards for every suspended game.
+- A starter still in the game is untouched and re-checked every pass,
+  settling the moment a reliever appears.
+
+Replayed on tonight's live slate: **21 of 28 settle, up from 11.**
+Ten additional starters — Sonny Gray, Roki Sasaki, Dustin May, Sean
+Burke, Elmer Rodriguez, Peter Lambert, Ryan Gusto, AJ Smith-Shawver,
+Robert Stock, Randy Dobnak — went from blank to graded without waiting
+for their games.
+
+Worth knowing about the Rockies case that prompted this: Tanner Gordon
+threw 7.0 IP and is done, but Colorado had not sent a reliever out yet
+(they were batting in the top of the 8th), so no already-happened fact
+proved he was out. He settles on the first pitch Colorado's bullpen
+throws. That lag is the discipline working, not a gap.
+
 ## 2026-08-26 - Outs results fill in while the games finish, not at 03:00
 
 Operator report: "the total outs are not auto updating like they
