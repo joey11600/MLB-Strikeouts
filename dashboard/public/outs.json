@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-29T03:22:15.397998+00:00",
+ "generated_at": "2026-08-29T03:27:19.690796+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-28",
@@ -2372,7 +2372,7 @@
      "fair_over": 0.5212,
      "hold_pct": 0.0697,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 18,
      "paper_side": "UNDER",
      "paper_stake_units": 1.0,
      "clears_gates": false
