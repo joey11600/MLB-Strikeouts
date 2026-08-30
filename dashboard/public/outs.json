@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-30T08:27:33.947811+00:00",
+ "generated_at": "2026-08-30T08:32:42.639246+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-29",
@@ -3686,15 +3686,15 @@
   }
  },
  "scorecard": {
-  "run_at": "2026-08-24T18:45:54+00:00",
-  "n_starts": "373",
-  "n_dates": "16",
-  "over_rate": "0.496",
-  "brier_raw": "0.24795",
-  "brier_cal": "0.24795",
-  "brier_market": "0.24433",
-  "z_raw_vs_market": "0.647",
-  "z_cal_vs_market": "0.647"
+  "run_at": "2026-08-30T08:30:59+00:00",
+  "n_starts": "486",
+  "n_dates": "21",
+  "over_rate": "0.4918",
+  "brier_raw": "0.27996",
+  "brier_cal": "0.27996",
+  "brier_market": "0.24355",
+  "z_raw_vs_market": "4.06",
+  "z_cal_vs_market": "4.06"
  },
  "paper_tracks": {
   "policies": {
