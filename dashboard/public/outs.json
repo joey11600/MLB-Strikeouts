@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-08-30T11:30:10.150761+00:00",
+ "generated_at": "2026-08-30T11:35:15.118104+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-08-29",
@@ -3686,7 +3686,7 @@
   }
  },
  "scorecard": {
-  "run_at": "2026-08-30T08:30:59+00:00",
+  "run_at": "2026-08-30T11:34:30+00:00",
   "n_starts": "486",
   "n_dates": "21",
   "over_rate": "0.4918",
