@@ -574,6 +574,24 @@ strikeouts model, not a variant of it.
   the "gates" caption, indistinguishable from an unevaluated row; the
   09-01 Vasquez OVER read as a 2u recommendation while the production
   rule had refused it. All five staked rows that night were below bar.
+- [x] Print the statistic that agrees with the pick (2026-09-02, A-052
+  amendment) — the projection column was the mean, which sits on the
+  model's own side of the line only 69% of the time; it is now the
+  **median**, which does so 100% by construction (half-integer lines).
+  Mean kept in the tooltip. Derived for every historical board from
+  the sidecar pmf.
+- [x] Name the price plays (2026-09-02, same amendment) — the Side
+  column is the VALUE side (vs the market's fair, not vs 50%), and on
+  45 of 247 live rows that is the side the model itself calls less
+  likely. Tagged **price play** with both numbers; Side column itself
+  unchanged so the board stays in sync with what the paper policy
+  stakes.
+- [ ] **Decide whether price plays belong on a board whose model loses
+  to the market.** 18% of rows stake against the model's own lean on a
+  disagreement of ≤11.6pp with an opponent measured better calibrated
+  (z = +4.56). Measure the class's hit rate separately before the next
+  promotion round; if it is the leaking half, the entry bar should
+  require lean and value to agree.
 - [x] **`opp_obp_asof` was dead at serve time (A-053)** — fixed
   2026-09-02. `_extend_daily_to_scored_dates` gives every scored
   `(team, season, date)` a zero-measure daily row before the prior-day

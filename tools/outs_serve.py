@@ -150,6 +150,25 @@ def calibrate(p, cal: dict | None):
     raise ValueError(f"unknown calibrator kind {cal['kind']!r}")
 
 
+def median_outs(pmf) -> int:
+    """Smallest k with P(outs <= k) >= 0.5 — the ONE number to print
+    beside an over/under side.
+
+    Every market line is a half-integer, so ``median > line`` is exactly
+    ``P(over) > 0.5``: the displayed projection can never sit on the
+    other side of the line from the displayed side. The mean cannot
+    promise that. Outs are left-skewed — blow-up starts at ~7 outs drag
+    the mean down while a 26% spike at exactly 15 holds the median up —
+    and on the live boards the mean disagreed with the model's own lean
+    on 31% of rows (247 rows, 2026-08-26..09-02; the median on 0%). The
+    operator read "E[outs] 14.4" beside "OVER 14.5" and, reasonably,
+    called it a contradiction (A-052 amendment 2026-09-02). It was: the
+    wrong statistic was labelled as the projection.
+    """
+    c = np.cumsum(np.asarray(pmf, dtype=float))
+    return int(np.searchsorted(c, 0.5))
+
+
 # ---------------------------------------------------------- today inputs
 def _drest_lookup(iso_date: str, pitcher_ids: list[int]) -> dict[int, float]:
     """Days since each pitcher's previous appearance, from the pitch
@@ -292,6 +311,7 @@ def price_board(iso_date: str, matched: list[dict] | None = None) -> list[dict]:
             "under_odds": str(m.get("under_odds", "")),
             "odds_source": m.get("odds_source", ""),
             "expected_outs": round(float(exp_outs[i]), 2),
+            "median_outs": median_outs(pmf[i]),
             "p_over_raw": round(raw, 4),
             "p_over_cal": round(calp, 4),
             "fair_over": (round(float(nv["fair_over"]), 4)

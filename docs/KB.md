@@ -806,15 +806,33 @@ both — there is no refusal to explain there. Consumers must tolerate
 both fields being absent: payloads built before this ship without
 them, and the page degrades to a generic tooltip.
 
-`expected_outs` on the board is a DISPLAY column. No decision code
-reads it, and that is deliberate: an over/under prices off P(over),
-not the mean, and the outs distribution is left-skewed enough that the
-two legitimately disagree (measured 63 rows with the mean below the
-line and the over still favoured, against 3 the other way). Do not
-add a "mean must agree with the side" filter without re-measuring — it
-was tested on 210 graded rows at p = 0.217, and a boundary-cell
-concentration variant at p = 0.974. Neither separates winners from
-losers.
+**The projection column is the median, not the mean** (2026-09-02).
+`expected_outs` stays in the sidecar and the evidence log but is no
+longer what the board prints beside the side. Every market line is a
+half-integer, so `median > line` is exactly `P(over) > 0.5`: the
+printed projection cannot sit on the other side of the line from the
+model's own lean. The mean can — it is pulled by HOW FAR a start lands,
+while an over/under pays only on WHICH SIDE — and did on 31% of live
+rows, which is what the operator was (correctly) objecting to.
+`tools/outs_serve.median_outs(pmf)` computes it; `build_payload`
+derives it from the sidecar pmf for boards priced before the field
+existed. No decision code reads either statistic: the side comes from
+`models/edge.py`, and a "mean must agree with the side" filter was
+tested and rejected (p = 0.217 on 210 rows; a boundary-cell variant at
+p = 0.974).
+
+**The Side column is the VALUE side, and it can oppose the model's own
+lean.** `compute_edge` picks the side by P(over) against the market's
+no-vig fair, not against 50%. When model and market agree on direction
+and the market is further out, the value is on the other side — the
+board then shows a side the model itself thinks less likely. Measured
+45 of 247 live rows (18%), all within 11.6pp of a coin flip. These
+carry a **price play** tag with both numbers. The Side column is left
+as the value side deliberately: it is what the paper policy stakes, and
+a board that showed the lean instead would disagree with its own
+ledger. Whether price plays should clear the entry bar at all, on a
+board whose model is measured worse than the market, is an open
+ROADMAP item — measure the class's hit rate before deciding.
 
 Grading is two-layered (since 2026-08-25): `tools/outs_boxscore.py`
 grades settled starts from the public MLB boxscore the same night —

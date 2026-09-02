@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools.outs_serve import (
     OUTS_LOG_PATH, OUTS_SLATES_DIR, _write_json_atomic, available_dates,
-    load_outs_calibrator, load_slate, log_dates, price_board, write_slate)
+    load_outs_calibrator, load_slate, log_dates, median_outs, price_board,
+    write_slate)
 
 ET = ZoneInfo("America/New_York")
 PAYLOAD_PATH = Path(__file__).parent.parent / "dashboard" / "public" / "outs.json"
@@ -107,6 +108,10 @@ def build_payload() -> dict:
         board = []
         for r in slate.get("board", []):
             row = {k: v for k, v in r.items() if k != "pmf"}
+            # From the sidecar's own pmf, so boards priced before the
+            # field existed carry it too (A-052, 2026-09-02).
+            if row.get("median_outs") is None and r.get("pmf"):
+                row["median_outs"] = median_outs(r["pmf"])
             row["actual_outs"] = actual.get((d, int(r.get("pitcher_id", 0))))
             pcols = paper.get(str(r.get("pitcher_id")))
             row["paper_side"] = pcols["side"] if pcols else None

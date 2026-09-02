@@ -291,3 +291,99 @@ def test_load_slate_takes_the_freshest_sidecar_not_the_state_dir(
         "generated_at": "2026-08-25T13:00:00+00:00",
         "board": [{"pitcher_id": 8}]}), encoding="utf-8")
     assert srv.load_slate("2026-08-25")["board"][0]["pitcher_id"] == 8
+
+
+# --------------------------------------------------------- median_outs
+def _sidecar_rows():
+    import glob
+    out = []
+    for path in sorted(glob.glob(str(OS.OUTS_SLATES_DIR / "*.json"))):
+        with open(path, encoding="utf-8") as f:
+            for r in json.load(f).get("board", []):
+                if r.get("pmf"):
+                    out.append((path, r))
+    return out
+
+
+def test_median_never_contradicts_the_models_own_lean():
+    """A-052 amendment 2026-09-02. The board's projection column used to
+    be the mean, which sat on the other side of the line from the
+    model's own lean on 31% of live rows — the operator read
+    "E[outs] 14.4 / OVER 14.5" and called it a contradiction. The median
+    cannot do that: every market line is a half-integer, so
+    `median > line` IS `P(over) > 0.5`. Pinned on every sidecar pmf the
+    checkout has, at every market line, so a future pmf shape cannot
+    quietly break it.
+
+    NOTE what this does and does not promise. It pins the median against
+    the model's OWN lean (P(over) vs 50%). The board's Side column is the
+    VALUE side (P(over) vs the market's fair), which can legitimately
+    oppose the lean — see the next test. The median agrees with the
+    former always and the latter only ~82% of the time; that gap is a
+    property of the Side column, not of the median."""
+    from tools.outs_serve import median_outs, p_over
+    rows = _sidecar_rows()
+    assert rows, "no sidecar pmfs found to pin against"
+    for path, r in rows:
+        arr = np.asarray(r["pmf"], dtype=float)[None, :]
+        med = median_outs(r["pmf"])
+        for line in (13.5, 14.5, 15.5, 16.5, 17.5, 18.5, 19.5):
+            po = float(p_over(arr, line)[0])
+            assert (med > line) == (po > 0.5), (path, r["pitcher_name"], line, med, po)
+
+
+def test_value_side_can_oppose_the_lean_and_the_board_must_say_so():
+    """The second defect behind the same complaint. models/edge.py picks
+    the side against the MARKET, not against 50%, so a row can carry
+    side=UNDER while the model itself has the pitcher OVER (Logan Webb
+    09-01: P(over) .565 vs fair .602 -> UNDER). Measured 45 of 247 live
+    rows. Pins three things: the class exists in this checkout; every
+    member has model and market on the SAME side of 50% with the market
+    further out (a price play, never a disagreement about direction);
+    and the tag condition the page uses — value side != lean side —
+    catches exactly this class and nothing else."""
+    from tools.outs_serve import median_outs
+    seen = 0
+    for path, r in _sidecar_rows():
+        fair = r.get("fair_over")
+        if fair is None:
+            continue
+        p = r["p_over_cal"]
+        value_over = p > fair
+        lean_over = p > 0.5
+        med_over = median_outs(r["pmf"]) > r["line"]
+        assert med_over == lean_over, (path, r["pitcher_name"])   # from the test above
+        if value_over != lean_over:
+            seen += 1
+            # same side of 50%, market further out: a price play
+            assert (fair > 0.5) == lean_over, (path, r["pitcher_name"], p, fair)
+            assert abs(fair - 0.5) > abs(p - 0.5), (path, r["pitcher_name"], p, fair)
+            # and the median is on the LEAN side, i.e. opposite the badge —
+            # exactly what the operator saw and what the tag must explain
+            assert med_over != value_over
+    assert seen >= 1, "the price-play class is absent from this checkout's sidecars"
+
+
+def test_median_is_the_smallest_k_at_or_past_half():
+    from tools.outs_serve import median_outs
+    # mass 0.4 at 12, 0.3 at 15, 0.3 at 18 -> P(<=12)=.4, P(<=15)=.7 -> 15
+    pmf = np.zeros(28); pmf[12] = 0.4; pmf[15] = 0.3; pmf[18] = 0.3
+    assert median_outs(pmf) == 15
+    # exactly-half case resolves to the lower k, matching P(<=k) >= 0.5
+    pmf = np.zeros(28); pmf[14] = 0.5; pmf[18] = 0.5
+    assert median_outs(pmf) == 14
+
+
+def test_vasquez_0901_median_sits_over_the_line():
+    """The row that surfaced it: mean 14.40 under a 14.5 line, side OVER.
+    The median is 15 — over the line, agreeing with the side, and with
+    the 26% spike at exactly five innings that carried the bet."""
+    path = OS.OUTS_SLATES_DIR / "2026-09-01.json"
+    if not path.exists():
+        pytest.skip("2026-09-01 sidecar not in this checkout")
+    with open(path, encoding="utf-8") as f:
+        rows = [r for r in json.load(f)["board"] if r["pitcher_name"] == "Randy Vasquez"]
+    assert rows, "Vasquez row missing from the 09-01 sidecar"
+    r = rows[0]
+    assert r["line"] == 14.5 and r["expected_outs"] == pytest.approx(14.4, abs=0.01)
+    assert OS.median_outs(r["pmf"]) == 15

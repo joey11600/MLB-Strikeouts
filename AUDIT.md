@@ -462,8 +462,43 @@ Tracks open items, resolved items, and known risks.
   track's gold_capped 28-18 / +12.18u is 46 bets against that — the
   streak is variance, not skill.
 - **Two serve-time defects found in the same pass, filed as A-053.**
+- **Amended 2026-09-02 (operator, third time: "if his projected outs
+  was less than the line, why did we take the over? it makes no
+  sense"). He was right, and the two earlier answers — true — were
+  beside the point.** The board LABELLED the mean as the projection.
+  Measured on all 247 sidecar rows: the mean sits on the model's own
+  side of the line (P(over) vs 50%) **69.2%** of the time; the median
+  **100.0%**, by construction — every market line is a half-integer, so
+  `median > line` IS `P(over) > 0.5`. Shipped `median_outs` as the
+  projection column; mean moved to the tooltip. The Vasquez row: mean
+  14.40, **median 15**, line 14.5 — no contradiction once the right
+  statistic is printed.
+- **And a second defect behind the same symptom, caught only because
+  the browser check disagreed with the test.** The test pinned median
+  vs the model's lean at 100%; the rendered board still showed 6 rows
+  on 09-01 with the median opposite the Side badge. Because the Side
+  column is the VALUE side — `models/edge.py` picks against the
+  market's fair, not against 50% — and on **45 of 247 rows (18.2%)**
+  that is the side the model itself thinks LESS likely. Every one has
+  model and market on the same side of 50% with the market further out
+  (max |P(over) − 0.5| = 0.116): a price play, never a disagreement
+  about direction. Legitimate in general; dubious for THIS board, which
+  stakes against its own lean on a small disagreement with an opponent
+  measured better calibrated than it (z = +4.56). Never labelled.
+  Shipped a **price play** tag under the Side badge with both numbers
+  in the tooltip; the Side column itself is unchanged, because it is
+  what the paper policy stakes and changing it would desync the board
+  from the ledger. Pinned by a test that asserts the class exists, that
+  every member is a same-direction/market-further-out row, and that the
+  tag condition catches exactly them.
 - **Generalises to:** a gate that can refuse must render its refusal
-  as a POSITIVE mark, never as the absence of an approval mark. And
+  as a POSITIVE mark, never as the absence of an approval mark. When
+  the operator repeats a complaint after a correct explanation, the
+  explanation is answering the wrong question — find the statistic or
+  label that would make the complaint go away and check whether it
+  should have been there all along. And a test that passes while the
+  rendered page disagrees is measuring a different quantity than the
+  page shows: name the quantity in the test's name. And
   when a row looks alarming, measure whether the alarming feature
   actually separates winners from losers before shipping a filter for
   it — two plausible ones here did not.

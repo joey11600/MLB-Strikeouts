@@ -26,6 +26,11 @@ type OutsRow = {
   over_odds: string;
   under_odds: string;
   expected_outs: number;
+  // The projection column (2026-09-02). Half-integer lines make
+  // `median > line` exactly `P(over) > 50%`, so this can never sit on
+  // the other side of the line from the Side column — the mean did, on
+  // 31% of rows. Absent on payloads built before it shipped.
+  median_outs?: number | null;
   p_over_cal: number;
   fair_over: number | null;
   actual_outs: number | null;
@@ -301,7 +306,12 @@ export default function OutsPage() {
                 <th className="px-3 py-2.5">Pitcher</th>
                 <th className="px-3 py-2.5">Line</th>
                 <th className="figure px-3 py-2.5 text-right">O / U</th>
-                <th className="figure px-3 py-2.5 text-right">E[outs]</th>
+                <th
+                  className="figure px-3 py-2.5 text-right"
+                  title="the outs total the model has him more likely than not to reach — always on the same side of the line as the Side column"
+                >
+                  Median
+                </th>
                 <th className="px-3 py-2.5 text-right">Side</th>
                 <th className="figure px-3 py-2.5 text-right">Model</th>
                 <th className="figure px-3 py-2.5 text-right">Market</th>
@@ -323,6 +333,26 @@ export default function OutsPage() {
                     : gap > 0
                       ? "OVER"
                       : "UNDER";
+                // The Side column is the VALUE side — chosen against the
+                // market's fair, not against 50% (models/edge.py). On ~18%
+                // of live rows that is the side the model itself thinks
+                // LESS likely: model and market agree on direction, the
+                // market is just further out, so the price is on the other
+                // side. Legitimate, and worth naming, because it stakes
+                // against the model's own lean on a small disagreement
+                // with a better-calibrated opponent (A-052).
+                const leanOverModel = r.p_over_cal > 0.5;
+                const pricePlay =
+                  side !== null && (side === "OVER") !== leanOverModel;
+                const pricePlayWhy = pricePlay
+                  ? `model has him ${leanOverModel ? "OVER" : "UNDER"} at ` +
+                    `${pct(r.p_over_cal)}` +
+                    (r.median_outs != null ? ` (median ${r.median_outs})` : "") +
+                    `; the market has him ${leanOverModel ? "over" : "under"} ` +
+                    `at ${pct(r.fair_over)}, further out — so the price is on ` +
+                    `the ${side}. This side is the one the model itself calls ` +
+                    `less likely.`
+                  : undefined;
                 const modelSide =
                   side === "UNDER" ? 1 - r.p_over_cal : r.p_over_cal;
                 const marketSide =
@@ -369,21 +399,42 @@ export default function OutsPage() {
                     <td className="figure px-3 py-2.5 text-right text-ink-secondary">
                       {r.over_odds} / {r.under_odds}
                     </td>
-                    <td className="figure px-3 py-2.5 text-right">
-                      {iso(r.expected_outs)}
+                    <td
+                      className="figure px-3 py-2.5 text-right"
+                      title={
+                        r.median_outs != null
+                          ? `mean ${iso(r.expected_outs)} — the average sits ` +
+                            `${r.expected_outs < r.median_outs ? "below" : "at or above"} ` +
+                            `the median because blow-up starts pull it down; an ` +
+                            `over/under only cares which side of the line he lands on`
+                          : "payload predates the median column; showing the mean"
+                      }
+                    >
+                      {r.median_outs != null ? (
+                        r.median_outs
+                      ) : (
+                        <span className="text-ink-muted">{iso(r.expected_outs)}</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       {side ? (
-                        <span
-                          className={cn(
-                            "rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
-                            side === "OVER"
-                              ? "bg-over/15 text-over"
-                              : "bg-under/15 text-under",
-                          )}
-                        >
-                          {side}
-                        </span>
+                        <div title={pricePlayWhy}>
+                          <span
+                            className={cn(
+                              "rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+                              side === "OVER"
+                                ? "bg-over/15 text-over"
+                                : "bg-under/15 text-under",
+                            )}
+                          >
+                            {side}
+                          </span>
+                          {pricePlay ? (
+                            <div className="mt-0.5 text-[10px] uppercase tracking-wider text-accent">
+                              price play
+                            </div>
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="text-ink-muted">—</span>
                       )}
@@ -493,7 +544,19 @@ export default function OutsPage() {
       )}
 
       <p className="text-xs text-ink-muted">
-        Model and Market are both read for the side in the Side column;
+        Median is the outs total the model has him more likely than not
+        to reach, and it always lands on the same side of the line as
+        the Side column — hover it for the mean, which does not: blow-up
+        starts drag the average down while a spike at exactly five
+        innings holds the median up, and an over/under only pays on
+        which side of the line he lands, not how far. Side is the VALUE
+        side — the model&rsquo;s number against the market&rsquo;s, not
+        against 50% — so it can be the side the model itself thinks less
+        likely: when model and market agree on direction and the market
+        is simply further out, the price is on the other side. Those
+        rows carry a &ldquo;price play&rdquo; tag (about one row in
+        five); hover it for both numbers. Model and Market are both read
+        for the side in the Side column;
         Edge is simply their difference. Units are what the capped paper
         rule would stake on the row — quarter-Kelly sized on a half-trust
         blend of model and market, 2u per-bet cap, 10u daily cap with a

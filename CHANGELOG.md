@@ -1,6 +1,86 @@
 
 # Changelog
 
+## 2026-09-02 - The projection column was the wrong statistic, and the Side column was never the prediction
+
+Operator, for the third time: "if a pitcher's probability from our
+model was projected less than the line, yet our model somehow still
+said OVER, that's an issue. it makes no sense."
+
+Correct, twice over. Measured on every sidecar pmf in the checkout
+(247 rows, 2026-08-26..09-02):
+
+| beside the Side column | agrees with the model's own lean (P(over) vs 50%) |
+|---|---|
+| mean -- what the board printed as `E[outs]` | **69.2%** |
+| median | **100.0%** |
+
+| the Side column itself | agrees with the model's own lean |
+|---|---|
+| value side, P(over) vs the market's no-vig fair | **81.8%** |
+
+Two different defects wearing the same symptom.
+
+### 1. The projection was the mean. It should be the median.
+
+Every market line is a half-integer, so `median > line` is exactly
+`P(over) > 0.5` -- the median CANNOT sit on the other side of the line
+from what the model expects. The mean can, because an over/under pays
+on WHICH SIDE of the line he lands, not how far, and the mean is pulled
+by how far. Vasquez 09-01, out of 100 model starts: 11 gone by the end
+of the 3rd averaging 6.9 outs, 29 pulled in the 4th/5th, **26 exactly
+five innings**, 35 six-plus. 61 land over 14.5; the average of all 100
+is 14.4. Each wipe-out counts once toward the under, same as a 14-out
+start, but drags the average far more. His median is **15**.
+
+Shipped: `tools/outs_serve.median_outs(pmf)` (smallest k with
+P(outs <= k) >= 0.5) on every freshly priced row; `build_payload`
+derives it from each sidecar's pmf so every historical board has it (0
+rows lacking). /outs projection column is now **Median**; the mean
+moves to the cell tooltip with the one-line reason it sits below. Old
+payloads fall back to the mean, rendered muted.
+
+### 2. The Side column is the VALUE side, and 18% of the time that is the side the model thinks less likely
+
+`models/edge.py` picks the side by `P(over)` against the market's
+no-vig fair, not against 50%. Logan Webb 09-01, line 17.5: model
+P(over) 56.5% (median 18 -- the model has him OVER), market fair 60.2%.
+Board side: **UNDER**, because 56.5 < 60.2. A price play: the model
+agrees with the market's direction and merely thinks the market is too
+sure. In all 45 such rows the model is within 11.6pp of a coin flip.
+
+That is a legitimate betting concept and a dubious one for THIS board:
+it stakes the side the model itself calls less likely, on the strength
+of a small disagreement with an opponent that is measured better
+calibrated than the model (A-052: z = +4.56, model worse). It was
+never labelled. Shipped: a **price play** tag under the Side badge
+whenever the value side opposes the model's own lean, tooltip naming
+both numbers ("model has him OVER at 56.5% -- median 18; the market has
+him over at 60.2%, so the price is on the UNDER"). The Side column
+itself is unchanged: it is what the paper policy stakes, and changing it
+would desync the board from the ledger.
+
+### Tests
+
+`test_median_never_contradicts_the_models_own_lean` pins median-vs-50%
+on EVERY sidecar pmf at every market line; `test_value_side_can_oppose_
+the_lean_and_the_board_must_say_so` pins that the 45-row class exists,
+that every member has model and market on the same side of 50% with the
+market further out, and that the tag condition catches exactly them.
+Plus the boundary definition and the exact Vasquez row (mean 14.40,
+median 15). Suite green; tsc clean.
+
+`expected_outs` stays in the sidecar and the evidence log -- nothing
+decision-side ever read it. Nothing about how a side or a stake is
+CHOSEN changed in this commit; what changed is that the board now
+prints the statistic that agrees with the pick, and names the pick when
+it runs against the model's own lean.
+
+Separately, and still true: the Vasquez OVER was a bad pick for the
+reasons on file (A-052) -- the line moved a full out while the model's
+view moved 0.4pp, 14.5 is the model's worst live line, the entry bar
+refused it. The operator's suspicion was earned.
+
 ## 2026-09-02 - The outs board now sees the opponent it is pricing against
 
 Operator: "fix the opp_obp merge so the board sees the opponent".
