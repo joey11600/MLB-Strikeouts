@@ -586,12 +586,21 @@ strikeouts model, not a variant of it.
   likely. Tagged **price play** with both numbers; Side column itself
   unchanged so the board stays in sync with what the paper policy
   stakes.
-- [ ] **Decide whether price plays belong on a board whose model loses
-  to the market.** 18% of rows stake against the model's own lean on a
-  disagreement of ≤11.6pp with an opponent measured better calibrated
-  (z = +4.56). Measure the class's hit rate separately before the next
-  promotion round; if it is the leaking half, the entry bar should
-  require lean and value to agree.
+- [x] **Price plays measured (2026-09-02) — not the leaking half, and
+  the production bar already excludes them.** On 218 graded evidence
+  rows: price plays n=39, board side hit **51.3%** (CI 34.8–67.6%)
+  against a market-implied 42.7% (z=+1.09) and a model-implied 46.2%
+  (z=+0.64); flat 1u at posted odds **+4.47u (+0.115u/bet)**. Rows
+  where lean and value agree: n=179, hit 55.3%, +0.029u/bet. Difference
+  −4.0pp, **p=0.654**. Nothing significant either way. In the ledger:
+  `gates` has staked **0 of 9** price plays (the half-trust blend pulls
+  their edge under hold+margin by construction), `gold_capped` **1 of
+  51** (won, +1.09u; record without it 30-20 +12.97u vs +14.06u with).
+  No filter ships; the concern was raised on theory and did not
+  survive measurement. Re-read at n≥100 price plays. One underpowered
+  curiosity, NOT actionable: the 17 rows where the model sat within
+  3pp of a coin flip hit 64.7% (+6.13u) while the 22 further out hit
+  40.9% (−1.66u).
 - [x] **`opp_obp_asof` was dead at serve time (A-053)** — fixed
   2026-09-02. `_extend_daily_to_scored_dates` gives every scored
   `(team, season, date)` a zero-measure daily row before the prior-day

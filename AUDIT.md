@@ -491,6 +491,23 @@ Tracks open items, resolved items, and known risks.
   from the ledger. Pinned by a test that asserts the class exists, that
   every member is a same-direction/market-further-out row, and that the
   tag condition catches exactly them.
+- **Price plays measured the same day (operator: "measure the price
+  play hit rate") — the class is NOT the leaking half, and the
+  production bar already excludes it.** 218 graded evidence rows.
+  Price plays n=39: board side hit 51.3% (CI 34.8–67.6%), market
+  implied 42.7% (z=+1.09), model implied 46.2% (z=+0.64), flat 1u at
+  posted odds +4.47u = +0.115u/bet. Agreed rows n=179: hit 55.3%,
+  market 50.8% (z=+1.22), +0.029u/bet. Difference −4.0pp, p=0.654. By
+  board side: UNDER price plays 26 bets +4.59u, OVER 13 bets −0.12u
+  (consistent with the standing finding that the outs model's edge is
+  UNDER-side). In the ledger through 09-01: `gates` 0 of 9 bets were
+  price plays — the blended-edge bar structurally cannot pass a row
+  where the model sits within ~12pp of 50% and the market is further
+  out; `gold_capped` 1 of 51 (Gavin Williams UNDER 18.5, won); the
+  shadow `gold_uncapped` 3 of 63 (1-2, −2.38u). No filter ships. The
+  concern was raised on theory in this same amendment and did not
+  survive its own measurement — recorded here so it is not re-raised
+  on the same theory without new data. Re-read at n≥100.
 - **Generalises to:** a gate that can refuse must render its refusal
   as a POSITIVE mark, never as the absence of an approval mark. When
   the operator repeats a complaint after a correct explanation, the

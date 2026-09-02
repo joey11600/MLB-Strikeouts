@@ -830,9 +830,14 @@ board then shows a side the model itself thinks less likely. Measured
 carry a **price play** tag with both numbers. The Side column is left
 as the value side deliberately: it is what the paper policy stakes, and
 a board that showed the lean instead would disagree with its own
-ledger. Whether price plays should clear the entry bar at all, on a
-board whose model is measured worse than the market, is an open
-ROADMAP item — measure the class's hit rate before deciding.
+ledger. Measured 2026-09-02 on 218 graded rows: price plays hit 51.3%
+on the board side (n=39, CI 34.8–67.6%) against a market-implied
+42.7%, +0.115u/bet flat — not distinguishable from the agreed rows
+(55.3%, +0.029u/bet; p=0.654) and not the leaking half. The production
+`gates` bar has never staked one: a half-trust blend of a model within
+~12pp of 50% and a market further out cannot clear hold+margin. So the
+tag is a label, not a warning — do not add a lean-must-equal-value
+filter on the theory alone; the theory was tested and did not hold.
 
 Grading is two-layered (since 2026-08-25): `tools/outs_boxscore.py`
 grades settled starts from the public MLB boxscore the same night —

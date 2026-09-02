@@ -1,6 +1,54 @@
 
 # Changelog
 
+## 2026-09-02 - Price plays measured: not the leaking half, and already excluded by the production bar
+
+Operator: "measure the price play hit rate."
+
+The morning's A-052 amendment tagged the 18% of board rows where the
+value side opposes the model's own lean, and raised -- on theory -- the
+worry that staking against your own lean on a small disagreement with
+a better-calibrated opponent might be where the outs model bleeds.
+Measured on 218 graded evidence rows (2026-08-24..09-01), board side,
+flat 1u at posted odds:
+
+| class | n | hit | market implied | model implied | flat P&L | per bet |
+|---|---|---|---|---|---|---|
+| price plays (value != lean) | 39 | **51.3%** (CI 34.8-67.6) | 42.7% (z=+1.09) | 46.2% (z=+0.64) | +4.47u | **+0.115u** |
+| agreed (value == lean) | 179 | 55.3% (CI 47.7-62.7) | 50.8% (z=+1.22) | 58.4% (z=-0.83) | +5.27u | +0.029u |
+
+Difference in hit rate -4.0pp, **p = 0.654**. Nothing is significant in
+either direction; the CI on the price-play hit rate spans "losing
+badly" to "crushing". By board side, UNDER price plays went +4.59u on
+26 bets and OVER -0.12u on 13, in line with the standing finding that
+the outs model's edge is UNDER-side.
+
+In the ledger, the question mostly answers itself:
+
+| policy | bets | price plays staked | their record |
+|---|---|---|---|
+| `gates` (production bar) | 9 | **0** | -- |
+| `gold_capped` | 51 | 1 | 1-0, +1.09u (record without: 30-20 +12.97u vs +14.06u) |
+| `gold_uncapped` (shadow) | 63 | 3 | 1-2, -2.38u |
+
+`gates` cannot pass one by construction: it reads a half-trust blend
+of model and market, and a row where the model sits within ~12pp of
+50% while the market is further out blends to an edge under
+hold-plus-margin every time.
+
+**No filter ships.** The tag stays as a label. The theory was tested
+the same day it was raised and did not hold -- recorded in AUDIT so it
+is not re-raised on theory alone. One underpowered curiosity, NOT
+actionable: the 17 price plays where the model sat within 3pp of a
+coin flip hit 64.7% (+6.13u) while the 22 further out hit 40.9%
+(-1.66u). Re-read the class at n >= 100.
+
+Ledger figures are direct sums of `data/outs_paper_tracks.csv`
+`pl_units` (the file `tools/outs_paper.py` writes and reports); the
+evidence-row P&L is a research quantity computed from the log's posted
+odds, not a ledger number.
+
+
 ## 2026-09-02 - The projection column was the wrong statistic, and the Side column was never the prediction
 
 Operator, for the third time: "if a pitcher's probability from our
