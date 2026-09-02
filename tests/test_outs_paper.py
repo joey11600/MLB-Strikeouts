@@ -88,6 +88,44 @@ def test_board_paper_columns_match_the_policies():
     assert sum(1 for c in cols.values() if c["clears_gates"]) == 1
 
 
+def test_rejected_stake_carries_its_shortfall():
+    """A-052: a staked row the entry bar refused must ship the two
+    numbers behind the refusal, or the board can only render the
+    rejection as blank space beside a bold stake — which is what let
+    the 2026-09-01 Randy Vasquez OVER read as a recommendation."""
+    cols = outs_paper.board_paper_columns(GOLD_0824)
+    rejected = {k: c for k, c in cols.items() if not c["clears_gates"]}
+    assert rejected, "fixture must contain a below-bar row to be a test"
+    for pid, c in rejected.items():
+        assert c["stake_units"] > 0                    # staked anyway
+        assert c["gate_edge"] is not None
+        assert c["gate_threshold"] is not None
+        # the refusal must be arithmetically visible, not just asserted
+        assert c["gate_edge"] < c["gate_threshold"], pid
+    # and a row that DOES clear carries them too, so the board never
+    # has to branch on presence to explain either verdict
+    passing = [c for c in cols.values() if c["clears_gates"]]
+    assert passing and all(c["gate_edge"] >= c["gate_threshold"]
+                           for c in passing)
+
+
+def test_vasquez_rejection_is_the_shape_the_board_must_show():
+    """The exact 2026-09-01 row: raw gap 14.1pp clears the paper bar and
+    stakes 2u, while the blended edge 7.0pp misses the 8.9pp entry bar.
+    A fat Edge column and a refused bet are not contradictory — the two
+    bars read different numbers, and the board has to say so."""
+    board = [{"pitcher_name": "Randy Vasquez", "game_pk": "824472",
+              "pitcher_id": "681190", "line": 14.5, "over_odds": "+100",
+              "under_odds": "-132", "p_over_cal": 0.6082,
+              "fair_over": 0.4677}]
+    c = outs_paper.board_paper_columns(board)["681190"]
+    assert c["side"] == "OVER"
+    assert c["stake_units"] == 2.0          # MAX_STAKE_UNITS, quarter-Kelly
+    assert c["clears_gates"] is False
+    assert c["gate_edge"] == pytest.approx(0.0702, abs=5e-4)
+    assert c["gate_threshold"] == pytest.approx(0.0890, abs=5e-4)
+
+
 def test_settle_push_and_void():
     bet = {"line": 18.0, "odds": +100, "side": "OVER", "units_risked": 2.0}
     assert _settle(bet, 18) == ("PUSH", 0.0)      # exact land, whole line

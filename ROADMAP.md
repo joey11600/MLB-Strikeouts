@@ -567,6 +567,27 @@ strikeouts model, not a variant of it.
   scorecard task. **The edge.py rule STANDS**: indistinguishable is
   not edge — nothing prices until z goes negative on a serious sample
   AND a calibrator passes its gate.
+- [x] Make the entry bar's REFUSAL visible on the board (2026-09-01,
+  A-052 amendment) — a staked row that fails `clears_gates` now renders
+  struck-through and tagged "below bar", tooltip naming the blended
+  edge and the bar it missed. Previously the refusal was the absence of
+  the "gates" caption, indistinguishable from an unevaluated row; the
+  09-01 Vasquez OVER read as a 2u recommendation while the production
+  rule had refused it. All five staked rows that night were below bar.
+- [ ] **`opp_obp_asof` is dead at serve time (A-053)** — NaN on 100% of
+  served board rows vs 17.6% in history, because the team-batting merge
+  keys on an exact `game_date` a future slate cannot match. Every start
+  is priced against a train-mean opponent. Fix the join to carry the
+  team's latest prior-day totals forward onto the slate date.
+- [ ] **No park or weather feature exists on the outs target (A-053)** —
+  with `opp_obp_asof` dead, `is_home` is the model's entire read on who
+  and where. Gauntlet a park factor before the next promotion round.
+- [ ] Rename or retire `p_over_cal` while it equals `p_over_raw`
+  (A-053) — the field asserts a Gate 5 map that has never existed.
+- [ ] Outs market verdict is now clearly NEGATIVE, not even: **555
+  starts / 24 dates, z = +4.56 model WORSE** (was +0.65 at 373). The
+  deficit is widening, not closing — treat every outs promotion as
+  closing a measured gap, not protecting a paper streak.
 
 ## Phase 11 — Score against the market, not the naive baseline (2026-08-19)
 

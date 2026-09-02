@@ -427,6 +427,77 @@ Tracks open items, resolved items, and known risks.
   the model's first market scorecard is free. And a calibration map
   must always face a holdout gate that can refuse it — both markets
   have now independently proven the refusal path earns its keep.
+- **Amended 2026-09-01 (operator: "look at the Randy Vasquez total
+  outs line and pick and tell me what's wrong"). A rejected bet and an
+  unevaluated one rendered identically on the board.** The 09-01
+  Vasquez row showed OVER 14.5, edge +14.0pp, **2u** — and carried
+  `clears_gates: false`, because the entry bar measured a blended edge
+  of 7.0pp against a required 8.9pp. The production rule refused the
+  bet. The board said so by omitting a small amber "gates" caption,
+  which is indistinguishable from a row nobody flagged. Settled 14
+  outs; the refusal was right. Fixed: `_policy_bets` now carries
+  `gate_threshold` / `clears_threshold` on each pick, `board_paper_
+  columns` ships `gate_edge` + `gate_threshold`, the payload passes
+  both through, and a refused stake renders struck-through with a
+  "below bar" tag whose tooltip names the two numbers. On the 09-01
+  board **all five staked rows were below the bar** — a fact the page
+  previously could not express.
+- **The mean-vs-line alarm was measured and does NOT hold up.** The
+  eye-catching part of that row — model expected 14.4 outs, line 14.5,
+  pick OVER — is legitimate left skew, not a defect: 26% of the PMF
+  sat on exactly 15 outs and the blow-up tail drags the mean under the
+  median. Across 210 graded rows the projection sat below the line
+  with the over still favoured **63 times** against **3** the other
+  way, so the disagreement is structural. Picks where projection and
+  side disagreed hit 46.9% (n=49) vs 57.1% when they agreed — but
+  **p = 0.217**, CI [32.5%, 61.7%]. A tighter candidate filter (share
+  of P(over) carried by the single boundary cell) discriminated not at
+  all: 52.4% vs 52.8%, **p = 0.974**. Neither ships. `expected_outs`
+  is a display column read by no decision code, and that is correct —
+  a binary over/under prices off the probability, not the mean.
+- **The market verdict has gone from even to clearly negative.**
+  `tools/score_outs_vs_market.py` on **555 starts / 24 dates**: paired
+  **z = +4.56, model WORSE** than the closing line (this item was
+  filed at z = +0.65 on 373 starts; 486 starts read +4.06). The paper
+  track's gold_capped 28-18 / +12.18u is 46 bets against that — the
+  streak is variance, not skill.
+- **Two serve-time defects found in the same pass, filed as A-053.**
+- **Generalises to:** a gate that can refuse must render its refusal
+  as a POSITIVE mark, never as the absence of an approval mark. And
+  when a row looks alarming, measure whether the alarming feature
+  actually separates winners from losers before shipping a filter for
+  it — two plausible ones here did not.
+
+### A-053: the outs board is served blind to the opponent, and "calibrated" names a map that does not exist
+- **Filed:** 2026-09-01 (found while auditing the A-052 Vasquez row)
+  **Status:** OPEN — neither is why that pick lost; both are real
+- **`opp_obp_asof` is NaN on 100% of served rows.** All 27 rows of the
+  09-01 board, against 17.6% missing in the 2026 history (15.6% in
+  August). `features/outs_asof.py:502` merges team batting on
+  `(opp, season, game_date)`; a game that has not been played has no
+  team-batting row for that date, so the join can never match on a
+  future slate. The model fills with the TRAIN mean and prices every
+  start against a generic average offence. Real train/serve skew: the
+  fitted `miss_opp` coefficient was learned on a minority-missing
+  regime and is applied to a 100%-missing one.
+- **Check the sign before blaming it for a loss.** CIN's true as-of
+  OBP was .3044 against a .3175 league mean — feeding the real number
+  in RAISES P(over) from 0.6082 to 0.6179. The bug made the Vasquez
+  pick very slightly LESS wrong, not more.
+- **Related exposure:** the outs model has no park and no weather
+  feature at all (`NUMERIC_FEATURES` + `BINARY_FEATURES` in
+  `models/outs_hazard.py`). With `opp_obp_asof` dead at serve, its
+  entire read on who-and-where is `is_home`. The 09-01 start was at
+  Great American Ball Park.
+- **`p_over_cal` is not calibrated.** `models/outs_calibrator.pkl` does
+  not exist, so `calibrate()` returns the identity-clamped input and
+  `p_over_cal == p_over_raw` on every row ever logged. This is the
+  designed outcome of A-052's Gate 5 refusal, not a regression — but
+  the served field name asserts a safety step that is not running, and
+  the evidence log has carried two identical columns since day one.
+- **Generalises to:** a feature's missingness rate at SERVE time is a
+  separate measurement from its rate in training, and only the first
+  one describes what the model is actually doing tonight.
 
 ### A-051: structural round — rate random effect KEEP; TTO-4 and damping measured and rejected
 - **Filed:** 2026-08-24 (full-model audit)  **Status:** RE shadowing

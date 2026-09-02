@@ -35,6 +35,11 @@ type OutsRow = {
   paper_side?: "OVER" | "UNDER" | null;
   paper_stake_units?: number | null;
   clears_gates?: boolean | null;
+  // The blended edge and the bar it had to clear (A-052). Absent on
+  // payloads built before the worker shipped them, so the rejection
+  // marker still renders without the numbers rather than showing NaN.
+  gate_edge?: number | null;
+  gate_threshold?: number | null;
 };
 
 type PaperPolicy = {
@@ -328,6 +333,17 @@ export default function OutsPage() {
                       : r.fair_over;
                 const edge = gap === null ? null : Math.abs(gap);
                 const stake = r.paper_stake_units ?? null;
+                // Why the entry bar refused a staked row. The bar reads a
+                // half-trust blend of model and market, which is why this
+                // number is smaller than the raw Edge column beside it —
+                // spelling that out is the point of the tooltip.
+                const gateWhy =
+                  r.gate_edge != null && r.gate_threshold != null
+                    ? `blended edge ${(r.gate_edge * 100).toFixed(1)}pp is under the ` +
+                      `${(r.gate_threshold * 100).toFixed(1)}pp entry bar — the ` +
+                      `production rule would not take this bet (the shadow ` +
+                      `paper policy stakes it anyway)`
+                    : "the production entry bar refused this stake";
                 const settled = r.actual_outs !== null;
                 const wentOver = settled && r.actual_outs! > r.line;
                 // Whole-number alternate lines can land exactly on the
@@ -391,7 +407,19 @@ export default function OutsPage() {
                     <td className="figure px-3 py-2.5 text-right">
                       {stake && stake > 0 ? (
                         <div>
-                          <span className="font-semibold">{stake}u</span>
+                          <span
+                            className={cn(
+                              "font-semibold",
+                              // A rejected stake is struck through as well
+                              // as labelled: the shortfall must not rest on
+                              // hue alone (palette rule).
+                              r.clears_gates
+                                ? undefined
+                                : "text-ink-muted line-through decoration-under/70",
+                            )}
+                          >
+                            {stake}u
+                          </span>
                           {r.clears_gates ? (
                             <div
                               className="text-[10px] uppercase tracking-wider text-accent"
@@ -399,7 +427,14 @@ export default function OutsPage() {
                             >
                               gates
                             </div>
-                          ) : null}
+                          ) : (
+                            <div
+                              className="text-[10px] uppercase tracking-wider text-under"
+                              title={gateWhy}
+                            >
+                              below bar
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-ink-muted">—</span>
@@ -465,7 +500,13 @@ export default function OutsPage() {
         correlation haircut — which is why a bigger edge does not scale
         the stake linearly, and why a late row on a heavy slate can show
         an edge but no units. A &ldquo;gates&rdquo; tag means the row
-        also clears the production entry bar. Every stake is
+        also clears the production entry bar; a struck-through stake
+        tagged &ldquo;below bar&rdquo; means it does NOT — the paper
+        policy sizes off the raw model-vs-market gap, while the entry
+        bar reads a half-trust blend of the two and must beat the
+        book&rsquo;s hold plus a margin, so a fat Edge here can still be
+        a bet the production rule refuses. Hover the tag for the two
+        numbers. Every stake is
         hypothetical: betting is blocked until calibration passes, and
         model probabilities are served raw — both candidate calibration
         maps were refused on an untouched holdout. On settled rows, ✓/✗

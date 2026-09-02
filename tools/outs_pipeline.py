@@ -112,6 +112,12 @@ def build_payload() -> dict:
             row["paper_side"] = pcols["side"] if pcols else None
             row["paper_stake_units"] = pcols["stake_units"] if pcols else 0.0
             row["clears_gates"] = bool(pcols and pcols.get("clears_gates"))
+            # The two numbers behind the verdict, so a rejected stake can
+            # say how far short it fell instead of showing nothing (A-052).
+            # None on rows no policy staked — there is no rejection there.
+            row["gate_edge"] = pcols.get("gate_edge") if pcols else None
+            row["gate_threshold"] = (pcols.get("gate_threshold")
+                                     if pcols else None)
             board.append(row)
         # biggest model-vs-market disagreement first — the page's point
         # is watching the disagreements get graded, not implying picks

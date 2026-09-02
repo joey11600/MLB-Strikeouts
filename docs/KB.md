@@ -762,6 +762,32 @@ blocked behind the calibration gate, and the strikeouts
 ledger/aggregates are market-filtered so the two products can never
 blend.
 
+**Two independent bars, and the board must distinguish them** (A-052
+amendment, 2026-09-01). The paper policy stakes off the RAW
+model-vs-market gap against a flat 8pp bar; the production entry bar
+(`models.edge.compute_edge`) reads a HALF-TRUST BLEND of model and
+market and must beat the book's hold plus a margin. They disagree
+routinely — a row can show a fat Edge column and still be a bet the
+production rule refuses. Since 2026-09-01 each row also carries
+`gate_edge` and `gate_threshold` (the blended edge actually measured
+and the bar it faced), sourced from the same `compute_edge` call
+`_policy_bets` already makes so the two can never drift, and a refused
+stake renders struck-through with a "below bar" tag rather than by
+omitting the "gates" caption. Rows no policy staked carry `None` for
+both — there is no refusal to explain there. Consumers must tolerate
+both fields being absent: payloads built before this ship without
+them, and the page degrades to a generic tooltip.
+
+`expected_outs` on the board is a DISPLAY column. No decision code
+reads it, and that is deliberate: an over/under prices off P(over),
+not the mean, and the outs distribution is left-skewed enough that the
+two legitimately disagree (measured 63 rows with the mean below the
+line and the over still favoured, against 3 the other way). Do not
+add a "mean must agree with the side" filter without re-measuring — it
+was tested on 210 graded rows at p = 0.217, and a boundary-cell
+concentration variant at p = 0.974. Neither separates winners from
+losers.
+
 Grading is two-layered (since 2026-08-25): `tools/outs_boxscore.py`
 grades settled starts from the public MLB boxscore the same night —
 since 2026-08-26 that means game Final OR

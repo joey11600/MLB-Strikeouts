@@ -104,6 +104,12 @@ def _policy_bets(policy: str, board: list[dict]) -> list[dict]:
             "pitcher_name": r.get("pitcher_name", ""),
             "side": side, "line": float(r["line"]), "odds": odds,
             "units_risked": units, "best_edge": e["best_edge"],
+            # The entry-bar verdict and the two numbers behind it, carried
+            # on the pick itself so the board can show WHY a staked row was
+            # rejected instead of re-deriving the bar in another module
+            # (A-052). PAPER_FIELDS ignores them on the CSV write.
+            "gate_threshold": e["threshold"],
+            "clears_threshold": e["clears_threshold"],
         })
     if policy != "gold_uncapped":
         picks = portfolio_daily_cap(picks)
@@ -129,13 +135,21 @@ def board_paper_columns(board: list[dict]) -> dict[str, dict]:
             "side": b["side"],
             "stake_units": b["units_risked"],
             "clears_gates": False,
+            # A staked row that fails the bar is the case the board used
+            # to render as blank space next to a bold stake (A-052).
+            # Ship the shortfall itself so the rejection is legible: the
+            # blended edge that was measured and the bar it had to clear.
+            "gate_edge": b["best_edge"],
+            "gate_threshold": b["gate_threshold"],
         }
     # gates entries are usually a subset of the gold board, but the two
     # bars are independent (blended-edge threshold vs raw 8pp gap), so
     # a gates-only row still gets its stake rather than a blank.
     for b in _policy_bets("gates", board):
         row = out.setdefault(str(b["pitcher_id"]), {
-            "side": b["side"], "stake_units": b["units_risked"]})
+            "side": b["side"], "stake_units": b["units_risked"],
+            "gate_edge": b["best_edge"],
+            "gate_threshold": b["gate_threshold"]})
         row["clears_gates"] = True
     return out
 

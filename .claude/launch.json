@@ -4,8 +4,28 @@
     {
       "name": "dashboard",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "3947", "--directory", "dashboard/out"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3947",
+        "--directory",
+        "dashboard/out"
+      ],
       "port": 3947
+    },
+    {
+      "name": "dashboard-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "dashboard",
+        "--",
+        "--port",
+        "3948"
+      ],
+      "port": 3948
     }
   ]
 }

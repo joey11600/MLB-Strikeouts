@@ -1,6 +1,81 @@
 
 # Changelog
 
+## 2026-09-01 - A refused bet looked exactly like an unflagged one
+
+Operator: "look at the Randy Vasquez total outs line and pick and tell
+me what's wrong" -- then, "if his projected outs was less than the
+line, why did we take the over?"
+
+The 2026-09-01 row read: Randy Vasquez, SD at CIN, line 14.5 outs,
++100 / -132, model 60.8% over vs a 46.8% no-vig fair, edge +14.0pp,
+stake **2u**. It settled at 14 outs. It also carried
+`clears_gates: false` -- the production entry bar had measured a
+blended edge of 7.0pp against a required 8.9pp and REFUSED the bet.
+
+The board expressed that refusal by not drawing a small amber "gates"
+caption. A rejected bet and a row nobody evaluated rendered
+identically, next to a bold 2u.
+
+Fixed, end to end:
+
+- `_policy_bets` carries `gate_threshold` and `clears_threshold` on
+  every pick (`extrasaction="ignore"` keeps them out of the CSV).
+- `board_paper_columns` ships `gate_edge` + `gate_threshold` on both
+  verdicts, so the board never branches on field presence.
+- `build_payload` passes both through; `None` where no policy staked.
+- The /outs Units cell strikes the stake through and tags it
+  **below bar**, tooltip naming both numbers. Hue does not carry it:
+  the strikethrough and the word do.
+
+On the 09-01 board **all five staked rows were below the bar** -- the
+page previously had no way to say that.
+
+### The alarming part was measured and is not the defect
+
+Expected 14.4 outs, line 14.5, pick OVER looks like a sign error. It
+is not. Outs are left-skewed -- 26% of Vasquez's PMF sat on exactly 15
+outs (5.0 IP) while ~11% had him gone by the 3rd, and the blow-up tail
+drags the mean below the median. Strip p(15) and P(over) falls 0.608
+-> 0.346: the whole bet was "does he finish the fifth".
+
+Across 210 graded rows the projection sat below the line with the over
+still favoured **63 times**, against **3** the other way. Structural,
+not a glitch. And it does not predict losers:
+
+| | n | model-side hit rate |
+|---|---|---|
+| projection agrees with side | 161 | 57.1% |
+| projection disagrees | 49 | **46.9%** (p = 0.217, CI [32.5, 61.7]) |
+
+A tighter candidate -- share of P(over) carried by the single boundary
+cell -- discriminated not at all (52.4% vs 52.8%, **p = 0.974**).
+Neither filter ships. `expected_outs` is read by no decision code, and
+that is correct: an over/under prices off the probability, not the
+mean.
+
+### What the same pass turned up (A-053, open)
+
+- `opp_obp_asof` is NaN on **100% of served rows** (27/27) against
+  17.6% in history -- the team-batting merge keys on an exact
+  `game_date`, which a future slate cannot match. Every start is
+  priced against a train-mean opponent. Sign checked before blame:
+  CIN's real .3044 OBP would have RAISED P(over) to 0.6179.
+- No park or weather feature exists at all; with the opponent dead,
+  `is_home` is the model's whole read on who-and-where.
+- `p_over_cal == p_over_raw` on every row ever logged --
+  `models/outs_calibrator.pkl` does not exist. Designed (A-052's
+  Gate 5 refused all three maps), but the field name asserts
+  otherwise.
+
+### Market verdict, re-measured
+
+`tools/score_outs_vs_market.py`, **555 starts / 24 dates**: Brier raw
+0.2844 vs market 0.2450, paired **z = +4.56, model WORSE**. A-052 was
+filed at z = +0.65 on 373 starts. The gold_capped paper track's
+28-18 / +12.18u is 46 bets against that -- variance, not skill.
+
+
 ## 2026-08-27 - The outs paper P&L was frozen at its seed date
 
 Operator: "something is wrong with the bets profit tracker. it didnt
