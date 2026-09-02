@@ -1,6 +1,82 @@
 
 # Changelog
 
+## 2026-09-02 - The outs board now sees the opponent it is pricing against
+
+Operator: "fix the opp_obp merge so the board sees the opponent".
+
+`opp_obp_asof` was NaN on **every served row** -- 27 of 27 on the
+2026-09-01 board -- so the model priced each start against the TRAIN
+MEAN opponent instead of the one actually batting. Training had real
+values on 81% of rows (`miss_opp` fired on 1,802 of 9,710, all of it
+the MIN_OPP_GAMES gate), so the fitted coefficient was being applied in
+a regime it had never seen.
+
+Cause: the per-day batting table is built from games already PLAYED,
+and the feature merged on `(opp, season, game_date)`. A slate date has
+no row in that table by construction, so the join could never match.
+
+### Fixed by giving the date a row, not by loosening the join
+
+`_extend_daily_to_scored_dates` unions zero-measure rows for every
+`(team, season, date)` being scored that the daily table lacks, BEFORE
+`_prior_day_totals` runs. The slate date then receives its
+strictly-prior cumulative the same way a played date does, and the
+exact-date merge is untouched.
+
+An as-of / backward join was the obvious alternative and is WRONG: the
+daily row for date D holds totals strictly BEFORE D, so rolling back to
+the opponent's last played date would silently drop that date's own
+game.
+
+Both daily tables needed it. The league as-of rate is the shrink target
+in the same formula and is keyed on `(season, game_date)` -- fixing only
+the team side would have left `league_obp_asof` NaN and the blend NaN
+anyway. That half would have looked fixed and shipped nothing.
+
+### Neutrality proved rather than argued
+
+Zero rows contribute 0 to every cumsum, so no date that already
+resolved can move. On the 4,166-row 2026 frame:
+
+| check | result |
+|---|---|
+| index identical | yes |
+| non-opponent columns changed | **none** |
+| rows that already had `opp_obp_asof` | 3,406, **max abs delta 0** |
+| rows that LOST a value | 0 |
+| rows newly populated | 160 |
+
+This guard earns its keep because the same builder produces the
+TRAINING frame -- a silent shift there would mean serving a feature the
+shipped pkl was never fitted on. It does not, so **no retraining is
+implied**; serving now matches the regime training was fitted in.
+
+### Price impact
+
+Measured on the 09-01 board, same feature frame both arms: mean
+**-1.6pp** (sd 1.3, range -4.4 to +0.8). The model gets slightly LESS
+over-confident on the OVER -- the direction its measured bias needs.
+Randy Vasquez moves **+0.8pp**: CIN's .3055 is a below-average offence,
+so seeing the real opponent RAISES his number. The blind fill had been
+flattering the UNDER on him, not the OVER.
+
+Historical sidecars are NOT re-priced -- they are the record of what was
+served. The fix reaches the board on the worker's next pricing pass.
+
+### Tests
+
+Three in `tests/test_outs_asof.py`, **two of which fail without the
+fix**. The slate-date test asserts against `_brute_row` -- the
+independent reimplementation that reads `game_date < row.game_date`
+directly -- so it pins the RIGHT value, not merely a non-null one. The
+third is the inertness guard and passes both ways by design. Suite 279
+passed.
+
+Still open in A-053: `p_over_cal` names a calibrator pickle that has
+never existed, and the model has no park or weather channel at all.
+
+
 ## 2026-09-01 - A refused bet looked exactly like an unflagged one
 
 Operator: "look at the Randy Vasquez total outs line and pick and tell

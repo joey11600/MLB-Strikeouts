@@ -228,6 +228,64 @@ COLUMN_ALIASES = {
 }
 
 
+def _extend_daily_to_scored_dates(daily: pd.DataFrame,
+                                  scored: pd.DataFrame,
+                                  keys: tuple[str, ...],
+                                  source_cols: tuple[str, ...],
+                                  measures: tuple[str, ...]) -> pd.DataFrame:
+    """Give every key being SCORED a daily row, so the prior-day total
+    exists even on a date that has not been played yet.
+
+    ``keys`` names the daily table's key columns; ``source_cols`` names
+    the columns of ``scored`` that supply them, positionally.
+
+    ``_prior_day_totals`` hands a row the sum over STRICTLY EARLIER dates
+    in its group — so a date with no row of its own receives nothing at
+    all, and the exact-date merge that follows falls to NaN. Harmless
+    across history, where every scored date is a date somebody played.
+    Fatal on a slate: tonight's game is not in the batting table BY
+    CONSTRUCTION (that table is built from games already played), so
+    every served row missed the join and took the train-mean fill
+    instead of its real opponent. Measured 2026-09-01: 27 of 27 board
+    rows, against 17.6% missing across the 2026 history — the model was
+    pricing every start tonight against a generic average offence while
+    its coefficient had been fitted on real ones (A-053).
+
+    The added rows carry zero measures, which makes them provably inert
+    on everything that already worked: they contribute 0 to every
+    cumsum, so no date that already had a row can change value. They
+    exist only to give a missing date something to receive a total on.
+
+    The MIN_OPP_GAMES gate still applies afterwards, so a team genuinely
+    short of prior games still resolves to NaN rather than to a number
+    built on nothing.
+
+    BOTH daily tables need this, not just the per-team one. The league
+    as-of rate is the shrink target in the same formula and is keyed on
+    ``(season, game_date)`` — fixing only the team side would leave
+    ``league_obp_asof`` NaN on the slate date and the blend NaN anyway.
+    """
+    want = (scored.loc[:, list(source_cols)]
+            .dropna()
+            .drop_duplicates()
+            .rename(columns=dict(zip(source_cols, keys))))
+    if want.empty:
+        return daily
+    # Match the daily table's dtypes, or the anti-join below silently
+    # calls every row missing and doubles the table.
+    for k in keys:
+        want[k] = (pd.to_datetime(want[k]) if k == "game_date"
+                   else want[k].astype(daily[k].dtype))
+    missing = want.merge(daily[list(keys)], on=list(keys), how="left",
+                         indicator=True)
+    missing = missing[missing["_merge"] == "left_only"].drop(columns="_merge")
+    if missing.empty:
+        return daily
+    for c in measures:
+        missing[c] = 0.0
+    return pd.concat([daily, missing], ignore_index=True)
+
+
 def normalize_starts(df: pd.DataFrame) -> pd.DataFrame:
     """Rename a per-start table's columns to this module's canonical names.
 
@@ -480,10 +538,19 @@ def build_outs_asof(starts: pd.DataFrame,
         tb["ob"] = tb["ob"].astype("float64")
         tdaily = tb.groupby(["batting_team", "season", "game_date"],
                             as_index=False)[["_g", "pa_n", "ob"]].sum()
+        # A slate date is never in the batting table — it has not been
+        # played. Give it a zero row BEFORE the prior-day pass so it can
+        # receive a total, or the merge below drops it to NaN (A-053).
+        tdaily = _extend_daily_to_scored_dates(
+            tdaily, g, ("batting_team", "season", "game_date"),
+            ("opp", "season", "game_date"), ("_g", "pa_n", "ob"))
         tdaily = _prior_day_totals(tdaily, ["batting_team", "season"],
                                    ["_g", "pa_n", "ob"])
         # League as-of on-base rate, prior day, within season (the shrink target).
         ldaily = tb.groupby(["season", "game_date"], as_index=False)[["pa_n", "ob"]].sum()
+        ldaily = _extend_daily_to_scored_dates(
+            ldaily, g, ("season", "game_date"),
+            ("season", "game_date"), ("pa_n", "ob"))
         ldaily = _prior_day_totals(ldaily, ["season"], ["pa_n", "ob"])
         with np.errstate(invalid="ignore", divide="ignore"):
             ldaily["league_obp_asof"] = np.where(

@@ -574,11 +574,18 @@ strikeouts model, not a variant of it.
   the "gates" caption, indistinguishable from an unevaluated row; the
   09-01 Vasquez OVER read as a 2u recommendation while the production
   rule had refused it. All five staked rows that night were below bar.
-- [ ] **`opp_obp_asof` is dead at serve time (A-053)** — NaN on 100% of
-  served board rows vs 17.6% in history, because the team-batting merge
-  keys on an exact `game_date` a future slate cannot match. Every start
-  is priced against a train-mean opponent. Fix the join to carry the
-  team's latest prior-day totals forward onto the slate date.
+- [x] **`opp_obp_asof` was dead at serve time (A-053)** — fixed
+  2026-09-02. `_extend_daily_to_scored_dates` gives every scored
+  `(team, season, date)` a zero-measure daily row before the prior-day
+  pass, so a slate date receives its strictly-prior cumulative like any
+  played date and the exact-date merge is left alone. Applied to BOTH
+  daily tables (the league shrink target is keyed the same way, so
+  fixing one half would have shipped nothing). Provably inert on rows
+  that already resolved: 3,406 unchanged at max abs delta 0, every
+  non-opponent column bit-identical, so the training frame is untouched
+  and no retraining is implied. Board price impact mean −1.6pp, i.e.
+  slightly less OVER-confident. Two of three new tests fail without the
+  fix; the slate-date one asserts against the brute-force oracle.
 - [ ] **No park or weather feature exists on the outs target (A-053)** —
   with `opp_obp_asof` dead, `is_home` is the model's entire read on who
   and where. Gauntlet a park factor before the next promotion round.

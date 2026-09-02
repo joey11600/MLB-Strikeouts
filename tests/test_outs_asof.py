@@ -525,3 +525,73 @@ def test_empty_input_is_handled():
     empty = pd.DataFrame(columns=["game_pk", "pitcher", "game_date", "outs",
                                   "pitches", "is_home", "opp", "drest"])
     assert build_outs_asof(empty).empty
+
+
+# --------------------------------------------------------------------------
+# 7. A SLATE DATE IS NOT IN THE BATTING TABLE (A-053)
+# --------------------------------------------------------------------------
+def _slate_rows(sp: pd.DataFrame) -> pd.DataFrame:
+    """Tonight's card: real pitchers and opponents on a date one day past
+    everything the batting table knows about, with the label placeholders
+    tools/outs_serve._today_rows uses."""
+    last = sp["game_date"].max()
+    gd = last + pd.Timedelta(days=1)
+    pool = sp[sp["game_date"] == last]
+    return pd.DataFrame([{
+        "game_pk": 999_000 + i, "pitcher": int(r["pitcher"]), "game_date": gd,
+        "outs": 0, "pitches": 0.0, "is_home": int(r["is_home"]),
+        "team": r["team"], "opp": r["opp"], "drest": 5,
+    } for i, (_, r) in enumerate(pool.iterrows())])
+
+
+def test_slate_date_resolves_its_opponent(synth):
+    """The A-053 regression: a start on a date NOBODY has played cannot
+    find a row in the per-day batting table, so the exact-date merge
+    dropped it to NaN and the model priced it against the train-mean
+    fill. Measured on the live 2026-09-01 board: 27 of 27 rows."""
+    sp, tb = synth
+    slate = _slate_rows(sp)
+    f = build_outs_asof(pd.concat([sp, slate], ignore_index=True), tb)
+    got = f[f["game_date"] == slate["game_date"].iloc[0]]
+    assert len(got) == len(slate)
+    assert got["opp_obp_asof"].notna().all(), "slate rows still blind"
+    # and it is the RIGHT number, not merely non-null — brute force is an
+    # independent reimplementation reading `game_date < row.game_date`
+    for _, row in got.iterrows():
+        want = _brute_row(sp, tb, row)["opp_obp_asof"]
+        assert row["opp_obp_asof"] == pytest.approx(want, abs=1e-12)
+
+
+def test_extending_the_daily_table_cannot_move_an_existing_row(synth):
+    """The zero rows are inert: they contribute 0 to every cumsum, so a
+    date that already had a batting row must come out bit-identical.
+    Proven here rather than argued, because this runs on the training
+    frame too and a silent shift would mean serving a feature the
+    shipped pkl was never fitted on."""
+    sp, tb = synth
+    before = build_outs_asof(sp, tb).set_index(["game_pk", "pitcher"]).sort_index()
+    after = (build_outs_asof(pd.concat([sp, _slate_rows(sp)], ignore_index=True), tb)
+             .set_index(["game_pk", "pitcher"]).sort_index())
+    after = after.loc[before.index]
+    for c in before.columns:
+        a, b = after[c], before[c]
+        assert a.equals(b), f"{c} moved on rows that already resolved"
+
+
+def test_slate_still_honours_the_min_opp_games_gate(synth):
+    """Extending the table must not manufacture a number out of nothing:
+    a slate date early enough that the opponent is short of MIN_OPP_GAMES
+    prior games stays NaN, exactly as a played date would."""
+    sp, tb = synth
+    season = sorted(M.SEASON_STARTS)[-1]
+    early = pd.Timestamp(M.SEASON_STARTS[season]) + pd.Timedelta(days=3)
+    hist = sp[sp["game_date"] < early]
+    slate = pd.DataFrame([{
+        "game_pk": 999_999, "pitcher": int(hist["pitcher"].iloc[0]),
+        "game_date": early, "outs": 0, "pitches": 0.0, "is_home": 0,
+        "team": TEAMS[0], "opp": TEAMS[1], "drest": 5}])
+    f = build_outs_asof(pd.concat([hist, slate], ignore_index=True),
+                        tb[tb["game_date"] < early])
+    got = f[f["game_pk"] == 999_999].iloc[0]
+    assert got["opp_games_prior"] < M.MIN_OPP_GAMES
+    assert pd.isna(got["opp_obp_asof"])

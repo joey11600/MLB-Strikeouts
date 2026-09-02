@@ -470,16 +470,54 @@ Tracks open items, resolved items, and known risks.
 
 ### A-053: the outs board is served blind to the opponent, and "calibrated" names a map that does not exist
 - **Filed:** 2026-09-01 (found while auditing the A-052 Vasquez row)
-  **Status:** OPEN — neither is why that pick lost; both are real
-- **`opp_obp_asof` is NaN on 100% of served rows.** All 27 rows of the
+  **Status:** opponent merge FIXED 2026-09-02; the naming item and the
+  missing park/weather channel remain OPEN
+- **`opp_obp_asof` was NaN on 100% of served rows.** All 27 rows of the
   09-01 board, against 17.6% missing in the 2026 history (15.6% in
-  August). `features/outs_asof.py:502` merges team batting on
+  August). `features/outs_asof.py` merged team batting on
   `(opp, season, game_date)`; a game that has not been played has no
-  team-batting row for that date, so the join can never match on a
-  future slate. The model fills with the TRAIN mean and prices every
+  team-batting row for that date, so the join could never match on a
+  future slate. The model filled with the TRAIN mean and priced every
   start against a generic average offence. Real train/serve skew: the
   fitted `miss_opp` coefficient was learned on a minority-missing
-  regime and is applied to a 100%-missing one.
+  regime (1,802 of 9,710 training rows, 18.6%, all of it the
+  MIN_OPP_GAMES gate) and applied to a 100%-missing one.
+- **Fixed 2026-09-02 by giving the missing dates a row to receive a
+  total on, not by loosening the join.** `_extend_daily_to_scored_dates`
+  unions zero-measure rows for every `(team, season, date)` being scored
+  that the daily table lacks, BEFORE `_prior_day_totals` runs — so the
+  strictly-prior cumulative is computed for the slate date the same way
+  it is for a played date, and the exact-date merge is left alone. An
+  as-of/backward join was the obvious alternative and is WRONG here: the
+  daily row for date D holds totals strictly before D, so rolling back
+  to the opponent's last played date would silently drop that date's own
+  game. Both daily tables needed it — the league table is the shrink
+  target in the same formula and is keyed on `(season, game_date)`, so
+  fixing only the team side would have left `league_obp_asof` NaN and
+  the blend NaN anyway.
+- **Neutrality proved, not argued.** Zero rows contribute 0 to every
+  cumsum, so no date that already resolved can move. Verified on the
+  4,166-row 2026 frame: identical index, **every non-opponent column
+  bit-identical**, all 3,406 rows that already had `opp_obp_asof`
+  unchanged at **max abs delta 0**, 0 rows lost a value, 160 newly
+  populated. That guard matters because the same builder produces the
+  TRAINING frame: a silent shift there would mean serving a feature the
+  shipped pkl was never fitted on. It does not, so no retraining is
+  implied — serving now matches the regime training was fitted in.
+- **Price impact, measured on the 09-01 board:** mean **−1.6pp**
+  (sd 1.3, range −4.4 to +0.8) — the model gets slightly LESS
+  over-confident on the OVER, the direction its measured bias needs.
+  Vasquez moves +0.8pp (CIN's .3055 is a below-average offence, so
+  seeing the real opponent RAISES his number). Levels are not a replay
+  of the served snapshot — the parquet has advanced since — but both
+  arms use the identical feature frame, so the shift is a clean
+  controlled comparison.
+- **Regression cover:** three tests in `tests/test_outs_asof.py`, two of
+  which fail without the fix. The slate-date test asserts against
+  `_brute_row`, the independent reimplementation that reads
+  `game_date < row.game_date` directly, so it pins the RIGHT number
+  rather than merely a non-null one; the third is the inertness guard
+  and passes both ways by design.
 - **Check the sign before blaming it for a loss.** CIN's true as-of
   OBP was .3044 against a .3175 league mean — feeding the real number
   in RAISES P(over) from 0.6082 to 0.6179. The bug made the Vasquez

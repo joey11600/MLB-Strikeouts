@@ -127,6 +127,34 @@ normalizes by construction (measured worst |Σ−1| = 5.6e-16 over all
 | External validator vs MLB boxscores | `tools/validate_outs_vs_mlb.py` |
 | As-of features | `features/outs_asof.py` |
 
+**Prior-day features need a row on the date being scored.** The
+opponent (`opp_obp_asof`) and its league shrink target are per-day
+aggregates: `_prior_day_totals` hands each row the sum over STRICTLY
+EARLIER dates in its group, and the feature is then attached by an
+exact `(key…, game_date)` merge. A date with no row of its own
+therefore receives nothing and merges to NaN. Across history that is
+invisible — every scored date is a date somebody played — and on a
+slate it is total: tonight's game is not in a table built from games
+already played, so before 2026-09-02 **every served row** took the
+train-mean fill instead of its real opponent (A-053).
+
+`_extend_daily_to_scored_dates` unions zero-measure rows for the scored
+keys the daily table lacks, BEFORE the prior-day pass. Two properties
+make this the right shape, and both are load-bearing:
+
+- Zero rows contribute 0 to every cumsum, so nothing that already
+  resolved can move. The same builder produces the TRAINING frame, so
+  that inertness is what keeps a serve-time fix from silently changing
+  the feature the shipped pkl was fitted on. It is asserted in
+  `tests/test_outs_asof.py`, not assumed.
+- An as-of / backward join is NOT an acceptable substitute. The daily
+  row for date D holds totals strictly BEFORE D, so rolling back to the
+  team's last played date drops that date's own game.
+
+Apply it to EVERY per-day table feeding a formula, not just the obvious
+one — the league rate is the shrink target in the same expression, so
+fixing only the team side leaves the blend NaN and looks fixed.
+
 Fit and evaluate:
 
 ```
