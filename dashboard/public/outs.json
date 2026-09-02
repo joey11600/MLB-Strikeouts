@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-02T14:40:22.030950+00:00",
+ "generated_at": "2026-09-02T14:45:27.746428+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-09-02",
@@ -30,7 +30,9 @@
      "actual_outs": 12,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.12372480198492225,
+     "gate_threshold": 0.08939483620777632
     },
     {
      "date": "2026-08-27",
@@ -55,7 +57,9 @@
      "actual_outs": 13,
      "paper_side": "UNDER",
      "paper_stake_units": 0.5,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.049082368969386114,
+     "gate_threshold": 0.09208523068992179
     },
     {
      "date": "2026-08-27",
@@ -80,7 +84,9 @@
      "actual_outs": 13,
      "paper_side": "UNDER",
      "paper_stake_units": 0.5,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.04838447159734588,
+     "gate_threshold": 0.08958629046217757
     },
     {
      "date": "2026-08-27",
@@ -105,7 +111,9 @@
      "actual_outs": 15,
      "paper_side": "UNDER",
      "paper_stake_units": 0.25,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.043750132882338644,
+     "gate_threshold": 0.0908002759572266
     },
     {
      "date": "2026-08-27",
@@ -130,7 +138,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -155,7 +165,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -180,7 +192,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -205,7 +219,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -230,7 +246,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -255,7 +273,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -280,7 +300,9 @@
      "actual_outs": 27,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -305,7 +327,9 @@
      "actual_outs": 19,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-27",
@@ -330,7 +354,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     }
    ]
   },
@@ -360,7 +386,9 @@
      "actual_outs": 18,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.09379002879039777,
+     "gate_threshold": 0.08847771928684399
     },
     {
      "date": "2026-08-28",
@@ -385,7 +413,9 @@
      "actual_outs": 12,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07449871645274209,
+     "gate_threshold": 0.08991260923845189
     },
     {
      "date": "2026-08-28",
@@ -410,7 +440,9 @@
      "actual_outs": 15,
      "paper_side": "UNDER",
      "paper_stake_units": 1.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.061978841512469685,
+     "gate_threshold": 0.09016788635385263
     },
     {
      "date": "2026-08-28",
@@ -435,7 +467,9 @@
      "actual_outs": 21,
      "paper_side": "UNDER",
      "paper_stake_units": 1.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.052808029197080275,
+     "gate_threshold": 0.08822612085769975
     },
     {
      "date": "2026-08-28",
@@ -460,7 +494,9 @@
      "actual_outs": 18,
      "paper_side": "UNDER",
      "paper_stake_units": 1.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.049493220338983124,
+     "gate_threshold": 0.08971724584502482
     },
     {
      "date": "2026-08-28",
@@ -485,7 +521,9 @@
      "actual_outs": 12,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -510,7 +548,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -535,7 +575,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -560,7 +602,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -585,7 +629,9 @@
      "actual_outs": 9,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -610,7 +656,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -635,7 +683,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -660,7 +710,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -685,7 +737,9 @@
      "actual_outs": 12,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -710,7 +764,9 @@
      "actual_outs": 14,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -735,7 +791,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -760,7 +818,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -785,7 +845,9 @@
      "actual_outs": 20,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -810,7 +872,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -835,7 +899,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -860,7 +926,9 @@
      "actual_outs": 12,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -885,7 +953,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -910,7 +980,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -935,7 +1007,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -960,7 +1034,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -985,7 +1061,9 @@
      "actual_outs": 14,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -1010,7 +1088,9 @@
      "actual_outs": 24,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -1035,7 +1115,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-28",
@@ -1060,7 +1142,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     }
    ]
   },
@@ -1090,7 +1174,9 @@
      "actual_outs": 9,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.20170899561482547,
+     "gate_threshold": 0.08903416388389428
     },
     {
      "date": "2026-08-29",
@@ -1115,7 +1201,9 @@
      "actual_outs": 11,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.11604240837696339,
+     "gate_threshold": 0.09002801120448177
     },
     {
      "date": "2026-08-29",
@@ -1140,7 +1228,9 @@
      "actual_outs": 15,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.10341585233441902,
+     "gate_threshold": 0.08968641114982566
     },
     {
      "date": "2026-08-29",
@@ -1165,7 +1255,9 @@
      "actual_outs": 15,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.08000274764572651,
+     "gate_threshold": 0.09016201046051785
     },
     {
      "date": "2026-08-29",
@@ -1190,7 +1282,9 @@
      "actual_outs": 10,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07300363408521299,
+     "gate_threshold": 0.09132069139117303
     },
     {
      "date": "2026-08-29",
@@ -1215,7 +1309,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1240,7 +1336,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1265,7 +1363,9 @@
      "actual_outs": 14,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1290,7 +1390,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1315,7 +1417,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1340,7 +1444,9 @@
      "actual_outs": 12,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1365,7 +1471,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1390,7 +1498,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1415,7 +1525,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1440,7 +1552,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1465,7 +1579,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1490,7 +1606,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1515,7 +1633,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1540,7 +1660,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1565,7 +1687,9 @@
      "actual_outs": 9,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1590,7 +1714,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1615,7 +1741,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1640,7 +1768,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1665,7 +1795,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1690,7 +1822,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1715,7 +1849,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1740,7 +1876,9 @@
      "actual_outs": 13,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-29",
@@ -1765,7 +1903,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     }
    ]
   },
@@ -1795,7 +1935,9 @@
      "actual_outs": 13,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.13656709992921956,
+     "gate_threshold": 0.08877106113747345
     },
     {
      "date": "2026-08-30",
@@ -1820,7 +1962,9 @@
      "actual_outs": 17,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.09468762745823711,
+     "gate_threshold": 0.08815796289480503
     },
     {
      "date": "2026-08-30",
@@ -1845,7 +1989,9 @@
      "actual_outs": 21,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07592661290322578,
+     "gate_threshold": 0.09011866235167208
     },
     {
      "date": "2026-08-30",
@@ -1870,7 +2016,9 @@
      "actual_outs": 17,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.0706960151802658,
+     "gate_threshold": 0.09113821138211396
     },
     {
      "date": "2026-08-30",
@@ -1895,7 +2043,9 @@
      "actual_outs": 16,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.06604790987072606,
+     "gate_threshold": 0.08958712928862188
     },
     {
      "date": "2026-08-30",
@@ -1920,7 +2070,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -1945,7 +2097,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -1970,7 +2124,9 @@
      "actual_outs": 25,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -1995,7 +2151,9 @@
      "actual_outs": 9,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2020,7 +2178,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2045,7 +2205,9 @@
      "actual_outs": 20,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2070,7 +2232,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2095,7 +2259,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2120,7 +2286,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2145,7 +2313,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2170,7 +2340,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2195,7 +2367,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2220,7 +2394,9 @@
      "actual_outs": 11,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2245,7 +2421,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2270,7 +2448,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2295,7 +2475,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2320,7 +2502,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2345,7 +2529,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2370,7 +2556,9 @@
      "actual_outs": 14,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-30",
@@ -2395,7 +2583,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     }
    ]
   },
@@ -2425,7 +2615,9 @@
      "actual_outs": 15,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.11313927125506074,
+     "gate_threshold": 0.08926406926406914
     },
     {
      "date": "2026-08-31",
@@ -2450,7 +2642,9 @@
      "actual_outs": 9,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07444790987072614,
+     "gate_threshold": 0.08958712928862188
     },
     {
      "date": "2026-08-31",
@@ -2475,7 +2669,9 @@
      "actual_outs": 19,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07108976175144871,
+     "gate_threshold": 0.09108065002801834
     },
     {
      "date": "2026-08-31",
@@ -2500,7 +2696,9 @@
      "actual_outs": 21,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.06817480198492226,
+     "gate_threshold": 0.08939483620777632
     },
     {
      "date": "2026-08-31",
@@ -2525,7 +2723,9 @@
      "actual_outs": 18,
      "paper_side": "OVER",
      "paper_stake_units": 1.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.05744986711766131,
+     "gate_threshold": 0.0908002759572266
     },
     {
      "date": "2026-08-31",
@@ -2550,7 +2750,9 @@
      "actual_outs": 18,
      "paper_side": "OVER",
      "paper_stake_units": 0.5,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.04767742809756892,
+     "gate_threshold": 0.08968693883732513
     },
     {
      "date": "2026-08-31",
@@ -2575,7 +2777,9 @@
      "actual_outs": 21,
      "paper_side": "OVER",
      "paper_stake_units": 0.5,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.04436585233441909,
+     "gate_threshold": 0.08968641114982566
     },
     {
      "date": "2026-08-31",
@@ -2600,7 +2804,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2625,7 +2831,9 @@
      "actual_outs": 14,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2650,7 +2858,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2675,7 +2885,9 @@
      "actual_outs": 14,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2700,7 +2912,9 @@
      "actual_outs": 13,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2725,7 +2939,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2750,7 +2966,9 @@
      "actual_outs": 11,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2775,7 +2993,9 @@
      "actual_outs": 11,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2800,7 +3020,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2825,7 +3047,9 @@
      "actual_outs": 13,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2850,7 +3074,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2875,7 +3101,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2900,7 +3128,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2925,7 +3155,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2950,7 +3182,9 @@
      "actual_outs": 13,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-08-31",
@@ -2975,7 +3209,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     }
    ]
   },
@@ -3005,7 +3241,9 @@
      "actual_outs": 15,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07644819676792569,
+     "gate_threshold": 0.08700040453074419
     },
     {
      "date": "2026-09-01",
@@ -3030,7 +3268,9 @@
      "actual_outs": 18,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07153723874006473,
+     "gate_threshold": 0.09093316519546034
     },
     {
      "date": "2026-09-01",
@@ -3055,7 +3295,9 @@
      "actual_outs": 14,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.07022903225806454,
+     "gate_threshold": 0.08896551724137945
     },
     {
      "date": "2026-09-01",
@@ -3080,7 +3322,9 @@
      "actual_outs": 14,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.06909959935513732,
+     "gate_threshold": 0.08820235639141337
     },
     {
      "date": "2026-09-01",
@@ -3105,7 +3349,9 @@
      "actual_outs": 16,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.06700230496453907,
+     "gate_threshold": 0.08805539117055282
     },
     {
      "date": "2026-09-01",
@@ -3130,7 +3376,9 @@
      "actual_outs": 13,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3155,7 +3403,9 @@
      "actual_outs": 9,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3180,7 +3430,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3205,7 +3457,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3230,7 +3484,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3255,7 +3511,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3280,7 +3538,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3305,7 +3565,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3330,7 +3592,9 @@
      "actual_outs": 12,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3355,7 +3619,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3380,7 +3646,9 @@
      "actual_outs": 12,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3405,7 +3673,9 @@
      "actual_outs": 20,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3430,7 +3700,9 @@
      "actual_outs": 6,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3455,7 +3727,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3480,7 +3754,9 @@
      "actual_outs": 17,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3505,7 +3781,9 @@
      "actual_outs": 12,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3530,7 +3808,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3555,7 +3835,9 @@
      "actual_outs": 15,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3580,7 +3862,9 @@
      "actual_outs": 18,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3605,7 +3889,9 @@
      "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3630,7 +3916,9 @@
      "actual_outs": 16,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-01",
@@ -3655,7 +3943,9 @@
      "actual_outs": 14,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     }
    ]
   },
@@ -3685,7 +3975,9 @@
      "actual_outs": null,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": true
+     "clears_gates": true,
+     "gate_edge": 0.11835079308879759,
+     "gate_threshold": 0.09009168750473594
     },
     {
      "date": "2026-09-02",
@@ -3710,7 +4002,9 @@
      "actual_outs": null,
      "paper_side": "UNDER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.08401116804098968,
+     "gate_threshold": 0.09145307943043422
     },
     {
      "date": "2026-09-02",
@@ -3735,7 +4029,9 @@
      "actual_outs": null,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.06382257190243124,
+     "gate_threshold": 0.08968693883732513
     },
     {
      "date": "2026-09-02",
@@ -3760,7 +4056,9 @@
      "actual_outs": null,
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.06330204907689624,
+     "gate_threshold": 0.09066990916838157
     },
     {
      "date": "2026-09-02",
@@ -3785,7 +4083,9 @@
      "actual_outs": null,
      "paper_side": "OVER",
      "paper_stake_units": 1.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.05316325763900476,
+     "gate_threshold": 0.09156915369475759
     },
     {
      "date": "2026-09-02",
@@ -3810,7 +4110,9 @@
      "actual_outs": null,
      "paper_side": "OVER",
      "paper_stake_units": 1.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": 0.05086411266495966,
+     "gate_threshold": 0.08951759005687808
     },
     {
      "date": "2026-09-02",
@@ -3835,7 +4137,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -3860,7 +4164,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -3885,7 +4191,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -3910,7 +4218,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -3935,7 +4245,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -3960,7 +4272,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -3985,7 +4299,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4010,7 +4326,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4035,7 +4353,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4060,7 +4380,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4085,7 +4407,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4110,7 +4434,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4135,7 +4461,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4160,7 +4488,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4185,7 +4515,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4210,7 +4542,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4235,7 +4569,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4260,7 +4596,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4285,7 +4623,9 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     },
     {
      "date": "2026-09-02",
@@ -4310,21 +4650,23 @@
      "actual_outs": null,
      "paper_side": null,
      "paper_stake_units": 0.0,
-     "clears_gates": false
+     "clears_gates": false,
+     "gate_edge": null,
+     "gate_threshold": null
     }
    ]
   }
  },
  "scorecard": {
-  "run_at": "2026-08-30T11:34:30+00:00",
-  "n_starts": "486",
-  "n_dates": "21",
-  "over_rate": "0.4918",
-  "brier_raw": "0.27996",
-  "brier_cal": "0.27996",
-  "brier_market": "0.24355",
-  "z_raw_vs_market": "4.06",
-  "z_cal_vs_market": "4.06"
+  "run_at": "2026-09-02T02:26:55+00:00",
+  "n_starts": "555",
+  "n_dates": "24",
+  "over_rate": "0.4919",
+  "brier_raw": "0.28443",
+  "brier_cal": "0.28443",
+  "brier_market": "0.24498",
+  "z_raw_vs_market": "4.56",
+  "z_cal_vs_market": "4.56"
  },
  "paper_tracks": {
   "policies": {
