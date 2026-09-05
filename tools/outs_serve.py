@@ -11,7 +11,9 @@ directive 2026-08-24) and this module is its serving spine:
     own features: pitcher aggregates are cumsum-minus-current /
     shift-before-roll, league and opponent aggregates are prior-DAY.
   * price_board()         — hazard pmf -> P(outs > line), calibrated
-    (models/outs_calibrator.pkl, Gate 5), no-vig fair prob alongside
+    (models/outs_calibrator.pkl, Gate 5), no-vig fair prob alongside,
+    plus the row's ROLE facts (what his previous appearance was —
+    A-054; facts only, the rule lives in tools/outs_paper)
   * write_slate() / log_dates() — its own sidecar + evidence log,
     union-merged, never touching any strikeouts artifact
 
@@ -170,23 +172,121 @@ def median_outs(pmf) -> int:
 
 
 # ---------------------------------------------------------- today inputs
-def _drest_lookup(iso_date: str, pitcher_ids: list[int]) -> dict[int, float]:
-    """Days since each pitcher's previous appearance, from the pitch
+#: The role facts a sidecar row carries (A-054). Facts about the
+#: pitcher's PREVIOUS appearance only — the rule that reads them lives in
+#: tools/outs_paper.relief_role, never here.
+ROLE_FIELDS = ("prev_app_date", "prev_app_pitches", "prev_app_was_start",
+               "relief_apps_since_last_start", "days_since_prev_start")
+
+_ROLE_COLS = ("game_pk", "at_bat_number", "inning_topbot",
+              "home_team", "away_team")
+
+
+def _appearance_lookup(iso_date: str, pitcher_ids: list[int]) -> dict[int, dict]:
+    """Each pitcher's appearance history this season, from the pitch
     cache (which ends yesterday — strictly prior by construction).
-    Matches training's semantics: ANY appearance, not just starts."""
+
+    ``days_since_prev_app`` is _drest_lookup's number and keeps its
+    contract: ANY appearance, not just starts, matching training. The
+    rest are the ROLE facts the model has no feature for (A-054):
+
+      * was that previous appearance a START — the first pitcher his
+        team used in that game, the same definition
+        features/outs_asof.build_starts_table and
+        features/asof.team_relief_pitches_by_date use
+      * how many pitches it was
+      * how many relief outings he has made since his last start
+      * how long since that last start
+
+    exp_o, the stop rates and p5_pitches are all built over prior STARTS,
+    so a reliever making a spot start is priced as a generic starter
+    (Kade Morris, 2026-09-04: four relief outings of 35-68 pitches since
+    his one June start; model median 15 outs, line 9.5). Facts only —
+    nothing here decides anything.
+    """
     from data.backfill_statcast import load_cached
     d = date.fromisoformat(iso_date)
     df = load_cached(date(d.year, 3, 26), d)
-    out: dict[int, float] = {}
+    out: dict[int, dict] = {}
+    if df.empty or not {"pitcher", "game_date"}.issubset(df.columns):
+        return out
+    wanted = {int(p) for p in pitcher_ids}
+    today = pd.Timestamp(d)
+
+    if not set(_ROLE_COLS).issubset(df.columns):
+        # Degrade to the old one-number lookup rather than lose days-rest.
+        mine = df[df["pitcher"].isin(wanted)]
+        last = pd.to_datetime(mine.groupby("pitcher")["game_date"].max())
+        for pid, ts in last.items():
+            out[int(pid)] = {"days_since_prev_app":
+                             float((today - ts.normalize()).days),
+                             **{k: None for k in ROLE_FIELDS}}
+        return out
+
+    df = df[["pitcher", "game_date", *_ROLE_COLS]].copy()
+    df["game_date"] = pd.to_datetime(df["game_date"]).dt.normalize()
+    df["pitching_team"] = np.where(df["inning_topbot"] == "Top",
+                                   df["home_team"], df["away_team"])
+    # The starter is the first pitcher his team used. Computed over
+    # EVERY pitcher before narrowing to the ones asked for — a reliever's
+    # game must still have its starter to compare against.
+    starter = (df.sort_values(["game_pk", "at_bat_number"], kind="mergesort")
+                 .groupby(["game_pk", "pitching_team"], sort=False)["pitcher"]
+                 .first().to_dict())
+    df = df[df["pitcher"].isin(wanted)]
     if df.empty:
         return out
-    df = df[df["pitcher"].isin(pitcher_ids)]
-    if df.empty:
-        return out
-    last = pd.to_datetime(df.groupby("pitcher")["game_date"].max())
-    for pid, ts in last.items():
-        out[int(pid)] = float((pd.Timestamp(d) - ts.normalize()).days)
+    # One row per appearance; a pitch row is a pitch, so size() is the
+    # pitch count (the same count build_starts_table sums per PA).
+    app = (df.groupby(["pitcher", "game_pk"], sort=False)
+             .agg(game_date=("game_date", "first"),
+                  pitches=("at_bat_number", "size"),
+                  pitching_team=("pitching_team", "first"))
+             .reset_index())
+    app["is_start"] = [
+        starter.get((g, t)) == p
+        for g, t, p in zip(app["game_pk"], app["pitching_team"], app["pitcher"])
+    ]
+    app = app.sort_values(["pitcher", "game_date", "game_pk"], kind="mergesort")
+    for pid, g in app.groupby("pitcher", sort=False):
+        is_start = g["is_start"].to_numpy(dtype=bool)
+        dates = g["game_date"].to_numpy()
+        pitches = g["pitches"].to_numpy()
+        starts_at = np.flatnonzero(is_start)
+        if len(starts_at):
+            last_start = int(starts_at[-1])
+            relief_since = int((~is_start[last_start + 1:]).sum())
+            days_since_start = float(
+                (today - pd.Timestamp(dates[last_start])).days)
+        else:
+            relief_since = int((~is_start).sum())
+            days_since_start = None
+        out[int(pid)] = {
+            "days_since_prev_app": float((today - pd.Timestamp(dates[-1])).days),
+            "prev_app_date": pd.Timestamp(dates[-1]).strftime("%Y-%m-%d"),
+            "prev_app_pitches": int(pitches[-1]),
+            "prev_app_was_start": bool(is_start[-1]),
+            "relief_apps_since_last_start": relief_since,
+            "days_since_prev_start": days_since_start,
+        }
     return out
+
+
+def _drest_lookup(iso_date: str, pitcher_ids: list[int]) -> dict[int, float]:
+    """Days since each pitcher's previous appearance — the one-number
+    view of _appearance_lookup, kept for callers that want only it.
+    ANY appearance, not just starts (training's semantics)."""
+    return {pid: a["days_since_prev_app"]
+            for pid, a in _appearance_lookup(iso_date, pitcher_ids).items()}
+
+
+def role_block(apps: dict[int, dict], pid: int) -> dict:
+    """The sidecar row's role facts. ALWAYS present on a row priced by
+    this code — an absent block means the row predates it, which is
+    how tools/outs_paper tells "not relief work" from "never looked".
+    Every value None for a pitcher with no appearance this season."""
+    a = apps.get(int(pid)) or {}
+    return {k: a.get(k) for k in ROLE_FIELDS}
 
 
 def today_board_inputs(iso_date: str) -> list[dict]:
@@ -229,8 +329,12 @@ def feature_frame(today_rows: pd.DataFrame | None = None) -> pd.DataFrame:
     return build_outs_asof(starts, tb)
 
 
-def _today_rows(iso_date: str, matched: list[dict]) -> pd.DataFrame:
-    drest = _drest_lookup(iso_date, [int(m["pitcher_id"]) for m in matched])
+def _today_rows(iso_date: str, matched: list[dict],
+                apps: dict[int, dict] | None = None) -> pd.DataFrame:
+    if apps is None:
+        apps = _appearance_lookup(iso_date,
+                                  [int(m["pitcher_id"]) for m in matched])
+    drest = {pid: a["days_since_prev_app"] for pid, a in apps.items()}
     rows = []
     for m in matched:
         pid = int(m["pitcher_id"])
@@ -259,7 +363,10 @@ def price_board(iso_date: str, matched: list[dict] | None = None) -> list[dict]:
     if not matched:
         return []
 
-    today = _today_rows(iso_date, matched)
+    # One pass over the pitch cache serves both the days-rest input and
+    # the role facts (A-054): the same frame, read once.
+    apps = _appearance_lookup(iso_date, [int(m["pitcher_id"]) for m in matched])
+    today = _today_rows(iso_date, matched, apps)
     feat = feature_frame(today)
     feat_today = feat[
         (pd.to_datetime(feat["game_date"]) == pd.Timestamp(iso_date))
@@ -319,6 +426,9 @@ def price_board(iso_date: str, matched: list[dict] | None = None) -> list[dict]:
             "hold_pct": (round(float(nv["hold_pct"]), 4)
                          if nv.get("hold_pct") is not None else None),
             "pmf": [round(float(x), 5) for x in pmf[i]],
+            # What he did in his PREVIOUS appearance (A-054). Facts only:
+            # the rule that reads them is tools/outs_paper.relief_role.
+            "role": role_block(apps, int(m["pitcher_id"])),
             # No edge, no stake, no side, on purpose.
             "diagnostic_only": True,
         })

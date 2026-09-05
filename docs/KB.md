@@ -871,9 +871,10 @@ across the state dir and the checkout, NOT the state dir's copy: the
 pass is gap-fill (the volume's existing copy wins), so the volume can
 hold a stale board while the checkout holds the re-price.
 
-Paper tracks (`tools/outs_paper.py`, since 2026-08-25): three staking
-policies — production gates-as-written, gold-board (8pp+ gap) with the
-v1 caps, gold-board uncapped raw quarter-Kelly — are scored on every
+Paper tracks (`tools/outs_paper.py`, since 2026-08-25): four staking
+policies — production gates-as-written, gates minus relief-role rows
+(`gates_role`, A-054, 2026-09-04), gold-board (8pp+ gap) with the v1
+caps, gold-board uncapped raw quarter-Kelly — are scored on every
 SETTLED slate through the real `models/edge.py` + `models/staking.py`
 code and appended to `data/outs_paper_tracks.csv` (append-only; a
 (date, policy) pair freezes on first write, the locked-picks rule).
@@ -883,6 +884,20 @@ ONLY for dates strictly before today — retrospective evidence, never a
 pick. Cumulative flat-basis totals ride the payload's `paper_tracks`
 and render as a card on /outs. Purpose: settle "should the gates be
 looser?" with a graded record instead of an argument.
+
+Role facts (A-054, 2026-09-04): every sidecar row priced since carries
+a `role` block — the pitcher's previous appearance (date, pitches,
+start-or-relief by `build_starts_table`'s first-pitcher definition),
+relief outings since his last start, days since that start — from
+`outs_serve._appearance_lookup`, the same pitch-cache pass that feeds
+days-rest. Facts only at serve time; `outs_paper.relief_role` is the
+rule. `gates_role` refuses to score a slate whose rows lack the block
+rather than silently becoming `gates`, so its record starts clean at
+the first fully-annotated slate. `build_payload` adds `relief_role`,
+`role_skip` and `gates_role_units` per row for the /outs caption and
+tags. The model itself still has no role feature: `exp_o`, the stop
+rates and `p5_pitches` are built over prior STARTS only, which is the
+open half of A-054.
 
 Calibration: Gate 5 measured to a refusal (A-052) — Platt, isotonic,
 and per-line Platt all degraded per-line calibration on the untouched

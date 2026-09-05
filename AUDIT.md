@@ -520,6 +520,63 @@ Tracks open items, resolved items, and known risks.
   actually separates winners from losers before shipping a filter for
   it — two plausible ones here did not.
 
+### A-054: the outs model prices a reliever's spot start as a generic starter — the book's low line is role information it cannot read
+- **Filed:** 2026-09-04 (operator: "explain to me why some of the total
+  outs probabilities are so crazy today. like a 90.6% probability for
+  kade morris. that should be a slam dunk, right?")
+  **Status:** measured; shadow paper policy + board caption SHIPPED the
+  same day (no price moves); the model-side fix is OPEN (ROADMAP Phase
+  10: role feature through the five gates)
+- **The row.** Kade Morris, ATH at SEA, DK 9.5 outs, +119 / -159, market
+  fair P(over) 0.4265; model median 15, mean 14.76, P(over) 0.9058.
+  2026 MLB log: one start (06-06, 12 outs, 91 pitches), then relief
+  outings of 9, 9, 8 and 6 outs at 51 / 68 / 41 / 35 pitches, the last
+  on 08-30. The book priced a three-inning outing.
+- **Mechanism.** `exp_o` is the expanding mean over prior STARTS this
+  season (n=1 -> 12.0, shrunk halfway to league -> 13.63);
+  `stop_rate_b` shrinks toward the league hazard with W_HAZ=24, so with
+  one prior start the vector IS the league curve; `p5_pitches` is a
+  rolling mean over prior STARTS (91, from June). Relief appearances
+  enter nothing except `days_since_prev_game` -- and a relief outing
+  five days earlier puts him in the "5" bucket, the healthy-starter
+  bucket (16.04 mean outs). No opener / min-line / role guard exists
+  anywhere in the outs serve path. The strikeouts side has had one
+  since A-007 (`ROLE_LOOKBACK_GAMES` / `STARTER_TYPICAL_BF`: "pricing a
+  reliever/opener with a starter-trained model is out-of-distribution").
+- **Measured in history (13,716 starts, all three seasons):** previous
+  appearance was relief -> mean outs 9.7 / 10.6 / 9.4 against 16.1 /
+  15.9 / 15.9, P(outs >= 12) 0.44 / 0.50 / 0.41 against 0.90; previous
+  appearance <= 40 pitches -> 8.4 / 9.2 / 7.5; two or more relief
+  outings since the last start -> 8.3 / 9.2 / 7.8; the Morris profile
+  (relief AND <= 45 pitches) n = 186 / 215 / 242, P(>= 10) 0.34 / 0.41
+  / 0.23 -- the market's 0.43 was the right number. IL returns (>= 15
+  days since the last START, previous appearance a start) are the mild
+  case: mean 13.8-14.6, P(>= 12) 0.80-0.88. Second start back after a
+  <= 70-pitch first start back (Fried's class, n = 155): P(>= 13) 0.62,
+  0.72 when the pitch count actually reaches 73-80, 0.14 at <= 65.
+- **Measured on the served record (265 graded rows):** lines 10.5-12.5,
+  n = 6, model mean P(over) 0.695, market 0.502, actual OVER 0 of 6,
+  Brier 0.506 against the market's 0.255. `gates` staked 2u OVER on
+  Morris, Allen, Pallante and Fried tonight (4 of its 5 bets); uncapped
+  Kelly said 20.67u on Morris. Low-line (<= 12.5) OVER paper record:
+  `gates` 2-2 -1.42u against 6-2 +9.41u on everything else;
+  `gold_capped` 2-4 -4.92u against 35-20 +20.08u.
+- **Shipped (no price moves).** A `role` block on every sidecar row
+  (`outs_serve._appearance_lookup`, the same pitch-cache pass as
+  days-rest, 2.2 s); `outs_paper.relief_role`; fourth paper policy
+  `gates_role` that refuses to score any slate lacking the block; /outs
+  caption plus "role skip" and "role shadow" tags;
+  `tests/test_outs_role.py`. First evaluable slate 2026-09-05.
+- **Rejected.** A permanent "line <= 12.5" refusal (fit to eight rows;
+  it blocks Anthony Molina's 15-out night at 9.5); the book's line as a
+  model input (turns model-vs-market into market-vs-itself);
+  hand-patching a pitcher.
+- **Generalises to:** a line four to six outs below a starter's normal
+  line is the book's role information, not a mispricing. When model and
+  book disagree by that much, read the pitcher's last three appearances
+  before believing either number. Same family as the A-052 Vasquez row
+  (the book moved one out) and the Leahy limited start; larger.
+
 ### A-053: the outs board is served blind to the opponent, and "calibrated" names a map that does not exist
 - **Filed:** 2026-09-01 (found while auditing the A-052 Vasquez row)
   **Status:** opponent merge FIXED 2026-09-02; the naming item and the

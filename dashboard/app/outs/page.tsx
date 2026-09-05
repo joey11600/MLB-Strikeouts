@@ -45,6 +45,20 @@ type OutsRow = {
   // marker still renders without the numbers rather than showing NaN.
   gate_edge?: number | null;
   gate_threshold?: number | null;
+  // Role facts (A-054, 2026-09-04): what the starter did in his PREVIOUS
+  // appearance — the one thing the model has no feature for. Absent on
+  // sidecars priced before the block existed, so every consumer
+  // tolerates undefined.
+  role?: {
+    prev_app_date: string | null;
+    prev_app_pitches: number | null;
+    prev_app_was_start: boolean | null;
+    relief_apps_since_last_start: number | null;
+    days_since_prev_start: number | null;
+  } | null;
+  relief_role?: boolean | null;
+  role_skip?: boolean | null;
+  gates_role_units?: number | null;
 };
 
 type PaperPolicy = {
@@ -71,10 +85,15 @@ type OutsPayload = {
   calibration: string;
 };
 
-// Display order + wording for the three paper policies. Keys must
+// Display order + wording for the four paper policies. Keys must
 // match tools/outs_paper.py POLICIES.
 const PAPER_POLICIES: [string, string, string][] = [
   ["gates", "Gates as written", "production entry bar · ¼-Kelly · 2u cap"],
+  [
+    "gates_role",
+    "Gates, relief-role skip",
+    "gates as written, minus any starter whose last outing was relief work · shadow",
+  ],
   ["gold_capped", "Gold board, capped", "every 8pp+ gap · ¼-Kelly · 2u cap"],
   ["gold_uncapped", "Gold board, uncapped", "every 8pp+ gap · raw ¼-Kelly · no caps"],
 ];
@@ -227,7 +246,7 @@ export default function OutsPage() {
               paper tracks
             </span>
             <span className="text-[11px] text-ink-muted">
-              three staking rules graded on every settled slate —
+              four staking rules graded on every settled slate —
               hypothetical, no bets placed
             </span>
           </div>
@@ -254,6 +273,9 @@ export default function OutsPage() {
                       <td className="figure py-1.5 pr-3 text-right">
                         {p.wins}-{p.losses}
                         {p.pushes > 0 ? `-${p.pushes}P` : ""}
+                        <div className="text-[10px] font-normal text-ink-muted">
+                          {p.dates} {p.dates === 1 ? "slate" : "slates"}
+                        </div>
                       </td>
                       <td className="figure py-1.5 pr-3 text-right text-ink-secondary">
                         {p.staked.toFixed(2)}u
@@ -374,6 +396,30 @@ export default function OutsPage() {
                       `production rule would not take this bet (the shadow ` +
                       `paper policy stakes it anyway)`
                     : "the production entry bar refused this stake";
+                // Role caption (A-054). His previous appearance was a
+                // relief outing — the one fact the model has no feature
+                // for (exp_o, stop rates and p5_pitches are built over
+                // prior STARTS only). The words carry it; hue is accent.
+                const reliefSince = r.role?.relief_apps_since_last_start;
+                const roleWhy = r.relief_role
+                  ? `His previous appearance` +
+                    (r.role?.prev_app_date ? ` (${r.role.prev_app_date})` : "") +
+                    ` was a relief outing` +
+                    (r.role?.prev_app_pitches != null
+                      ? ` of ${r.role.prev_app_pitches} pitches`
+                      : "") +
+                    (reliefSince != null && reliefSince > 0
+                      ? `, ${reliefSince === 1 ? "his only" : `one of ${reliefSince}`} relief outing${reliefSince === 1 ? "" : "s"} since his last start`
+                      : "") +
+                    (r.role?.days_since_prev_start != null
+                      ? ` ${r.role.days_since_prev_start} days ago`
+                      : "") +
+                    `. The model only learns from prior starts and cannot see ` +
+                    `this; in 2024–26 a listed starter whose last outing was ` +
+                    `relief averaged 9–11 outs against 16 for everyone else. ` +
+                    `The relief-role shadow policy skips this row` +
+                    (r.role_skip ? `; gates as written stakes it anyway.` : `.`)
+                  : undefined;
                 const settled = r.actual_outs !== null;
                 const wentOver = settled && r.actual_outs! > r.line;
                 // Whole-number alternate lines can land exactly on the
@@ -394,6 +440,20 @@ export default function OutsPage() {
                       <div className="text-[11px] text-ink-muted">
                         {r.pitcher_team} vs {r.opponent_team}
                       </div>
+                      {r.relief_role ? (
+                        <div
+                          className="mt-0.5 text-[10px] uppercase tracking-wider text-accent"
+                          title={roleWhy}
+                        >
+                          last outing relief
+                          {r.role?.prev_app_pitches != null
+                            ? ` · ${r.role.prev_app_pitches} pitches`
+                            : ""}
+                          {r.role?.prev_app_date
+                            ? ` ${r.role.prev_app_date.slice(5)}`
+                            : ""}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="figure px-3 py-2.5">{r.line}</td>
                     <td className="figure px-3 py-2.5 text-right text-ink-secondary">
@@ -486,6 +546,32 @@ export default function OutsPage() {
                               below bar
                             </div>
                           )}
+                          {r.role_skip ? (
+                            <div
+                              className="text-[10px] uppercase tracking-wider text-under"
+                              title={roleWhy}
+                            >
+                              role skip
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : r.gates_role_units && r.gates_role_units > 0 ? (
+                        // Gates as written left this row out (the daily
+                        // cap); the relief-role shadow takes it because
+                        // skipping relief-role rows freed the cap.
+                        <div
+                          title={
+                            `the relief-role shadow policy stakes ${r.gates_role_units}u here: ` +
+                            `it skipped the relief-role rows, which freed the daily cap ` +
+                            `that had cut this row from gates as written`
+                          }
+                        >
+                          <span className="font-semibold text-ink-secondary">
+                            {r.gates_role_units}u
+                          </span>
+                          <div className="text-[10px] uppercase tracking-wider text-accent">
+                            role shadow
+                          </div>
                         </div>
                       ) : (
                         <span className="text-ink-muted">—</span>
@@ -569,7 +655,14 @@ export default function OutsPage() {
         bar reads a half-trust blend of the two and must beat the
         book&rsquo;s hold plus a margin, so a fat Edge here can still be
         a bet the production rule refuses. Hover the tag for the two
-        numbers. Every stake is
+        numbers. A &ldquo;last outing relief&rdquo; caption under a
+        pitcher means his previous appearance was a relief outing: the
+        model only learns from prior starts and cannot see that, and in
+        2024&ndash;26 such starters averaged 9 to 11 outs against 16 for
+        the rest, so the &ldquo;Gates, relief-role skip&rdquo; paper
+        policy is gates as written minus those rows (&ldquo;role
+        skip&rdquo; tag). A &ldquo;role shadow&rdquo; stake is one that
+        policy takes only because the skips freed the daily cap. Every stake is
         hypothetical: betting is blocked until calibration passes, and
         model probabilities are served raw — both candidate calibration
         maps were refused on an untouched holdout. On settled rows, ✓/✗

@@ -1,6 +1,74 @@
 
 # Changelog
 
+## 2026-09-04 - Relief-role shadow: the board names the starters the model cannot see, and a fourth paper policy skips them (A-054)
+
+Operator: "explain to me why some of the total outs probabilities are
+so crazy today. like a 90.6% probability for kade morris. that should
+be a slam dunk, right?" -- then "build the shadow policy and caption."
+
+Kade Morris, ATH at SEA, DK line **9.5** outs (UNDER -159, market fair
+P(over) 0.4265). Model: median 15, P(over) **0.9058**. His 2026 MLB log:
+one start (06-06, 12 outs, 90 pitches) and four relief outings since, of
+6-9 outs at 35-68 pitches, the last on 08-30. The book priced a
+three-inning outing; the model priced a generic starter, because every
+pitcher feature it has -- `exp_o`, the stop-rate vector, `p5_pitches` --
+is built over prior STARTS and relief work never enters. The only
+channel that sees the relief outing is days-rest, and a relief outing
+five days earlier lands him in the *healthy starter* bucket.
+
+**Measured, 2024-26 (13,716 starts; an appearances table per
+(game_pk, pitcher) over the same pitch cache):**
+
+| previous appearance was | starts 24 / 25 / 26 | mean outs | P(outs >= 12) |
+|---|---|---|---|
+| a start | 4318 / 4480 / 3607 | 16.1 / 15.9 / 15.9 | 0.90 / 0.90 / 0.90 |
+| relief | 268 / 319 / 368 | 9.7 / 10.6 / 9.4 | 0.44 / 0.50 / 0.41 |
+| relief, <= 45 pitches (the Morris profile) | 186 / 215 / 242 | 8.0 / 8.8 / 6.7 | 0.29 / 0.34 / 0.19 |
+
+Same direction, same size, every season. On the served record
+(`outs_model_log.csv`, 265 graded rows): lines 10.5-12.5, n=6, model
+mean P(over) 0.695, market 0.502, actual OVER **0 of 6**, Brier 0.506
+against the market's 0.255. The production `gates` rule staked 2u OVER
+on four such rows tonight alone (Morris, Allen, Pallante, Fried); Allen
+threw 7. Paper record of low-line (<= 12.5) OVER bets: `gates` 2-2
+-1.42u against 6-2 +9.41u on everything else; `gold_capped` 2-4 -4.92u
+against 35-20 +20.08u.
+
+**Shipped -- and nothing here moves a price:**
+
+- `tools/outs_serve._appearance_lookup` (one pass over the same pitch
+  cache days-rest already reads, 2.2 s): every sidecar row now carries
+  a `role` block -- previous appearance date, pitches, whether it was a
+  START (first pitcher his team used, `build_starts_table`'s
+  definition), relief outings since his last start, days since that
+  start. Facts only; the serve module still computes no edge, stake,
+  or side.
+- `tools/outs_paper.relief_role` reads it. Fourth paper policy
+  **`gates_role`** = gates as written minus any row whose previous
+  appearance was relief; sized and daily-capped identically, so the
+  freed cap flows to the next row down the edge list (tonight: Morris
+  and Allen out, Blake Snell UNDER 17.5 in). Scored ONLY on slates
+  whose every row carries the block -- an older slate yields no bets
+  rather than silently collapsing the policy into `gates`. First
+  evaluable slate: 2026-09-05.
+- `/outs`: a "last outing relief . N pitches MM-DD" caption under the
+  pitcher (hover for the numbers and the history), a "role skip" tag on
+  a gates stake the shadow refuses, a "role shadow" stake on a row only
+  the shadow takes, and the fourth policy on the paper-tracks card with
+  a slate count, so a younger record reads as younger.
+- `tests/test_outs_role.py` pins tonight's six-row fixture (gates 5
+  bets / 10u; gates_role 4 / 8u with Snell in), the
+  refuse-without-block rule, the board columns, the lookup on synthetic
+  pitch rows, the degrade path, and the summary.
+
+**Deliberately NOT shipped:** a serve-time refusal on low lines (fit to
+eight rows, and it would have blocked Anthony Molina's 15-out night at
+9.5), the book's line as a model input, and any hand-patch. The model
+fix is a role feature through the five gates -- it has three-season
+variance in history, unlike the pitch-limit channel -- then a gated-off
+shadow and a refit (ROADMAP Phase 10).
+
 ## 2026-09-02 - Price plays measured: not the leaking half, and already excluded by the production bar
 
 Operator: "measure the price play hit rate."

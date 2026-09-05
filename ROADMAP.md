@@ -519,6 +519,25 @@ strikeouts model, not a variant of it.
   omitted. All three outs CSVs and `outs_slates` now merge both
   directions; new watchdog row `outs paper tracks served` counts
   served bets against the repo ledger (served < repo only)
+- [x] **Relief-role shadow (2026-09-04, A-054).** Sidecar rows carry a
+  `role` block (previous appearance: date, pitches, start-or-relief,
+  relief outings since last start, days since that start); fourth
+  paper policy `gates_role` = gates minus relief-role rows, scored
+  only on slates that carry the block; /outs captions the rows.
+  Measured 2024-26: a starter whose previous appearance was relief
+  averages 9-11 outs against 16, P(>=12) 0.41-0.50 vs 0.90, every
+  season; the served record went 0/6 OVER at lines 10.5-12.5. No
+  price moves
+- [ ] **Role feature through the five gates (A-054, open).**
+  Candidates with measured three-season variance: previous appearance
+  was relief; pitches in the previous appearance (<=40 -> 7.5-9.2 mean
+  outs, 76+ -> 16.2); relief outings since last start (2+ -> 7.8-9.2).
+  All known before first pitch (Gate 1). Collinear with each other and
+  with `days_rest_bucket` (Gate 4 keeps one or two). Score Gate 2 on
+  the PRICED rows as well as the wide table -- the strikeouts side's
+  A-024a reversed there. Then a gated-off two-week shadow, refit,
+  promote. Judge the `gates_role` paper record at n >= 30 bets, not
+  before
 
 ### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
 - [x] Per-start outs table, 13,170 regular-season starts 2024–2026

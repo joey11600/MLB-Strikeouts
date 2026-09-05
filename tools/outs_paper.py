@@ -1,14 +1,22 @@
-"""Outs paper tracks — three staking policies graded nightly, no money.
+"""Outs paper tracks — four staking policies graded nightly, no money.
 
 Born from the 2026-08-24 slate, where three plausible rules disagreed
 by a factor of eight on the same board (+2.22u / +5.67u / +17.73u).
-Instead of arguing, every settled slate is now scored under all three
+Instead of arguing, every settled slate is now scored under all of them
 and the running totals published on the /outs page:
 
   gates          entry: the production edge gates as written
                  (models.edge.compute_edge clears_threshold);
                  stake: quarter-Kelly on the HALF-TRUST blended
                  probability, quantized, 2u cap, portfolio daily cap.
+  gates_role     `gates` minus any starter whose PREVIOUS appearance
+                 was a relief outing (relief_role, A-054, 2026-09-04).
+                 The model prices such a pitcher as a generic starter —
+                 exp_o and the stop rates see prior STARTS only — and
+                 measured 2024-26 he averages 9-11 outs against 16.
+                 Scored ONLY on slates whose every row carries the
+                 `role` block; an older slate yields no bets rather than
+                 silently collapsing this policy into `gates`.
   gold_capped    entry: every row the page highlights gold
                  (|raw model-vs-fair gap| >= GOLD_GAP, currently 8pp);
                  stake: sized exactly like `gates`.
@@ -58,7 +66,7 @@ ET = ZoneInfo("America/New_York")
 GOLD_GAP = 0.08
 
 KELLY_FRACTION = 0.25
-POLICIES = ("gates", "gold_capped", "gold_uncapped")
+POLICIES = ("gates", "gates_role", "gold_capped", "gold_uncapped")
 
 PAPER_FIELDS = [
     "date", "policy", "game_pk", "pitcher_id", "pitcher_name", "side",
@@ -66,8 +74,39 @@ PAPER_FIELDS = [
 ]
 
 
+def relief_role(row: dict) -> bool | None:
+    """Was this starter's PREVIOUS appearance a relief outing?
+
+    The one role fact the outs model has no feature for (A-054):
+    exp_o, the stop rates and p5_pitches are built over prior STARTS
+    only, so a reliever making a spot start is priced as a generic
+    starter. Measured on 13,716 starts 2024-26, a start whose previous
+    appearance was relief averaged 9.4 / 10.6 / 9.4 outs by season
+    against 16.1 / 15.9 / 15.9 for the rest, P(outs >= 12) 0.41-0.50
+    vs 0.90 — every season, the same direction.
+
+    Returns None when the sidecar row predates the ``role`` block: a
+    policy reading this cannot be evaluated on that row and must say
+    so rather than guess. A pitcher with no appearance this season
+    (every role value None) is NOT relief work — the model's own
+    is_debut path handles him.
+    """
+    role = row.get("role")
+    if not isinstance(role, dict) or "prev_app_was_start" not in role:
+        return None
+    was_start = role.get("prev_app_was_start")
+    if was_start is None:
+        return False
+    return not bool(was_start)
+
+
 def _policy_bets(policy: str, board: list[dict]) -> list[dict]:
     """The policy's bets for one slate, from pre-game fields only."""
+    if policy == "gates_role" and any(relief_role(r) is None for r in board):
+        # Evaluable only when EVERY row carries the role block. A slate
+        # priced before the block existed would silently reduce this
+        # policy to `gates` and pollute the comparison it exists for.
+        return []
     picks = []
     for r in board:
         p_over = r.get("p_over_cal")
@@ -82,6 +121,9 @@ def _policy_bets(policy: str, board: list[dict]) -> list[dict]:
 
         if policy == "gates":
             if not e["clears_threshold"]:
+                continue
+        elif policy == "gates_role":
+            if not e["clears_threshold"] or relief_role(r):
                 continue
         elif abs(raw_gap) < GOLD_GAP:
             continue
@@ -151,6 +193,32 @@ def board_paper_columns(board: list[dict]) -> dict[str, dict]:
             "gate_edge": b["best_edge"],
             "gate_threshold": b["gate_threshold"]})
         row["clears_gates"] = True
+    # The relief-role shadow (A-054): `role_skip` marks a gates bet the
+    # shadow refuses; `gates_role_units` is what the shadow stakes on the
+    # row, which can be MORE than gates did — skipping relief-role rows
+    # frees the daily cap for the next row down the edge list. Such a
+    # row gets an entry even when no other policy staked it, so the
+    # board can show the shadow's stake instead of a blank.
+    role_bets = {str(b["pitcher_id"]): b
+                 for b in _policy_bets("gates_role", board)}
+    for r in board:
+        pid = str(r.get("pitcher_id"))
+        rr = relief_role(r)
+        if pid in out:
+            out[pid]["relief_role"] = rr
+            out[pid]["role_skip"] = bool(out[pid].get("clears_gates") and rr)
+            out[pid]["gates_role_units"] = (
+                role_bets[pid]["units_risked"] if pid in role_bets else 0.0)
+        elif pid in role_bets:
+            b = role_bets[pid]
+            out[pid] = {
+                "side": b["side"], "stake_units": 0.0,
+                "clears_gates": False,
+                "gate_edge": b["best_edge"],
+                "gate_threshold": b["gate_threshold"],
+                "relief_role": rr, "role_skip": False,
+                "gates_role_units": b["units_risked"],
+            }
     return out
 
 

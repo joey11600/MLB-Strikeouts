@@ -92,7 +92,7 @@ def build_payload() -> dict:
     # page as soon as the repo syncs — a payload rebuilt from one
     # directory would silently DROP yesterday's board (the exact way
     # the date stepper would come up empty tomorrow morning).
-    from tools.outs_paper import board_paper_columns
+    from tools.outs_paper import board_paper_columns, relief_role
 
     dates = available_dates()[:PAYLOAD_DATES]
     actual = _actuals()
@@ -123,6 +123,14 @@ def build_payload() -> dict:
             row["gate_edge"] = pcols.get("gate_edge") if pcols else None
             row["gate_threshold"] = (pcols.get("gate_threshold")
                                      if pcols else None)
+            # Role facts -> verdicts (A-054). `relief_role` reads the
+            # row's own block so an UNSTAKED relief-role row still gets
+            # its caption; the skip and shadow-stake flags come through
+            # the policy path like every other paper column.
+            row["relief_role"] = relief_role(r)
+            row["role_skip"] = bool(pcols and pcols.get("role_skip"))
+            row["gates_role_units"] = (float(pcols.get("gates_role_units") or 0.0)
+                                       if pcols else 0.0)
             board.append(row)
         # biggest model-vs-market disagreement first — the page's point
         # is watching the disagreements get graded, not implying picks
