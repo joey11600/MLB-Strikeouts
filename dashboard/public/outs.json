@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-05T00:26:21.605853+00:00",
+ "generated_at": "2026-09-05T00:27:54.450548+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-09-04",
@@ -33,7 +33,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.20170899561482547,
-     "gate_threshold": 0.08903416388389428
+     "gate_threshold": 0.08903416388389428,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -61,7 +64,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.11604240837696339,
-     "gate_threshold": 0.09002801120448177
+     "gate_threshold": 0.09002801120448177,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -89,7 +95,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.10341585233441902,
-     "gate_threshold": 0.08968641114982566
+     "gate_threshold": 0.08968641114982566,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -117,7 +126,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.08000274764572651,
-     "gate_threshold": 0.09016201046051785
+     "gate_threshold": 0.09016201046051785,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -145,7 +157,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07300363408521299,
-     "gate_threshold": 0.09132069139117303
+     "gate_threshold": 0.09132069139117303,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -173,7 +188,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -201,7 +219,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -229,7 +250,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -257,7 +281,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -285,7 +312,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -313,7 +343,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -341,7 +374,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -369,7 +405,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -397,7 +436,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -425,7 +467,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -453,7 +498,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -481,7 +529,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -509,7 +560,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -537,7 +591,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -565,7 +622,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -593,7 +653,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -621,7 +684,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -649,7 +715,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -677,7 +746,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -705,7 +777,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -733,7 +808,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -761,7 +839,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-29",
@@ -789,7 +870,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     }
    ]
   },
@@ -822,7 +906,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.13656709992921956,
-     "gate_threshold": 0.08877106113747345
+     "gate_threshold": 0.08877106113747345,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -850,7 +937,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.09468762745823711,
-     "gate_threshold": 0.08815796289480503
+     "gate_threshold": 0.08815796289480503,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -878,7 +968,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07592661290322578,
-     "gate_threshold": 0.09011866235167208
+     "gate_threshold": 0.09011866235167208,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -906,7 +999,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.0706960151802658,
-     "gate_threshold": 0.09113821138211396
+     "gate_threshold": 0.09113821138211396,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -934,7 +1030,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.06604790987072606,
-     "gate_threshold": 0.08958712928862188
+     "gate_threshold": 0.08958712928862188,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -962,7 +1061,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -990,7 +1092,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1018,7 +1123,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1046,7 +1154,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1074,7 +1185,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1102,7 +1216,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1130,7 +1247,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1158,7 +1278,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1186,7 +1309,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1214,7 +1340,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1242,7 +1371,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1270,7 +1402,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1298,7 +1433,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1326,7 +1464,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1354,7 +1495,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1382,7 +1526,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1410,7 +1557,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1438,7 +1588,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1466,7 +1619,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-30",
@@ -1494,7 +1650,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     }
    ]
   },
@@ -1527,7 +1686,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.11313927125506074,
-     "gate_threshold": 0.08926406926406914
+     "gate_threshold": 0.08926406926406914,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1555,7 +1717,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07444790987072614,
-     "gate_threshold": 0.08958712928862188
+     "gate_threshold": 0.08958712928862188,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1583,7 +1748,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07108976175144871,
-     "gate_threshold": 0.09108065002801834
+     "gate_threshold": 0.09108065002801834,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1611,7 +1779,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.06817480198492226,
-     "gate_threshold": 0.08939483620777632
+     "gate_threshold": 0.08939483620777632,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1639,7 +1810,10 @@
      "paper_stake_units": 1.0,
      "clears_gates": false,
      "gate_edge": 0.05744986711766131,
-     "gate_threshold": 0.0908002759572266
+     "gate_threshold": 0.0908002759572266,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1667,7 +1841,10 @@
      "paper_stake_units": 0.5,
      "clears_gates": false,
      "gate_edge": 0.04767742809756892,
-     "gate_threshold": 0.08968693883732513
+     "gate_threshold": 0.08968693883732513,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1695,7 +1872,10 @@
      "paper_stake_units": 0.5,
      "clears_gates": false,
      "gate_edge": 0.04436585233441909,
-     "gate_threshold": 0.08968641114982566
+     "gate_threshold": 0.08968641114982566,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1723,7 +1903,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1751,7 +1934,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1779,7 +1965,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1807,7 +1996,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1835,7 +2027,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1863,7 +2058,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1891,7 +2089,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1919,7 +2120,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1947,7 +2151,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -1975,7 +2182,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -2003,7 +2213,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -2031,7 +2244,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -2059,7 +2275,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -2087,7 +2306,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -2115,7 +2337,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-08-31",
@@ -2143,7 +2368,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     }
    ]
   },
@@ -2176,7 +2404,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07644819676792569,
-     "gate_threshold": 0.08700040453074419
+     "gate_threshold": 0.08700040453074419,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2204,7 +2435,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07153723874006473,
-     "gate_threshold": 0.09093316519546034
+     "gate_threshold": 0.09093316519546034,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2232,7 +2466,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07022903225806454,
-     "gate_threshold": 0.08896551724137945
+     "gate_threshold": 0.08896551724137945,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2260,7 +2497,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.06909959935513732,
-     "gate_threshold": 0.08820235639141337
+     "gate_threshold": 0.08820235639141337,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2288,7 +2528,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.06700230496453907,
-     "gate_threshold": 0.08805539117055282
+     "gate_threshold": 0.08805539117055282,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2316,7 +2559,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2344,7 +2590,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2372,7 +2621,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2400,7 +2652,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2428,7 +2683,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2456,7 +2714,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2484,7 +2745,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2512,7 +2776,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2540,7 +2807,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2568,7 +2838,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2596,7 +2869,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2624,7 +2900,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2652,7 +2931,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2680,7 +2962,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2708,7 +2993,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2736,7 +3024,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2764,7 +3055,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2792,7 +3086,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2820,7 +3117,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2848,7 +3148,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2876,7 +3179,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-01",
@@ -2904,7 +3210,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     }
    ]
   },
@@ -2937,7 +3246,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.13135759162303662,
-     "gate_threshold": 0.09002801120448177
+     "gate_threshold": 0.09002801120448177,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -2965,7 +3277,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.09211116804098968,
-     "gate_threshold": 0.09145307943043422
+     "gate_threshold": 0.09145307943043422,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -2993,7 +3308,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.08699294043491956,
-     "gate_threshold": 0.08907008086253375
+     "gate_threshold": 0.08907008086253375,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3021,7 +3339,10 @@
      "paper_stake_units": 1.5,
      "clears_gates": false,
      "gate_edge": 0.08084191116874695,
-     "gate_threshold": 0.08878031878031888
+     "gate_threshold": 0.08878031878031888,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3049,7 +3370,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07084197080291965,
-     "gate_threshold": 0.08822612085769975
+     "gate_threshold": 0.08822612085769975,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3077,7 +3401,10 @@
      "paper_stake_units": 0.5,
      "clears_gates": false,
      "gate_edge": 0.0617309734513275,
-     "gate_threshold": 0.09132083602671857
+     "gate_threshold": 0.09132083602671857,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3105,7 +3432,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3133,7 +3463,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3161,7 +3494,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3189,7 +3525,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3217,7 +3556,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3245,7 +3587,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3273,7 +3618,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3301,7 +3649,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3329,7 +3680,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3357,7 +3711,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3385,7 +3742,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3413,7 +3773,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3441,7 +3804,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3469,7 +3835,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3497,7 +3866,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3525,7 +3897,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3553,7 +3928,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3581,7 +3959,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3609,7 +3990,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3637,7 +4021,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-02",
@@ -3665,7 +4052,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     }
    ]
   },
@@ -3698,7 +4088,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.1297656889188582,
-     "gate_threshold": 0.09360038610038622
+     "gate_threshold": 0.09360038610038622,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3726,7 +4119,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": false,
      "gate_edge": 0.07845292781672752,
-     "gate_threshold": 0.09198052291732826
+     "gate_threshold": 0.09198052291732826,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3754,7 +4150,10 @@
      "paper_stake_units": 1.0,
      "clears_gates": false,
      "gate_edge": 0.06197742809756901,
-     "gate_threshold": 0.08968693883732513
+     "gate_threshold": 0.08968693883732513,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3782,7 +4181,10 @@
      "paper_stake_units": 0.25,
      "clears_gates": false,
      "gate_edge": 0.040037666210008815,
-     "gate_threshold": 0.09047964113181493
+     "gate_threshold": 0.09047964113181493,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3810,7 +4212,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3838,7 +4243,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3866,7 +4274,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3894,7 +4305,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3922,7 +4336,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3950,7 +4367,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -3978,7 +4398,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -4006,7 +4429,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -4034,7 +4460,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -4062,7 +4491,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -4090,7 +4522,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -4118,7 +4553,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -4146,7 +4584,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-03",
@@ -4174,7 +4615,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     }
    ]
   },
@@ -4207,7 +4651,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.2396294675647635,
-     "gate_threshold": 0.09052061846582403
+     "gate_threshold": 0.09052061846582403,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4235,7 +4682,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.16153927125506073,
-     "gate_threshold": 0.08926406926406914
+     "gate_threshold": 0.08926406926406914,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4263,7 +4713,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.15114100438517464,
-     "gate_threshold": 0.08903416388389428
+     "gate_threshold": 0.08903416388389428,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4291,7 +4744,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.14663766621000884,
-     "gate_threshold": 0.09047964113181493
+     "gate_threshold": 0.09047964113181493,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4319,7 +4775,10 @@
      "paper_stake_units": 2.0,
      "clears_gates": true,
      "gate_edge": 0.10409260030356349,
-     "gate_threshold": 0.08891699809042496
+     "gate_threshold": 0.08891699809042496,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4347,7 +4806,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4375,7 +4837,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4403,7 +4868,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4431,7 +4899,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4459,7 +4930,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4487,7 +4961,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4515,7 +4992,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4543,7 +5023,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4571,7 +5054,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4599,7 +5085,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4627,7 +5116,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4655,7 +5147,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4683,7 +5178,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4711,7 +5209,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4739,7 +5240,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4767,7 +5271,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4795,7 +5302,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4823,7 +5333,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4851,7 +5364,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4879,7 +5395,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4907,7 +5426,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4935,7 +5457,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4963,7 +5488,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -4991,7 +5519,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     },
     {
      "date": "2026-09-04",
@@ -5019,7 +5550,10 @@
      "paper_stake_units": 0.0,
      "clears_gates": false,
      "gate_edge": null,
-     "gate_threshold": null
+     "gate_threshold": null,
+     "relief_role": null,
+     "role_skip": false,
+     "gates_role_units": 0.0
     }
    ]
   }
@@ -5046,6 +5580,16 @@
     "staked": 24.0,
     "pl": 7.99,
     "dates": 8
+   },
+   "gates_role": {
+    "bets": 0,
+    "wins": 0,
+    "losses": 0,
+    "pushes": 0,
+    "voids": 0,
+    "staked": 0,
+    "pl": 0,
+    "dates": 0
    },
    "gold_capped": {
     "bets": 61,
