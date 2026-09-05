@@ -399,6 +399,7 @@ cumsum-minus-current, per-season reset). Values reproduced this session:
 | 6 | league regime | expanding league-mean outs through prior day | 15.66 → 15.57 → 15.26 |
 | 7 | opponent as-of OBP | team level, ≥20 prior opponent games | r = −0.042 |
 | 8 | recent pitch budget | prior-5 mean pitch count — **pick one only** | r(exp_o, p5_p) = 0.805 |
+| 9 | `prev_app_pitches` (A-054, 2026-09-04) | pitch count of the previous APPEARANCE this season, any role, from the all-pitchers appearance table; NaN via `miss_budget` | ≤40 → 7.5–9.2 outs, 76+ → 16.2; gated, shadow only (`ROLE_FEATURES`) |
 
 ### Two traps found this session
 
@@ -497,3 +498,12 @@ bet the raw hazard output.
 - `exp_o` measures r = +0.4145 here against the +0.328 quoted in the brief;
   the definitions differ somewhere and it should be reconciled before the
   feature is written into `features/`.
+- **Role (A-054).** Every pitcher feature in §9 is built over prior STARTS,
+  so a reliever making a spot start is priced as a generic starter. Feature
+  9 passed the gauntlet (2026-09-04) but captures only a fifth of the
+  relief-row overshoot (2026 relief-previous rows: actual 8.92, production
+  10.12, shadow 10.02 outs). The encodings that captured more failed Gate 3
+  or 4: a separate missingness indicator is a near-linear combination of
+  `miss_budget` + `rest_unknown` + `is_debut`, and the relief binary flips
+  sign beside the count. Next: a three-level history block (no appearance /
+  relief only / prior start) replacing `miss_budget` plus a role indicator.

@@ -88,6 +88,10 @@ __all__ = [
     "MARKET_LINES",
     "SIGN_CONTRACT",
     "load_dataset",
+    "FeatureSet",
+    "BASE_FEATURES",
+    "ROLE_FEATURES",
+    "default_features",
     "explode_states",
     "brier_at_lines",
     "asof_baseline_pmf",
@@ -98,6 +102,12 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 MODEL_PATH = Path(__file__).parent / "outs_hazard.pkl"
+
+#: The ROLE-set shadow model (A-054): fitted on 2024+2025 with
+#: ROLE_FEATURES, served beside the production pkl as `p_over_shadow` on
+#: every sidecar row and scored against it for two weeks before promotion.
+#: Absent file = no shadow column, never an error.
+ROLE_MODEL_PATH = Path(__file__).parent / "outs_hazard_role.pkl"
 
 #: CLAUDE.md: "No training data from before 2024 (post-pitch-clock,
 #: post-humidor)." Enforced in fit(), not just documented.
@@ -221,6 +231,88 @@ COLUMN_MISSING_BLOCK = {
     "p5_pitches": "miss_budget",
 }
 
+#: ROLE block (A-054, 2026-09-04). What the pitcher did in his PREVIOUS
+#: appearance this season, from the all-pitchers appearance table
+#: (features/outs_asof.build_appearances_table). Every other pitcher feature
+#: is built over prior STARTS, so a reliever making a spot start is priced
+#: as a generic starter -- Kade Morris, DK line 9.5, model P(over) 0.906.
+#: Measured on 13,716 starts: previous appearance relief -> 9.4-10.6 outs
+#: vs 15.9-16.1, P(>=12) 0.41-0.50 vs 0.90, every season.
+#:
+#: GATED 2026-09-04 (tools/gate_outs_role.py, three-way split, all
+#: candidates refit with their own penalty selection). The set that passed
+#: every gate in every direction is the pitch count of the previous
+#: appearance ALONE, its "no prior appearance" NaN routed through the
+#: existing miss_budget block:
+#:   Gate 2  Brier over the seven market lines better in S1/S2/S3, paired
+#:           z = -3.92 / -1.93 / -5.65 (wide 9.5-19.5 grid -4.18/-1.79/-6.45)
+#:   Gate 3  d E[outs] = +0.24 / +0.31 / +0.28 per sd, the measured direction
+#:   Gate 4  VIF of the new column 2.87 / 2.88 / 2.86; design max 13.1 / 6.4
+#:           / 7.6 against the shipped design's 12.2 / 5.5 / 6.7
+#:   Gate 5  ECE at 12.5 / 15.5 / 17.5 not worse in any split
+#: Rejected on the same run: the binary prev_app_relief beside the count
+#: (its sign flips to +0.09 in S2 -- the count carries the information);
+#: relief_since_start beside both (VIF 7-10, flips the binary to +1.0..+2.0
+#: in every split); a separate miss_role indicator (VIF 44-61: its rows are
+#: a strict subset of miss_budget's, so it is a near-linear combination of
+#: miss_budget, rest_unknown and is_debut); a 60-pitch hinge alone (worse
+#: in S2, z=+1.28) or beside the count (no gain, VIF 5.3). The columns
+#: below are still EMITTED by the builder for the paper policy and for the
+#: next round; only prev_app_pitches is fitted.
+#:
+#: OFF until the two-week shadow (ROLE_MODEL_PATH, p_over_shadow) is
+#: judged. Flipping this changes the DEFAULT feature set fit() uses and
+#: therefore requires a refit; the shipped pkl carries its own spec, so
+#: serving is unaffected by the flag alone.
+ROLE_FEATURES_ENABLED = False
+ROLE_NUMERIC = ("prev_app_pitches", "relief_since_start")
+ROLE_BINARY = ("prev_app_relief",)
+#: The rejected separate-indicator routing, kept for the gate tool's
+#: record (tools/gate_outs_role.py CANDIDATES) -- not what ROLE_FEATURES
+#: uses.
+ROLE_MISSING_BLOCK = {"miss_role": "prev_app_pitches"}
+ROLE_COLUMN_BLOCK = {"prev_app_pitches": "miss_role",
+                     "relief_since_start": "miss_role"}
+
+
+@dataclass(frozen=True)
+class FeatureSet:
+    """The columns a fit consumes and how their missingness is routed.
+
+    The fitted DesignSpec freezes a copy, so a pkl always knows which set
+    built it; module-level tuples are only the DEFAULT for a new fit.
+    """
+    name: str
+    numeric: tuple
+    binary: tuple
+    missing_blocks: dict
+    column_blocks: dict
+
+    def extend(self, name: str, numeric=(), binary=(), missing_blocks=None,
+               column_blocks=None) -> "FeatureSet":
+        return FeatureSet(
+            name=name,
+            numeric=tuple(self.numeric) + tuple(numeric),
+            binary=tuple(self.binary) + tuple(binary),
+            missing_blocks={**self.missing_blocks, **(missing_blocks or {})},
+            column_blocks={**self.column_blocks, **(column_blocks or {})},
+        )
+
+
+BASE_FEATURES = FeatureSet("base", NUMERIC_FEATURES, BINARY_FEATURES,
+                           dict(MISSING_BLOCKS), dict(COLUMN_MISSING_BLOCK))
+#: The gated set: previous-appearance pitch count, NaN through miss_budget
+#: (the NaN rows -- no appearance this season -- are a strict subset of
+#: miss_budget's no-start rows, so the indicator already exists).
+ROLE_FEATURES = BASE_FEATURES.extend(
+    "role", numeric=("prev_app_pitches",),
+    column_blocks={"prev_app_pitches": "miss_budget"})
+
+
+def default_features() -> FeatureSet:
+    return ROLE_FEATURES if ROLE_FEATURES_ENABLED else BASE_FEATURES
+
+
 #: Honest baseline (docs/FACTORS.md C1, "Not the mean -- the distribution"):
 #: the pitcher's own strictly as-of empirical outs DISTRIBUTION over prior
 #: starts, shrunk toward the as-of league PMF with this many pseudo-starts.
@@ -274,6 +366,11 @@ SIGN_CONTRACT = {
     "rest_21+": (-1, "rest", "21+ days rest -> 13.60 outs vs 16.08 at the reference"),
     "NO_HISTORY_BLOCK": (-1, "block", "genuine debut 10.79 outs vs 16.11 at career >= 10"),
     "UNKNOWN_REST_BLOCK": (-1, "block", "unknown rest bucket 14.71 outs vs 16.08 at the reference"),
+    # ROLE block (A-054). Gated only when the fit includes them; a base fit
+    # reports them as "not in design".
+    "prev_app_relief": (-1, "binary", "previous appearance relief -> 9.4-10.6 outs vs 15.9-16.1, all three seasons (A-054)"),
+    "prev_app_pitches": (+1, "sd", "<=40 pitches last time -> 7.5-9.2 outs; 76+ -> 16.2, all three seasons (A-054)"),
+    "relief_since_start": (-1, "sd", "2+ relief outings since the last start -> 7.8-9.2 outs vs 16 (A-054)"),
 }
 
 #: Terms deliberately NOT gated, with the measured reason. These are printed
@@ -351,20 +448,25 @@ def load_dataset(fast_opponent: bool = False, verbose: bool = True) -> pd.DataFr
     """
     from tools.build_outs_dataset import load_outs_starts
     from features.outs_asof import (
-        build_outs_asof, build_starts_table, load_statcast_pa,
-        team_batting_from_starts,
+        build_appearances_table, build_outs_asof, build_starts_table,
+        load_statcast_pa, team_batting_from_starts,
     )
 
     t0 = time.time()
     starts = load_outs_starts()
+    apps = None
     if fast_opponent:
         tb = team_batting_from_starts(starts)
-        src = "starters-only fallback"
+        src = "starters-only fallback (no ROLE block: needs the PA table)"
     else:
         pa = load_statcast_pa()
         _, tb = build_starts_table(pa)
+        # The ROLE block (A-054) needs every pitcher's appearances, which
+        # only the PA table has; the starts-only path leaves it NaN and a
+        # fit that asks for it refuses.
+        apps = build_appearances_table(pa)
         src = "full-game (Statcast PA table)"
-    feat = build_outs_asof(starts, tb)
+    feat = build_outs_asof(starts, tb, appearances=apps)
 
     n_games = feat["game_pk"].nunique()
     if len(feat) != 2 * n_games:
@@ -492,6 +594,13 @@ class DesignSpec:
     names: list[str]
     quality_idx: np.ndarray
     dropped: list[str] = field(default_factory=list)
+    # Which structural-missingness blocks this design has and which numeric
+    # column each is read from. Frozen per fit (A-054): a pkl fitted with
+    # the ROLE block carries miss_role; the shipped base pkl does not, and
+    # an old pkl without the field gets the base dicts.
+    missing_blocks: dict = field(default_factory=lambda: dict(MISSING_BLOCKS))
+    column_blocks: dict = field(default_factory=lambda: dict(COLUMN_MISSING_BLOCK))
+    feature_set: str = "base"
 
     @property
     def required_columns(self) -> list[str]:
@@ -509,7 +618,10 @@ class DesignSpec:
                 "mean": dict(self.mean), "sd": dict(self.sd),
                 "names": list(self.names),
                 "quality_idx": [int(i) for i in self.quality_idx],
-                "dropped": list(self.dropped)}
+                "dropped": list(self.dropped),
+                "missing_blocks": dict(self.missing_blocks),
+                "column_blocks": dict(self.column_blocks),
+                "feature_set": self.feature_set}
 
     @classmethod
     def from_dict(cls, d: dict) -> "DesignSpec":
@@ -518,7 +630,10 @@ class DesignSpec:
                    mean=dict(d["mean"]), sd=dict(d["sd"]),
                    names=list(d["names"]),
                    quality_idx=np.asarray(d["quality_idx"], dtype=int),
-                   dropped=list(d["dropped"]))
+                   dropped=list(d["dropped"]),
+                   missing_blocks=dict(d.get("missing_blocks", MISSING_BLOCKS)),
+                   column_blocks=dict(d.get("column_blocks", COLUMN_MISSING_BLOCK)),
+                   feature_set=str(d.get("feature_set", "base")))
 
 
 def _rest_labels(df: pd.DataFrame) -> np.ndarray:
@@ -528,17 +643,23 @@ def _rest_labels(df: pd.DataFrame) -> np.ndarray:
     return s.where(s.notna(), "unknown").astype(str).to_numpy()
 
 
-def fit_design_spec(train: pd.DataFrame) -> DesignSpec:
-    """Fit the design spec on the training frame only."""
+def fit_design_spec(train: pd.DataFrame,
+                    features: FeatureSet | None = None) -> DesignSpec:
+    """Fit the design spec on the training frame only.
+
+    ``features`` picks the column set (default: ``default_features()``, the
+    shipped set unless ROLE_FEATURES_ENABLED); the spec freezes it.
+    """
     from features.outs_asof import DAYS_REST_BUCKETS
 
-    missing = [c for c in list(NUMERIC_FEATURES) + list(BINARY_FEATURES)
+    fs = features or default_features()
+    missing = [c for c in list(fs.numeric) + list(fs.binary)
                + ["days_rest_bucket"] if c not in train.columns]
     if missing:
         raise KeyError(f"training frame is missing feature columns: {missing}")
 
     fill, mean, sd = {}, {}, {}
-    for c in NUMERIC_FEATURES:
+    for c in fs.numeric:
         v = pd.to_numeric(train[c], errors="coerce").to_numpy(float)
         obs = v[np.isfinite(v)]
         if obs.size == 0:
@@ -550,12 +671,15 @@ def fit_design_spec(train: pd.DataFrame) -> DesignSpec:
         sd[c] = s if s > 1e-12 else 1.0
 
     levels = [b for b in DAYS_REST_BUCKETS if b != REFERENCE_REST_BUCKET]
-    names = (list(NUMERIC_FEATURES) + list(BINARY_FEATURES)
-             + [f"rest_{b}" for b in levels] + list(MISSING_BLOCKS))
+    names = (list(fs.numeric) + list(fs.binary)
+             + [f"rest_{b}" for b in levels] + list(fs.missing_blocks))
     spec = DesignSpec(
-        numeric=list(NUMERIC_FEATURES), binary=list(BINARY_FEATURES),
+        numeric=list(fs.numeric), binary=list(fs.binary),
         rest_levels=levels, fill=fill, mean=mean, sd=sd, names=names,
         quality_idx=np.array([names.index(q) for q in QUALITY_FEATURES]),
+        missing_blocks=dict(fs.missing_blocks),
+        column_blocks=dict(fs.column_blocks),
+        feature_set=fs.name,
     )
 
     # Drop columns with no variation in TRAIN. Their coefficient is not
@@ -611,11 +735,11 @@ def build_design(df: pd.DataFrame, spec: DesignSpec,
     for b in spec.rest_levels:
         cols[f"rest_{b}"] = (lab == b).astype(float)
 
-    for block, src in MISSING_BLOCKS.items():
+    for block, src in spec.missing_blocks.items():
         cols[block] = isna[src].astype(float)
 
     if strict:
-        for c, block in COLUMN_MISSING_BLOCK.items():
+        for c, block in spec.column_blocks.items():
             if block in spec.dropped and isna[c].any():
                 raise ValueError(
                     f"{c!r} is missing on {int(isna[c].sum())} row(s) but the "
@@ -905,21 +1029,26 @@ class OutsHazard:
 
     # ------------------------------------------------------------------- fit
     def fit(self, train_df: pd.DataFrame, test_df: pd.DataFrame | None = None,
-            lam: float | None = None, verbose: bool = True) -> OutsHazardParams:
+            lam: float | None = None, verbose: bool = True,
+            features: FeatureSet | None = None) -> OutsHazardParams:
         """Fit on ``train_df``; refuse if ``test_df`` overlaps it.
 
         ``lam`` selects the ridge strength; when None it is chosen on an inner
         TEMPORAL split of the training years, scored on mean Brier across the
         seven market lines. The test frame is used ONLY for the overlap
-        refusal -- never for selection.
+        refusal -- never for selection. ``features`` picks the column set
+        (default: the shipped set, or the ROLE set when
+        ROLE_FEATURES_ENABLED); the fitted spec freezes it.
         """
         self._assert_training_era(train_df)
         if test_df is not None:
             self.assert_split_disjoint(train_df, test_df)
 
-        spec = fit_design_spec(train_df)
+        fs = features or default_features()
+        spec = fit_design_spec(train_df, fs)
         if lam is None:
-            lam, grid = self._select_lambda(train_df, spec, verbose=verbose)
+            lam, grid = self._select_lambda(train_df, spec, verbose=verbose,
+                                            features=fs)
         else:
             grid = None
 
@@ -951,6 +1080,7 @@ class OutsHazard:
             "lambda_grid": grid,
             "feature_names": list(spec.names),
             "dropped_features": list(spec.dropped),
+            "feature_set": fs.name,
         }
         return params
 
@@ -989,7 +1119,7 @@ class OutsHazard:
                       f"max|grad|={c['max_grad']:.3e}  {c['message']}")
         return params, report
 
-    def _select_lambda(self, train_df, spec, verbose=True):
+    def _select_lambda(self, train_df, spec, verbose=True, features=None):
         """Inner TEMPORAL split of the training years, scored on Brier."""
         dates = np.sort(pd.to_datetime(train_df["game_date"]).unique())
         cut = dates[int(len(dates) * INNER_SPLIT_FRAC)]
@@ -999,7 +1129,7 @@ class OutsHazard:
         if len(inner_te) < 200:
             raise ValueError("inner validation split is too small to select a penalty")
 
-        inner_spec = fit_design_spec(inner_tr)
+        inner_spec = fit_design_spec(inner_tr, features)
         Xte, _ = build_design(inner_te, inner_spec, strict=False)
         outs_te = inner_te["outs"].to_numpy(int)
 
@@ -1438,7 +1568,8 @@ def _print_advisory(model: OutsHazard) -> None:
 
 def run_split(feat: pd.DataFrame, train_years, test_year, save: bool,
               base_all: np.ndarray, lam: float | None = None,
-              verbose: bool = True) -> dict:
+              verbose: bool = True, features: FeatureSet | None = None,
+              out_path: Path | None = None) -> dict:
     year = feat["game_date"].dt.year
     train = feat[year.isin(list(train_years))].copy()
     test_pos = np.flatnonzero((year == int(test_year)).to_numpy())
@@ -1453,7 +1584,7 @@ def run_split(feat: pd.DataFrame, train_years, test_year, save: bool,
         raise ValueError(f"empty split: train={len(train)} test={len(test)}")
 
     model = OutsHazard()
-    model.fit(train, test_df=test, lam=lam, verbose=verbose)
+    model.fit(train, test_df=test, lam=lam, verbose=verbose, features=features)
 
     st = explode_states(train)
     print(f"\n  states: completion {len(st.comp_y):,} obs "
@@ -1469,7 +1600,7 @@ def run_split(feat: pd.DataFrame, train_years, test_year, save: bool,
     ev = _evaluate(model, test, base, verbose=True)
 
     if save and ok:
-        p = model.save()
+        p = model.save(out_path)
         print(f"\n  saved -> {p}")
     elif save and not ok:
         print("\n  NOT SAVED: sign contract violated.")
@@ -1488,7 +1619,14 @@ def main(argv=None) -> int:
     ap.add_argument("--fast-opponent", action="store_true",
                     help="starters-only opponent table (skips the Statcast re-read)")
     ap.add_argument("--no-save", action="store_true")
+    ap.add_argument("--features", choices=("base", "role"), default=None,
+                    help="feature set to fit (default: the flag's choice)")
+    ap.add_argument("--out", default=None,
+                    help="where to save the fitted model (default: MODEL_PATH; "
+                         "use ROLE_MODEL_PATH for the shadow)")
     a = ap.parse_args(argv)
+    fs = {"base": BASE_FEATURES, "role": ROLE_FEATURES}.get(a.features)
+    out_path = Path(a.out) if a.out else None
 
     feat = load_dataset(fast_opponent=a.fast_opponent)
     # The honest baseline is built ONCE over the whole frame so a test row can
@@ -1501,7 +1639,8 @@ def main(argv=None) -> int:
         res = {}
         for name, cfg in SPLITS.items():
             r = run_split(feat, cfg["train"], cfg["test"], save=False,
-                          base_all=base_all, lam=a.lam, verbose=True)
+                          base_all=base_all, lam=a.lam, verbose=True,
+                          features=fs)
             res[name] = r
         print("\n" + "=" * 78)
         print("THREE-WAY OUT-OF-SAMPLE SUMMARY (CLAUDE.md: must help in every "
@@ -1522,7 +1661,8 @@ def main(argv=None) -> int:
 
     train_years = tuple(int(y) for y in a.train.split(","))
     r = run_split(feat, train_years, int(a.test), save=not a.no_save,
-                  base_all=base_all, lam=a.lam, verbose=True)
+                  base_all=base_all, lam=a.lam, verbose=True, features=fs,
+                  out_path=out_path)
     return 0 if r["signs_ok"] else 1
 
 

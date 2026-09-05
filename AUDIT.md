@@ -576,6 +576,45 @@ Tracks open items, resolved items, and known risks.
   book disagree by that much, read the pitcher's last three appearances
   before believing either number. Same family as the A-052 Vasquez row
   (the book moved one out) and the Leahy limited start; larger.
+- **Amendment, same evening: the gauntlet.** Block built in the training
+  builder from an all-pitchers appearance table (strictly prior date;
+  brute-force, future-perturbation and serve-equals-train tests; real
+  rows agree exactly with the sidecar lookup). `tools/gate_outs_role.py`
+  refit seven encodings on the three splits with their own penalty
+  selection. **Passed every gate in every split: `prev_app_pitches`
+  alone, NaN routed through the existing miss_budget block** -- paired
+  Brier z vs the shipped set -3.92 / -1.93 / -5.65 (wide 9.5-19.5 grid
+  -4.18 / -1.79 / -6.45), d E[outs] +0.24 / +0.31 / +0.28 per sd, new
+  column VIF 2.9 with the design max 13.1 / 6.4 / 7.6 against the
+  shipped 12.2 / 5.5 / 6.7, ECE not worse. Rejected: a separate
+  `miss_role` indicator (VIF 44-61 -- its rows are a strict subset of
+  miss_budget's, so it is a near-linear combination of miss_budget,
+  rest_unknown and is_debut); the relief binary beside the count (sign
+  flips to +0.09 in S2); relief_since_start beside both (VIF 7-10,
+  binary flips to +1.0..+2.0 everywhere); a 60-pitch hinge alone (S2
+  worse, z +1.28); hinge or short-relief interaction beside the count
+  (pass, no gain, weaker reverse direction).
+- **The limit, measured, not argued.** 2026 relief-previous rows n=335:
+  actual mean 8.92 outs, production 10.12, shadow 10.02; P(>=12) actual
+  0.367, production 0.460, shadow 0.451. Morris tonight: 0.874 -> 0.840
+  at 9.5. A shared linear slope learned on the 95% of ordinary starts
+  cannot produce the eight-out regime of the 5%; the encodings that did
+  more are the ones the gates refused. The `gates_role` paper policy is
+  therefore still the guard for those rows, and the next refinement is
+  a three-level history block that resolves the collinearity by
+  construction (ROADMAP Phase 10).
+- **Against the banked closing lines** (`score_outs_vs_market.py`, 623
+  starts / 27 dates): Brier production 0.2885, shadow 0.2738, market
+  0.2459; shadow vs production z = -8.36, shadow vs market z = +4.12
+  (production +5.17). The six low-line (<= 12.5) rows: production 0.686,
+  shadow 0.656, market 0.220; mean P(over) 0.895 -> 0.870 against a hit
+  rate of 0.167. Better, and nowhere near enough on the rows that matter.
+- **Shipped:** `models/outs_hazard_role.pkl` (2024+2025, lambda 300,
+  sign contract OK, 3.8 KB) served as `p_over_shadow` /
+  `expected_outs_shadow` / `median_outs_shadow` on every sidecar row and
+  into the evidence log; /outs shows the shadow read under Model when it
+  differs by 5pp+. `ROLE_FEATURES_ENABLED` stays False. Decision
+  2026-09-18 on the served rows' Brier against the closing line.
 
 ### A-053: the outs board is served blind to the opponent, and "calibrated" names a map that does not exist
 - **Filed:** 2026-09-01 (found while auditing the A-052 Vasquez row)

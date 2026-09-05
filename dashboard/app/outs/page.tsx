@@ -59,6 +59,12 @@ type OutsRow = {
   relief_role?: boolean | null;
   role_skip?: boolean | null;
   gates_role_units?: number | null;
+  // The ROLE-set shadow model's read of the row (A-054): its P(over), mean
+  // and median, served beside production for the two-week comparison.
+  // Never a pick; shown only on hover. Absent before the shadow was fitted.
+  p_over_shadow?: number | null;
+  expected_outs_shadow?: number | null;
+  median_outs_shadow?: number | null;
 };
 
 type PaperPolicy = {
@@ -377,6 +383,20 @@ export default function OutsPage() {
                   : undefined;
                 const modelSide =
                   side === "UNDER" ? 1 - r.p_over_cal : r.p_over_cal;
+                const shadowSide =
+                  r.p_over_shadow == null
+                    ? null
+                    : side === "UNDER"
+                      ? 1 - r.p_over_shadow
+                      : r.p_over_shadow;
+                const shadowWhy =
+                  shadowSide == null
+                    ? undefined
+                    : `role-aware shadow model: ${pct(shadowSide)} for the ${side ?? "model"} side` +
+                      (r.median_outs_shadow != null ? ` (median ${r.median_outs_shadow})` : "") +
+                      `. It adds the pitch count of his previous appearance, the one thing ` +
+                      `the production model cannot see. Scored beside production for two weeks; ` +
+                      `not a pick.`;
                 const marketSide =
                   r.fair_over === null
                     ? null
@@ -499,8 +519,14 @@ export default function OutsPage() {
                         <span className="text-ink-muted">—</span>
                       )}
                     </td>
-                    <td className="figure px-3 py-2.5 text-right">
+                    <td className="figure px-3 py-2.5 text-right" title={shadowWhy}>
                       {pct(modelSide)}
+                      {shadowSide != null &&
+                      Math.abs(shadowSide - modelSide) >= 0.05 ? (
+                        <div className="text-[10px] text-ink-muted">
+                          shadow {pct(shadowSide)}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="figure px-3 py-2.5 text-right">
                       {pct(marketSide)}
@@ -662,7 +688,11 @@ export default function OutsPage() {
         the rest, so the &ldquo;Gates, relief-role skip&rdquo; paper
         policy is gates as written minus those rows (&ldquo;role
         skip&rdquo; tag). A &ldquo;role shadow&rdquo; stake is one that
-        policy takes only because the skips freed the daily cap. Every stake is
+        policy takes only because the skips freed the daily cap. A small
+        &ldquo;shadow&rdquo; figure under a Model number is the role-aware
+        shadow model&rsquo;s read of the same row, shown only when it
+        disagrees by five points or more; it is being scored beside
+        production for two weeks and is not a pick. Every stake is
         hypothetical: betting is blocked until calibration passes, and
         model probabilities are served raw — both candidate calibration
         maps were refused on an untouched holdout. On settled rows, ✓/✗

@@ -1,6 +1,78 @@
 
 # Changelog
 
+## 2026-09-04 (evening) - The role feature through the five gates: previous-appearance pitch count passes, shadow model served (A-054, second pass)
+
+Operator: "build the role feature and run it through the gates."
+
+**The block, built the leakage-safe way.** `features/outs_asof.py` gains
+`build_appearances_table(pa)` -- one row per (game, pitcher) for EVERY
+pitcher who threw a pitch, `is_start` by the same first-pitcher definition
+`build_starts_table` and the serve lookup use -- and `build_outs_asof(...,
+appearances=)` emits three columns from the pitcher's previous appearance
+this season, strictly prior DATE (the serve cache ends yesterday, so a
+same-day earlier game must be invisible in training too): `prev_app_relief`,
+`prev_app_pitches`, `relief_since_start` (capped at 3). Brute-force,
+future-perturbation and a serve-equals-train identity test
+(`tests/test_outs_role_features.py`, 12 tests) cover it; on real rows the
+builder and `outs_serve._appearance_lookup` agree exactly.
+
+**The model learned to take a feature set.** `models/outs_hazard.FeatureSet`
+(numeric, binary, missingness routing); `fit(..., features=)`; the
+`DesignSpec` freezes its set and its blocks in the pkl, and an old pkl
+without the fields loads as the base set. `ROLE_FEATURES_ENABLED = False`,
+so nothing the production pkl does changed.
+
+**Gates 2-5 (`tools/gate_outs_role.py`, every candidate refit with its own
+penalty selection on the three mandated splits; paired per-start Brier z
+against the shipped set, negative = better):**
+
+| candidate | S1 24->25 | S2 25->24 | S3 24+25->26 | signs | new-col VIF | verdict |
+|---|---|---|---|---|---|---|
+| `prev_app_pitches`, NaN via miss_budget | z -3.92 | z -1.93 | z -5.65 | OK | 2.9 | **PASS** |
+| + short-relief interaction | -3.92 | -0.75 | -6.23 | OK | 4.2 | pass, no gain, weaker reverse |
+| `prev_app_relief` alone | -0.60 | -0.64 | -4.81 | OK | 2.5 | pass, too weak |
+| pitch count with its own `miss_role` indicator | -3.53 | -1.57 | -5.22 | OK | **44-61** | REJECT Gate 4 |
+| relief + pitches | -3.34 | -1.52 | -5.21 | binary flips +0.09 in S2 | 44-61 | REJECT Gates 3+4 |
+| relief + pitches + relief_since_start | -3.30 | -0.61 | -5.25 | binary flips +1.0..+2.0 | 44-61 | REJECT Gates 3+4 |
+| 60-pitch hinge alone | -1.79 | **+1.28** | -4.53 | OK | 3.3 | REJECT Gate 2 |
+
+Gate 3 for the winner: d E[outs] = +0.24 / +0.31 / +0.28 per sd, the
+measured direction. Gate 5: ECE at 12.5 / 15.5 / 17.5 not worse in any
+split. The separate indicator failed Gate 4 for a structural reason: its
+rows are a strict subset of `miss_budget`'s (no appearance => no start), so
+it is a near-linear combination of miss_budget, rest_unknown and is_debut.
+
+**What it does and does not fix -- said plainly.** On all of 2026 the
+shadow beats production (Brier7 0.17445 vs 0.17559, paired z = -5.30).
+Against the banked CLOSING lines (`score_outs_vs_market.py`, 623 starts
+over 27 dates) production's Brier is 0.2885, the shadow's 0.2738, the
+market's 0.2459: the shadow is significantly better than production
+(paired z = -8.36) and still significantly worse than the book (z = +4.12,
+production +5.17). But on the
+population the block exists for -- 335 2026 starts whose previous
+appearance was relief, actual mean 8.92 outs -- production says 10.12 and
+the shadow 10.02. Kade Morris tonight moves from 87% to 84% at 9.5. A
+single straight-line term, its slope learned on the 95% of starts that
+follow a normal start, cannot manufacture the eight-out regime of the
+other 5%. The variants that captured more of it are the ones the gates
+rejected. So: the feature is real and ships to shadow; **the paper policy
+`gates_role` remains the operational guard for those rows**, and the
+next refinement is a single three-level history block (no appearance /
+relief only / prior start) that resolves the collinearity by
+construction rather than by omission.
+
+**Shadow serving.** `models/outs_hazard_role.pkl` (fitted 2024+2025, the
+gated set, lambda 300, sign contract OK). `price_board` serves
+`p_over_shadow` / `expected_outs_shadow` / `median_outs_shadow` on every
+sidecar row beside production; `p_over_shadow` joins the evidence log
+(`LOG_FIELDS`, blank on older rows); the /outs Model cell shows "shadow
+NN%" under the production number when the two differ by five points or
+more, and explains itself on hover. Not a pick, not a stake. **Decision
+2026-09-18**: promote (flip `ROLE_FEATURES_ENABLED`, refit, ship the pkl
+as production) only if the shadow's Brier against the closing line beats
+production's on the served rows accumulated by then.
+
 ## 2026-09-04 - Relief-role shadow: the board names the starters the model cannot see, and a fourth paper policy skips them (A-054)
 
 Operator: "explain to me why some of the total outs probabilities are

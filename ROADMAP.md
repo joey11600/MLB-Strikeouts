@@ -528,16 +528,27 @@ strikeouts model, not a variant of it.
   averages 9-11 outs against 16, P(>=12) 0.41-0.50 vs 0.90, every
   season; the served record went 0/6 OVER at lines 10.5-12.5. No
   price moves
-- [ ] **Role feature through the five gates (A-054, open).**
-  Candidates with measured three-season variance: previous appearance
-  was relief; pitches in the previous appearance (<=40 -> 7.5-9.2 mean
-  outs, 76+ -> 16.2); relief outings since last start (2+ -> 7.8-9.2).
-  All known before first pitch (Gate 1). Collinear with each other and
-  with `days_rest_bucket` (Gate 4 keeps one or two). Score Gate 2 on
-  the PRICED rows as well as the wide table -- the strikeouts side's
-  A-024a reversed there. Then a gated-off two-week shadow, refit,
-  promote. Judge the `gates_role` paper record at n >= 30 bets, not
-  before
+- [x] **Role feature through the five gates (2026-09-04 evening,
+  A-054 second pass).** `tools/gate_outs_role.py`: previous-appearance
+  pitch count, NaN through miss_budget, passed every gate in every
+  split (paired z -3.92 / -1.93 / -5.65, sign +0.24..+0.31 per sd, new
+  VIF 2.9, ECE not worse). Six other encodings rejected on the record
+  (separate indicator VIF 44-61; the relief binary flips sign beside
+  the count; hinge worse in S2). Shadow pkl fitted on 2024+2025 and
+  served as `p_over_shadow` on every row. It captures only a fifth of
+  the relief-row overshoot (2026: actual 8.92, production 10.12,
+  shadow 10.02 outs) -- the `gates_role` paper policy stays the guard
+- [ ] **Judge the shadow, 2026-09-18.** `score_outs_vs_market.py` on
+  the served rows with `p_over_shadow`: promote only if the shadow's
+  Brier against the closing line beats production's. Promotion = flip
+  `ROLE_FEATURES_ENABLED`, refit, ship the pkl as `outs_hazard.pkl`
+- [ ] **Relief-tail refinement.** A single three-level history block
+  (no appearance this season / relief only / prior start) in place of
+  miss_budget + a role indicator, which resolves the Gate-4
+  collinearity by construction; then the relief x short-outing
+  interaction on top. Judge on the relief population's mean and
+  P(>=12), not only on the whole-frame Brier. Judge the `gates_role`
+  paper record at n >= 30 bets, not before
 
 ### Phase 10a — Inning-hazard model (research artifact, 2026-08-08)
 - [x] Per-start outs table, 13,170 regular-season starts 2024–2026

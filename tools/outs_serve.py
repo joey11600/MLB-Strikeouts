@@ -38,7 +38,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.outs_hazard import MODEL_PATH, OutsHazard, p_over
+from models.outs_hazard import MODEL_PATH, ROLE_MODEL_PATH, OutsHazard, p_over
 from tracker import DATA_STATE_DIR
 
 CALIBRATOR_PATH = Path(__file__).parent.parent / "models" / "outs_calibrator.pkl"
@@ -125,6 +125,10 @@ LOG_FIELDS = [
     "opponent_team", "is_home", "line", "over_odds", "under_odds",
     "odds_source", "expected_outs", "p_over_raw", "p_over_cal",
     "fair_over", "hold_pct", "actual_outs", "over_hit", "logged_at",
+    # The ROLE-set shadow model's P(over) (A-054), blank on rows priced
+    # before it existed. tools/score_outs_vs_market.py scores the shadow
+    # pkl beside production whenever it is on disk; the promotion decision.
+    "p_over_shadow",
 ]
 
 
@@ -318,7 +322,8 @@ def feature_frame(today_rows: pd.DataFrame | None = None) -> pd.DataFrame:
     provably inert: every pitcher feature is cumsum-minus-current or
     shift-before-roll, and league/opponent features are prior-DAY."""
     from features.outs_asof import (
-        build_outs_asof, build_starts_table, load_statcast_pa)
+        build_appearances_table, build_outs_asof, build_starts_table,
+        load_statcast_pa)
     from tools.build_outs_dataset import load_outs_starts
 
     starts = load_outs_starts()
@@ -326,7 +331,11 @@ def feature_frame(today_rows: pd.DataFrame | None = None) -> pd.DataFrame:
         starts = pd.concat([starts, today_rows], ignore_index=True)
     pa = load_statcast_pa()
     _, tb = build_starts_table(pa)
-    return build_outs_asof(starts, tb)
+    # The ROLE block (A-054) rides the same PA frame: every pitcher's
+    # appearances through yesterday, so a today-row's previous appearance
+    # is read the way training reads it. The shipped base pkl ignores the
+    # columns; a ROLE-set pkl requires them.
+    return build_outs_asof(starts, tb, appearances=build_appearances_table(pa))
 
 
 def _today_rows(iso_date: str, matched: list[dict],
@@ -353,6 +362,19 @@ def _today_rows(iso_date: str, matched: list[dict],
     return pd.DataFrame(rows)
 
 
+def load_shadow_model() -> OutsHazard | None:
+    """The ROLE-set shadow pkl, or None when it is not on disk. Absence is
+    the normal state before the shadow is fitted, not an error."""
+    if not ROLE_MODEL_PATH.exists():
+        return None
+    try:
+        return OutsHazard().load(ROLE_MODEL_PATH)
+    except Exception as exc:              # a bad file must not cost the board
+        print(f"    outs: shadow model unreadable ({type(exc).__name__}: {exc}); "
+              "serving without it")
+        return None
+
+
 # --------------------------------------------------------------- pricing
 def price_board(iso_date: str, matched: list[dict] | None = None) -> list[dict]:
     """The day's outs board: model vs market, diagnostic only."""
@@ -377,6 +399,10 @@ def price_board(iso_date: str, matched: list[dict] | None = None) -> list[dict]:
     cal = load_outs_calibrator()
     pmf = model.predict_pmf_frame(feat_today)
     exp_outs = pmf @ np.arange(pmf.shape[1])
+    # The shadow rides the same feature rows; the ROLE block is already on
+    # them. Nothing here prices, stakes, or picks off the shadow number.
+    shadow = load_shadow_model()
+    pmf_s = shadow.predict_pmf_frame(feat_today) if shadow is not None else None
     by_key = {(int(r.game_pk), int(r.pitcher)): i
               for i, r in enumerate(feat_today.itertuples())}
 
@@ -429,6 +455,13 @@ def price_board(iso_date: str, matched: list[dict] | None = None) -> list[dict]:
             # What he did in his PREVIOUS appearance (A-054). Facts only:
             # the rule that reads them is tools/outs_paper.relief_role.
             "role": role_block(apps, int(m["pitcher_id"])),
+            # The ROLE-set shadow model's read of the same row (A-054):
+            # scored beside p_over_cal for two weeks, never a pick.
+            "p_over_shadow": (round(float(p_over(pmf_s[i][None, :], line)[0]), 4)
+                              if pmf_s is not None else None),
+            "expected_outs_shadow": (round(float(pmf_s[i] @ np.arange(pmf_s.shape[1])), 2)
+                                     if pmf_s is not None else None),
+            "median_outs_shadow": (median_outs(pmf_s[i]) if pmf_s is not None else None),
             # No edge, no stake, no side, on purpose.
             "diagnostic_only": True,
         })

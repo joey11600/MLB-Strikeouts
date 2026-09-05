@@ -895,9 +895,23 @@ rule. `gates_role` refuses to score a slate whose rows lack the block
 rather than silently becoming `gates`, so its record starts clean at
 the first fully-annotated slate. `build_payload` adds `relief_role`,
 `role_skip` and `gates_role_units` per row for the /outs caption and
-tags. The model itself still has no role feature: `exp_o`, the stop
-rates and `p5_pitches` are built over prior STARTS only, which is the
-open half of A-054.
+tags.
+
+The model side (A-054 second pass, 2026-09-04 evening): the builder
+emits the block from `build_appearances_table(pa)` (the PA table, so
+every pitcher's appearances, strictly prior DATE) and
+`models/outs_hazard.FeatureSet` lets a fit choose its columns; the
+fitted `DesignSpec` freezes the set and its missingness routing in the
+pkl. Gated on the three splits (`tools/gate_outs_role.py`):
+`prev_app_pitches` alone, NaN through `miss_budget`, passed everything;
+`ROLE_FEATURES_ENABLED` stays False. The shadow pkl
+`models/outs_hazard_role.pkl` (2024+2025) is served by `price_board`
+as `p_over_shadow` / `expected_outs_shadow` / `median_outs_shadow` on
+every sidecar row and `p_over_shadow` rides `LOG_FIELDS` into the
+evidence log, blank on older rows. Absent pkl = no shadow column, never
+an error. Promotion (decision 2026-09-18) = flip the flag, refit,
+ship as `outs_hazard.pkl`. Honest limit: the block closes about a fifth
+of the relief-row overshoot; `gates_role` stays the guard.
 
 Calibration: Gate 5 measured to a refusal (A-052) — Platt, isotonic,
 and per-line Platt all degraded per-line calibration on the untouched

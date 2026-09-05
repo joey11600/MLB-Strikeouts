@@ -20,6 +20,11 @@ PRIMARY sample only: posted line, two sides, exact no-vig fair, one
 row per start. Same report shape as tools/score_vs_market.py so the
 two markets read side by side — and stay separate.
 
+When models/outs_hazard_role.pkl exists (the ROLE-set shadow, A-054) it
+is scored on the same rows as a `shadow` column: Brier, paired z against
+the market, and paired z against production -- the promotion decision
+for 2026-09-18 reads off that last number.
+
 Usage: python tools/score_outs_vs_market.py
 """
 import sys
@@ -32,7 +37,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.calibration import clamp_prob
 from models.edge import no_vig_fair_prob
-from models.outs_hazard import MODEL_PATH, OutsHazard, load_dataset, p_over
+from models.outs_hazard import (MODEL_PATH, ROLE_MODEL_PATH, OutsHazard,
+                                load_dataset, p_over)
 from tools.daily_pipeline import _normalize_name
 from tools.score_vs_market import load_closing, paired, brier, slate_index
 from tools.outs_serve import calibrate, load_outs_calibrator
@@ -50,9 +56,16 @@ def build() -> pd.DataFrame:
         raise RuntimeError("shipped pkl trained on 2026 — scored rows "
                            "would not be out-of-sample; refusing")
 
+    shadow = None
+    if ROLE_MODEL_PATH.exists():
+        shadow = OutsHazard().load(ROLE_MODEL_PATH)
+        if 2026 in set(shadow.meta.get("train_seasons", [])):
+            raise RuntimeError("shadow pkl trained on 2026 -- refusing")
+
     keyed = {}
     f26 = feat[feat["year"] == 2026]
     pmf = prod.predict_pmf_frame(f26)
+    pmf_s = shadow.predict_pmf_frame(f26) if shadow is not None else None
     for i, r in enumerate(f26.itertuples()):
         keyed[(int(r.game_pk), int(r.pitcher))] = (i, int(r.outs))
 
@@ -89,6 +102,8 @@ def build() -> pd.DataFrame:
                 "raw": clamp_prob(raw),
                 "cal": float(calibrate(raw, cal)),
                 "fair": float(nv["fair_over"]),
+                "shadow": (clamp_prob(float(p_over(pmf_s[i][None, :], line)[0]))
+                           if pmf_s is not None else np.nan),
                 "actual_outs": actual,
                 "over_hit": float(actual > line),
             })
@@ -101,7 +116,9 @@ def build() -> pd.DataFrame:
 SCORECARD_PATH = Path(__file__).parent.parent / "data" / "outs_scorecard.csv"
 SCORECARD_FIELDS = ["run_at", "n_starts", "n_dates", "over_rate",
                     "brier_raw", "brier_cal", "brier_market",
-                    "z_raw_vs_market", "z_cal_vs_market"]
+                    "z_raw_vs_market", "z_cal_vs_market",
+                    # the ROLE-set shadow (A-054); blank before it existed
+                    "brier_shadow", "z_shadow_vs_market", "z_shadow_vs_prod"]
 
 
 def _persist(row: dict) -> None:
@@ -140,16 +157,25 @@ def main() -> int:
     print(f"\n=== OUTS vs CLOSING (posted line, two-sided): {len(df)} starts "
           f"over {df['date'].nunique()} date(s) ===")
     print(f"  base rate (actual over-rate): {y.mean():.4f}")
-    for c in ("raw", "cal", "fair"):
+    has_shadow = "shadow" in df.columns and df["shadow"].notna().any()
+    for c in ("raw", "cal", "fair") + (("shadow",) if has_shadow else ()):
         print(f"  Brier {c:<6}: {brier(df[c], y):.4f}")
     print("\n  paired vs MARKET — negative means the model is better:")
     zs = {}
-    for c in ("raw", "cal"):
+    for c in ("raw", "cal") + (("shadow",) if has_shadow else ()):
         m, se, z = paired(df[c], df["fair"], y)
         zs[c] = z
         verdict = ("model BETTER" if z < -1.96 else
                    "model WORSE" if z > 1.96 else "indistinguishable")
         print(f"    {c:<6}: {m:+.5f} +/- {se:.5f} (z={z:+.2f})  {verdict}")
+    z_sp = float("nan")
+    if has_shadow:
+        m, se, z_sp = paired(df["shadow"], df["raw"], y)
+        verdict = ("shadow BETTER than production" if z_sp < -1.96 else
+                   "shadow WORSE than production" if z_sp > 1.96 else
+                   "indistinguishable from production")
+        print("\n  ROLE shadow vs PRODUCTION (A-054; decision 2026-09-18): "
+              f"{m:+.5f} +/- {se:.5f} (z={z_sp:+.2f})  {verdict}")
 
     _persist({
         "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -161,6 +187,9 @@ def main() -> int:
         "brier_market": round(brier(df["fair"], y), 5),
         "z_raw_vs_market": round(float(zs["raw"]), 3),
         "z_cal_vs_market": round(float(zs["cal"]), 3),
+        "brier_shadow": round(brier(df["shadow"], y), 5) if has_shadow else "",
+        "z_shadow_vs_market": round(float(zs["shadow"]), 3) if has_shadow else "",
+        "z_shadow_vs_prod": round(float(z_sp), 3) if has_shadow else "",
     })
     print(f"\n  appended to {SCORECARD_PATH.name} — the outs market's own "
           f"verdict series, separate from the strikeouts scorecard")

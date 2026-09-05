@@ -105,6 +105,13 @@ MIN_OPP_GAMES = 20
 #: candidates correlate 0.85-0.92 with it and would fail Gate 4.
 BUDGET_N = 5
 
+#: ROLE block (A-054): relief outings since the last start, capped. Measured
+#: on 13,716 starts the effect saturates -- one relief outing since the last
+#: start -> 12.7-13.7 mean outs, two or more -> 7.8-9.2 -- and a reliever
+#: with thirty relief outings behind him is the same animal as one with
+#: three, so the cap keeps a rare row from carrying thirty units of leverage.
+ROLE_RELIEF_CAP = 3
+
 #: days_rest bucket labels, in order. "unknown" is a real level, not a
 #: missing value: its mean outs (14.71) sits between the short-rest and
 #: normal-rest bands and imputing it would destroy that.
@@ -173,6 +180,14 @@ FEATURE_COLS = [
     "league_asof_outs",
     "opp_obp_asof",
     "p5_pitches",
+    # ROLE block (A-054): what the pitcher did in his PREVIOUS appearance
+    # this season, from the ALL-pitchers appearance table. Every other
+    # pitcher feature above is built over prior STARTS, so a reliever making
+    # a spot start is otherwise priced as a generic starter. NaN (and 0 for
+    # the binary) when he has no prior appearance this season.
+    "prev_app_relief",
+    "prev_app_pitches",
+    "relief_since_start",
 ]
 
 
@@ -364,7 +379,8 @@ def days_rest_bucket(x) -> str:
 # --------------------------------------------------------------------------
 
 def build_outs_asof(starts: pd.DataFrame,
-                    team_batting: pd.DataFrame | None = None) -> pd.DataFrame:
+                    team_batting: pd.DataFrame | None = None,
+                    appearances: pd.DataFrame | None = None) -> pd.DataFrame:
     """Attach the Tier-1 as-of feature set to a per-start OUTS table.
 
     Parameters
@@ -383,6 +399,13 @@ def build_outs_asof(starts: pd.DataFrame,
         One row per (batting_team, game_pk): ``batting_team``, ``game_pk``,
         ``game_date``, ``pa_n``, ``ob``. Optional; when omitted the opponent
         features are emitted as all-NaN with n_prior = 0.
+
+    appearances
+        One row per (game_pk, pitcher) for EVERY pitcher who threw a pitch
+        (``build_appearances_table``): ``game_pk``, ``pitcher``,
+        ``game_date``, ``pitches``, ``is_start``. Optional; when omitted the
+        ROLE block is emitted as all-NaN, which the hazard model refuses to
+        fit on -- the block cannot be built from a starts-only table.
 
     Returns
     -------
@@ -582,6 +605,60 @@ def build_outs_asof(starts: pd.DataFrame,
     g["p5_n"] = grp.transform(
         lambda s: s.shift(1).rolling(BUDGET_N, min_periods=1).count()).fillna(0).astype("int16")
 
+    # ---------------------------------------------------------------- role
+    # What he did in his PREVIOUS appearance this season (A-054). The source
+    # is the all-pitchers appearance table, so a relief outing counts here
+    # even though it can enter no other pitcher feature. Strictly prior DATE:
+    # the pitch cache the serve path reads ends yesterday, so a same-day
+    # earlier game is invisible there and must be invisible here too.
+    g["prev_app_relief"] = np.nan
+    g["prev_app_pitches"] = np.nan
+    g["relief_since_start"] = np.nan
+    if appearances is not None and not appearances.empty:
+        ap = appearances[["game_pk", "pitcher", "game_date", "pitches",
+                          "is_start"]].copy()
+        ap["game_date"] = pd.to_datetime(ap["game_date"]).dt.normalize()
+        ap["season"] = _season_of(ap["game_date"])
+        ap["is_start"] = ap["is_start"].astype("int8")
+        ap["pitches"] = ap["pitches"].astype("float64")
+        ap = ap.sort_values(["pitcher", "season", "game_date", "game_pk"],
+                            kind="mergesort")
+        # Relief outings since the last start, AS OF AFTER each appearance:
+        # a start resets the count to 0; relief outings before any start
+        # this season count from 1.
+        grp = ap.groupby(["pitcher", "season"], sort=False)
+        start_id = grp["is_start"].cumsum()
+        ap["_relief_since"] = (ap.groupby([ap["pitcher"], ap["season"], start_id],
+                                          sort=False).cumcount()
+                               + (start_id == 0).astype("int64")).astype("float64")
+        # The last appearance strictly before the start's date. Both sides
+        # sorted on the date key; a same-date pair on the right (a
+        # doubleheader relief-then-start day) resolves to the later game_pk.
+        right = (ap.sort_values(["game_date", "game_pk"], kind="mergesort")
+                   .rename(columns={"game_date": "_ap_date"})
+                   [["pitcher", "season", "_ap_date", "pitches", "is_start",
+                     "_relief_since"]])
+        left = (g[["_row_id", "pitcher", "season", "game_date"]]
+                  .sort_values("game_date", kind="mergesort"))
+        m = pd.merge_asof(left, right, left_on="game_date", right_on="_ap_date",
+                          by=["pitcher", "season"], direction="backward",
+                          allow_exact_matches=False)
+        m = m.set_index("_row_id")
+        g = g.set_index("_row_id", drop=False)
+        g["prev_app_pitches"] = m["pitches"].reindex(g.index).to_numpy()
+        # 0 when there is no prior appearance: the miss_role indicator
+        # (prev_app_pitches NaN) carries "unknown"; the binary must be finite.
+        was_start = m["is_start"].reindex(g.index)
+        g["prev_app_relief"] = np.where(was_start.isna(), 0.0,
+                                        1.0 - was_start.to_numpy(dtype=float))
+        g["relief_since_start"] = np.minimum(
+            m["_relief_since"].reindex(g.index).to_numpy(dtype=float),
+            float(ROLE_RELIEF_CAP))
+        g = g.reset_index(drop=True)
+    # With no appearance table every role column stays NaN (a constant 0
+    # binary would be a fake "not relief" on every row); a ROLE-set fit
+    # refuses on the all-NaN block, and the base set never reads it.
+
     # ------------------------------------------------------------- tidy up
     g = g.sort_values("_row_id", kind="mergesort")
     drop = [c for c in g.columns if c.startswith("_")]
@@ -730,8 +807,42 @@ def build_starts_table(pa: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return sp, tb
 
 
+def build_appearances_table(pa: pd.DataFrame) -> pd.DataFrame:
+    """One row per (game_pk, pitcher) for EVERY pitcher who threw a pitch.
+
+    ``is_start`` marks the first pitcher his team used in the game -- the
+    same definition ``build_starts_table`` uses for the starter and
+    ``tools/outs_serve._appearance_lookup`` uses on the raw pitch cache, so
+    training and serving agree on who "started". ``pitches`` is the sum of
+    the per-PA pitch counts, which is the pitch-row count the serve lookup
+    takes. Input is the PA table from ``load_statcast_pa`` (regular season
+    only, by construction).
+    """
+    cols = ["game_pk", "pitcher", "game_date", "pitches", "is_start"]
+    if pa.empty:
+        return pd.DataFrame(columns=cols)
+    d = pa[["game_pk", "pitcher", "game_date", "at_bat_number", "inning_topbot",
+            "home_team", "away_team", "n_pitches"]].copy()
+    d["pitching_team"] = np.where(d["inning_topbot"] == "Top",
+                                  d["home_team"], d["away_team"])
+    d = d.sort_values(["game_pk", "at_bat_number"], kind="mergesort")
+    starter = (d.groupby(["game_pk", "pitching_team"], sort=False)["pitcher"]
+                 .first().rename("_starter").reset_index())
+    d = d.merge(starter, on=["game_pk", "pitching_team"], how="left")
+    app = (d.groupby(["game_pk", "pitcher"], sort=False)
+             .agg(game_date=("game_date", "first"),
+                  pitches=("n_pitches", "sum"),
+                  _starter=("_starter", "first"))
+             .reset_index())
+    app["is_start"] = (app["pitcher"] == app["_starter"]).astype("int8")
+    app["game_date"] = pd.to_datetime(app["game_date"]).dt.normalize()
+    app["pitches"] = app["pitches"].astype("float64")
+    return app[cols].sort_values(["pitcher", "game_date", "game_pk"],
+                                 kind="mergesort").reset_index(drop=True)
+
+
 def build_all(cache_dir: Path | None = None) -> pd.DataFrame:
     """End-to-end: cache -> PA table -> starts table -> as-of features."""
     pa = load_statcast_pa(cache_dir)
     sp, tb = build_starts_table(pa)
-    return build_outs_asof(sp, tb)
+    return build_outs_asof(sp, tb, appearances=build_appearances_table(pa))
