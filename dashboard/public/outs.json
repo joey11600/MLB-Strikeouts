@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-06T01:04:00.953922+00:00",
+ "generated_at": "2026-09-06T01:09:05.721256+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-09-05",
@@ -5210,7 +5210,7 @@
      "expected_outs_shadow": 16.38,
      "median_outs_shadow": 17,
      "diagnostic_only": true,
-     "actual_outs": null,
+     "actual_outs": 21,
      "paper_side": null,
      "paper_stake_units": 0.0,
      "clears_gates": false,
