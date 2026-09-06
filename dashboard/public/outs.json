@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-06T08:30:22.414482+00:00",
+ "generated_at": "2026-09-06T08:35:30.739906+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-09-05",
@@ -5921,15 +5921,18 @@
   }
  },
  "scorecard": {
-  "run_at": "2026-09-02T02:26:55+00:00",
-  "n_starts": "555",
-  "n_dates": "24",
-  "over_rate": "0.4919",
-  "brier_raw": "0.28443",
-  "brier_cal": "0.28443",
-  "brier_market": "0.24498",
-  "z_raw_vs_market": "4.56",
-  "z_cal_vs_market": "4.56"
+  "run_at": "2026-09-06T08:31:18+00:00",
+  "n_starts": "650",
+  "n_dates": "28",
+  "over_rate": "0.4938",
+  "brier_raw": "0.28584",
+  "brier_cal": "0.28584",
+  "brier_market": "0.24462",
+  "z_raw_vs_market": "5.06",
+  "z_cal_vs_market": "5.06",
+  "brier_shadow": "0.27123",
+  "z_shadow_vs_market": "3.961",
+  "z_shadow_vs_prod": "-8.47"
  },
  "paper_tracks": {
   "policies": {
