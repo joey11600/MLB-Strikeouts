@@ -1,2 +1,2 @@
 date,game_pk,pitcher_id,pitcher_name,pitcher_team,is_home,opponent_team,line,over_odds,under_odds,lineup_source,expected_bf,expected_k,p_over_raw,p_over_calibrated,blended_prob_over,fair_over,p_over_hookmix,p_over_prior,p_over_candidate,p_over_re,h1_open_line,h2_line_move,h2_fair_move,best_side,edge_best,threshold,strength,units_risked,actual_bf,actual_k,over_hit,bf_error,k_error,reconstructed,logged_at
-2026-09-08,824063,669203,Corbin Burnes,AZ,0,KC,2.5,-180,+140,confirmed,22.22,4.72,0.8519,,,0.6067,,,,,,,,,,,SHADOW,0,13,2,0,-9.22,-2.72,0,2026-09-10T07:25:29.456839+00:00
+2026-09-08,824063,669203,Corbin Burnes,AZ,0,KC,2.5,-180,+140,confirmed,22.22,4.72,0.8519,,,0.6067,,,,,,,,,,,SHADOW,0,13,2,0,-9.22,-2.72,0,2026-09-10T14:56:41.986033+00:00
