@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-10T21:02:41.658604+00:00",
+ "generated_at": "2026-09-10T21:07:00.137445+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-09-10",
@@ -6377,7 +6377,7 @@
    ]
   },
   "2026-09-10": {
-   "generated_at": "2026-09-10T20:46:54.635509+00:00",
+   "generated_at": "2026-09-10T21:06:59.758139+00:00",
    "board": [
     {
      "date": "2026-09-10",
@@ -6389,15 +6389,15 @@
      "is_home": true,
      "venue": "Rate Field",
      "start_time_utc": "2026-09-10T23:40:00.0000000Z",
-     "line": 5.5,
-     "over_odds": "-200",
-     "under_odds": "+148",
+     "line": 6.5,
+     "over_odds": "+120",
+     "under_odds": "-160",
      "odds_source": "live",
      "expected_outs": 9.22,
      "median_outs": 9,
-     "p_over_raw": 0.8418,
-     "p_over_cal": 0.8418,
-     "fair_over": 0.6231,
+     "p_over_raw": 0.7349,
+     "p_over_cal": 0.7349,
+     "fair_over": 0.4248,
      "hold_pct": 0.0699,
      "role": {
       "prev_app_date": "2026-09-06",
@@ -6406,7 +6406,7 @@
       "relief_apps_since_last_start": 10,
       "days_since_prev_start": null
      },
-     "p_over_shadow": 0.847,
+     "p_over_shadow": 0.7458,
      "expected_outs_shadow": 9.35,
      "median_outs_shadow": 9,
      "diagnostic_only": true,
@@ -6414,8 +6414,8 @@
      "paper_side": "OVER",
      "paper_stake_units": 2.0,
      "clears_gates": true,
-     "gate_edge": 0.10934221105527642,
-     "gate_threshold": 0.08989247311827951,
+     "gate_edge": 0.15503169934640526,
+     "gate_threshold": 0.08993006993007001,
      "relief_role": true,
      "role_skip": true,
      "gates_role_units": 0.0
