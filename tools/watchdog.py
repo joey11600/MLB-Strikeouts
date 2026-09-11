@@ -1372,6 +1372,44 @@ def check_outs_paper_tracks_served(r: Report) -> None:
              f"{len(rows)} paper row(s) over {n} date(s) all counted")
 
 
+def check_outs_history_depth(r: Report) -> None:
+    """The outs label table must still cover the seasons the model was fit on.
+
+    A-055: the worker and CI hold the CURRENT season's Statcast cache
+    alone, so a rebuild written straight over the cached table deletes
+    the older ones. Nothing downstream errors — the board renders, the
+    model prices, and every career-depth feature just gets shorter,
+    which is why this ran for 17 days unnoticed.
+    """
+    import pandas as pd
+
+    from models.outs_hazard import MODEL_PATH, OutsHazard
+    from tools.build_outs_dataset import OUT_PATH, _seasons
+
+    name = "outs history covers training"
+    if not OUT_PATH.exists():
+        r.ok(name, "no outs label table on disk yet")
+        return
+    try:
+        table = pd.read_parquet(OUT_PATH)
+        want = set(OutsHazard().load(MODEL_PATH).meta.get("train_seasons") or [])
+    except Exception as exc:
+        r.fail(name, f"unreadable ({type(exc).__name__}: {exc})")
+        return
+
+    have = set(_seasons(table))
+    missing = sorted(want - have)
+    if missing:
+        r.fail(name,
+               f"label table holds {sorted(have)}; the shipped pkl was fit on "
+               f"{sorted(want)} — missing {missing}",
+               "career depth silently shortens: every pitcher reads as a "
+               "rookie, and the market scorer's rebuild drifts away from "
+               "the board the operator sees (A-055)")
+    else:
+        r.ok(name, f"{len(table):,} starts, seasons {sorted(have)}")
+
+
 CHECKS = [
     check_calibrator_actually_applied,
     check_models_fitted,
@@ -1394,6 +1432,7 @@ CHECKS = [
     check_served_board_is_current,
     check_outs_page_current,
     check_outs_paper_tracks_served,
+    check_outs_history_depth,
 ]
 
 

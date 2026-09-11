@@ -1,6 +1,84 @@
 
 # Changelog
 
+## 2026-09-11 - The outs label table is merged, never replaced: 2024+2025 restored (A-055)
+
+Operator: "why has the system degraded so much?"
+
+**Mostly it had not.** The worker was pulling, grading and publishing on
+its five-minute pass; the watchdog returned 20 ok and 2 failures that
+are the known local-Statcast false alarms. Board size tracks the
+schedule exactly — 2026-09-10 served 9 pitchers because MLB played 5
+games. The strikeouts ledger has IMPROVED: `pl_calc` reads 18W-22L /
+**-2.82u**, and the damage is old and concentrated (STRONG 7 bets
+-7.84u; the last two weeks +7.03u on 20 bets). The strikeouts model's
+per-start gap against the market is flat week over week (+0.0170 /
++0.0031 / +0.0160 / +0.0168 / +0.0143 / +0.0027), so its scorecard z
+climbing 2.89 -> 4.88 is sample size, not decay — the deficit is the
+one A-041 already named.
+
+**What did move: the weekly outs scorecard, and it was measuring its own
+input.** `data/outs_scorecard.csv` runs `score_outs_vs_market.build()`,
+which REBUILDS predictions from features instead of reading what the
+board served. On the 411 graded starts the two paths share:
+
+| | mean P(over) | Brier |
+|---|---|---|
+| served board (`outs_model_log.csv`) | 0.5176 | 0.2571 |
+| scorecard's rebuild | 0.6960 | 0.2925 |
+| market (no-vig fair) | 0.5081 | 0.2470 |
+| actual over-rate | 0.4962 | — |
+
+A flat **+0.178** over-tilt at every line from 9.5 to 20.5, with
+`actual_outs` agreeing on 411/411 rows and lines on 382/411 — so not a
+grading or join disagreement. Served `expected_outs` averaged 15.79
+against 15.63 actual (nearly unbiased); the rebuild's PMF mean was
+**17.70**, +1.91 outs with a per-row sd of 0.74. A level shift, not
+noise.
+
+**Root cause (A-055).** `data/outs_starts.parquet` held **2026 alone**
+from 08-25 to today. A-052 committed the full 13,636-row table at 14:50
+ET on 08-24; the 03:01 ET CI run the next morning wrote 3,926 rows over
+it, and every daily run since rewrote the same slice.
+`_refresh_dataset` wrote `build()`'s output straight to `OUT_PATH`, and
+`build()` sees only the seasons the host's Statcast cache holds — the
+current one, by A-014's design. `load_outs_starts()` returns the cached
+parquet whenever it exists, so the serve path, the scorer, the hazard
+report and the validator all inherited a history beginning in March:
+`career_start_number` mean 7.2, `career_left_censored` **0.000 on every
+row**. Reproduced in the worker's own configuration (2026-only PA +
+2026-only labels): Brier 0.2897 against CI's last row of 0.28584.
+
+**The fix.** `build_outs_dataset.merge_starts` unions a fresh build into
+the table on disk by `(game_pk, pitcher)`: fresh wins on collision
+(a rebuild corrects a start cached mid-game), rows the fresh build
+cannot see are kept (a season-deep cache is the only thing that knows
+them). `save_outs_starts` is the single writer — `load_outs_starts`,
+`main` and `_refresh_dataset` all route through it — and RAISES rather
+than writing when a season on disk would vanish or the row count would
+fall. History restored through that same path: **14,108 starts**,
+seasons [2024, 2025, 2026], and the 4,398 committed 2026 rows kept
+intact including 09-08..09-10, which the rebuilding cache did not have.
+
+**Instrumentation, and what it is worth.** New watchdog row `outs
+history covers training` compares the table's seasons against the
+shipped pkl's `train_seasons` — 2024+2025 — and fails loudly when one
+is missing. That is the check that would have caught this on 08-25
+instead of 17 days later. `tests/test_outs_dataset_history.py` (7
+tests) pins the merge, the collision rule and both refusals; the
+season-dropping test monkeypatches `merge_starts` back to the
+pre-A-055 write and asserts the refusal fires with the table on disk
+untouched.
+
+**Not closed.** Restoring history moves the rebuild from 0.2925 to
+0.2688, which is most of the way to the served 0.2568 but not all of
+it. The two feature paths still differ by ~0.011 Brier on the same
+starts, so `outs_scorecard.csv` cannot judge the outs model until that
+is found — and its rows from 08-30 onward are not comparable to the
+08-24 one. Both recorded in ROADMAP Phase 10. Nothing here touches
+money: the outs market is `diagnostic_only`, betting stays blocked, and
+the strikeouts ledger shares no code with this path.
+
 ## 2026-09-04 (evening) - The role feature through the five gates: previous-appearance pitch count passes, shadow model served (A-054, second pass)
 
 Operator: "build the role feature and run it through the gates."

@@ -538,6 +538,25 @@ strikeouts model, not a variant of it.
   served as `p_over_shadow` on every row. It captures only a fifth of
   the relief-row overshoot (2026: actual 8.92, production 10.12,
   shadow 10.02 outs) -- the `gates_role` paper policy stays the guard
+- [x] **The label table is merged, never replaced (2026-09-11, A-055).**
+  `data/outs_starts.parquet` held 2026 alone from 08-25 to 09-11: the
+  daily rebuild reads whatever seasons the host's Statcast cache has
+  (the current one, by A-014) and wrote that over the full table, so
+  every career-depth feature shortened silently —
+  `career_left_censored` 0.000 on every row. `save_outs_starts` is now
+  the single writer, unions by `(game_pk, pitcher)`, and refuses a
+  write that would drop a season. 2024+2025 restored (14,108 starts);
+  new watchdog row `outs history covers training`. The weekly
+  scorecard's slide (z 0.647 -> 5.06 with no model change) was
+  measuring this, not the board: on shared starts the served board
+  scored 0.2571 against the rebuild's 0.2925
+- [ ] **Re-read the outs scorecard series after the restore.** Rows
+  from 2026-08-30 onward were computed against the truncated table and
+  are not comparable to the 08-24 row; the Sunday 04:30 task appends
+  the first honest one. The restore does NOT close the gap: the rebuild
+  still prices ~0.011 Brier worse than the board served on the same
+  starts, so the two feature paths differ by more than history depth.
+  Until that is found, the scorecard cannot judge the outs model
 - [ ] **Judge the shadow, 2026-09-18.** `score_outs_vs_market.py` on
   the served rows with `p_over_shadow`: promote only if the shadow's
   Brier against the closing line beats production's. Promotion = flip

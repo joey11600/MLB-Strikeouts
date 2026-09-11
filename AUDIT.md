@@ -258,6 +258,66 @@ Tracks open items, resolved items, and known risks.
   computation. Ask whether "no results" is a real answer or a missing
   input, and refuse to publish when it cannot tell.
 
+### A-055: the outs label table lost 2024+2025 to its own daily rebuild, and only the scorecard showed it
+- **Filed/Resolved:** 2026-09-11 (operator: "why has the system degraded
+  so much?")
+- **Description:** `data/outs_starts.parquet` held 2026 alone from
+  2026-08-25 to 2026-09-11. A-052 committed the full table (13,636 rows,
+  2024+2025+2026) at 14:50 ET on 08-24; the next CI run (03:01 ET,
+  08-25) wrote 3,926 rows over it, and every daily run since rewrote the
+  same 2026-only slice. Mechanism:
+  `outs_pipeline._refresh_dataset` called `build()` and wrote the result
+  straight to `OUT_PATH`, and `build()` can only see the seasons this
+  host's Statcast cache holds — on the worker and on CI, the current one
+  (~88 MB, by A-014's design). `load_outs_starts()` returns the cached
+  parquet whenever it exists, so every consumer silently inherited a
+  history beginning in March 2026: `career_start_number` mean 7.2,
+  `career_left_censored` **0.000 on every row** — Drew Rasmussen reads
+  as a 10-start rookie.
+- **Why nothing caught it:** no exception, no empty artifact, no stale
+  stamp. The board rendered, the model priced, the grades landed, and 22
+  watchdog checks stayed green. The one number that moved was the weekly
+  outs scorecard, which reads as a model verdict: `z_raw_vs_market`
+  0.647 (08-24) -> 4.06 -> 4.56 -> 5.06, with no outs model code changed
+  between those rows. The single clean row ran at 18:45 UTC on 08-24 —
+  five minutes before the full table was committed, ten hours before it
+  was overwritten.
+- **What the scorecard was actually measuring:** on the 411 starts the
+  served board and the scorer share, served `p_over_raw` mean 0.5176 /
+  Brier 0.2571 against rebuilt 0.6960 / 0.2925, market 0.2470 — a flat
+  +0.178 over-tilt at every line from 9.5 to 20.5, while `actual_outs`
+  agreed on 411/411 rows. Served `expected_outs` 15.79 vs actual 15.63
+  (nearly unbiased); the rebuild's PMF mean 17.70. Reproduced in the
+  worker's own configuration (2026-only PA + 2026-only labels): Brier
+  0.2897 against CI's 0.28584. Restoring full history moves the rebuild
+  to 0.2688 and `career_left_censored` to 0.391.
+- **Resolution:** the cached table is merged, never replaced.
+  `build_outs_dataset.merge_starts` unions a fresh build into the table
+  on disk keyed by `(game_pk, pitcher)` — fresh wins on collision,
+  because a rebuild corrects a start cached mid-game; rows the fresh
+  build cannot see are kept, because a season-deep cache is the only
+  thing that knows them. `save_outs_starts` is now the single writer
+  (`load_outs_starts`, `main`, `_refresh_dataset`) and RAISES rather
+  than writes if a season on disk would vanish or the row count would
+  fall. 2024+2025 restored through that same path: 14,108 starts.
+- **Locked with tests:** `tests/test_outs_dataset_history.py` (7 tests)
+  pins the merge, the collision rule and both refusals; the
+  season-dropping case monkeypatches `merge_starts` back to the
+  pre-A-055 behaviour and asserts the write is refused with the table on
+  disk untouched. New watchdog row `outs history covers training`
+  compares the table's seasons against the shipped pkl's
+  `train_seasons` — the indicator that would have caught this on 08-25.
+- **Still open:** even on full history the rebuild prices ~0.011 Brier
+  worse than the board served on the same starts (0.2688 vs 0.2568), so
+  the two feature paths differ by more than history depth. The
+  scorecard stays unfit to judge the model until that is found.
+- **Generalises to:** any derived table rebuilt from a partial cache.
+  A-014 taught this repo that "nothing priced" can mean "missing input";
+  this is the same shape one layer down, where the rebuild SUCCEEDS and
+  the loss is its output. If a cache is scoped narrower than the
+  artifact it feeds, the write must be a merge, and the artifact must
+  assert its own coverage.
+
 ### A-052: the outs model goes live as a shadow product — calibration maps refused, market baseline even
 - **Filed:** 2026-08-24 (operator: "lets proceed with making the outs
   model")  **Status:** shadow serving; betting blocked by design

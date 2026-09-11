@@ -49,8 +49,14 @@ def _refresh_dataset(force: bool = False) -> None:
     03:21 ET, 3,530 by 08:59), so the morning pass refreshes and the
     16:45 re-price skips. Halves the memory-and-time cost of every
     pass that cannot possibly gain a row.
+
+    The rebuild only ever sees the seasons this host's Statcast cache
+    holds — on the worker and on CI that is the current one — so its
+    output is MERGED into the cached table rather than written over it
+    (`save_outs_starts`, A-055). Replacing it deleted 2024+2025 on
+    2026-08-25 and every career-depth feature silently shortened.
     """
-    from tools.build_outs_dataset import build, OUT_PATH, atomic_write_parquet
+    from tools.build_outs_dataset import build, OUT_PATH, save_outs_starts
 
     yesterday = (datetime.now(ET) - timedelta(days=1)).date()
     if not force and OUT_PATH.exists():
@@ -63,10 +69,10 @@ def _refresh_dataset(force: bool = False) -> None:
         except Exception as exc:
             print(f"  (could not read the cached dataset: {exc}; rebuilding)")
 
-    df = build(verbose=False)
-    atomic_write_parquet(df, OUT_PATH)
+    df = save_outs_starts(build(verbose=False))
     print(f"  dataset refreshed: {len(df):,} starts through "
-          f"{df['game_date'].max().date()}")
+          f"{df['game_date'].max().date()} "
+          f"(seasons {sorted(set(pd.to_datetime(df['game_date']).dt.year))})")
 
 
 def _actuals() -> dict:

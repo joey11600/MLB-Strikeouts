@@ -362,6 +362,96 @@ def atomic_write_parquet(df: pd.DataFrame, path: Path) -> None:
             os.remove(tmp)
 
 
+# --------------------------------------------------------------------------
+# the cached table is MERGED, never replaced (A-055)
+# --------------------------------------------------------------------------
+#: A start is keyed by the game and the pitcher who started it. Both are
+#: stable ids, so a rebuild re-derives the same key for the same start.
+HISTORY_KEY = ["game_pk", "pitcher"]
+
+
+def _seasons(df: pd.DataFrame) -> list[int]:
+    if df is None or df.empty:
+        return []
+    if "game_year" in df.columns:
+        s = pd.to_numeric(df["game_year"], errors="coerce")
+    else:
+        s = pd.to_datetime(df["game_date"]).dt.year
+    return sorted(int(x) for x in s.dropna().unique())
+
+
+def merge_starts(fresh: pd.DataFrame,
+                 existing: pd.DataFrame | None) -> pd.DataFrame:
+    """Union a freshly built table into the cached one; fresh row wins.
+
+    A completed start never changes, but the CACHE it is derived from
+    does. The worker and CI both carry the CURRENT season only (~88 MB,
+    A-014), so `build()` there returns 2026 alone — correct for what it
+    can see, and a deletion of 2024+2025 if written straight over the
+    cached table.
+
+    Fresh rows win on collision because a rebuild corrects a start that
+    was cached mid-game; rows the fresh build cannot see are kept
+    because a season-deep cache is the only thing that knows them.
+    """
+    if existing is None or existing.empty:
+        return fresh.reset_index(drop=True)
+    if fresh is None or fresh.empty:
+        return existing.reset_index(drop=True)
+
+    # Without the key there is no union, only a replacement — and a
+    # silent replacement is the whole of A-055. Say so instead.
+    missing = sorted({c for c in HISTORY_KEY
+                      if c not in fresh.columns or c not in existing.columns})
+    if missing:
+        raise RuntimeError(
+            f"cannot merge the outs starts table: key column(s) {missing} "
+            f"absent (fresh={list(fresh.columns)}, "
+            f"cached={list(existing.columns)})")
+
+    superseded = existing.merge(fresh[HISTORY_KEY].drop_duplicates(),
+                                on=HISTORY_KEY, how="left", indicator=True)
+    keep = superseded[superseded["_merge"] == "left_only"].drop(columns="_merge")
+    out = pd.concat([keep[existing.columns], fresh[existing.columns]],
+                    ignore_index=True)
+    # Ordering is cosmetic; do not make it a second schema requirement.
+    order = [c for c in ("game_date", "game_pk", "is_home") if c in out.columns]
+    return (out.sort_values(order) if order else out).reset_index(drop=True)
+
+
+def save_outs_starts(fresh: pd.DataFrame, path: Path | None = None,
+                     verbose: bool = False) -> pd.DataFrame:
+    """Merge into the table on disk and write it atomically.
+
+    The guard is deliberately louder than the merge needs: after a union
+    a season can only go missing through a bug, and this table feeds
+    every career-depth feature the model reads, so it fails the write
+    rather than document the loss afterwards (the shrink-guard shape
+    A-030 settled for the model log).
+    """
+    path = OUT_PATH if path is None else Path(path)
+    existing = pd.read_parquet(path) if path.exists() else None
+    merged = merge_starts(fresh, existing)
+
+    if existing is not None and not existing.empty:
+        lost = set(_seasons(existing)) - set(_seasons(merged))
+        if lost:
+            raise RuntimeError(
+                f"refusing to write {path.name}: season(s) {sorted(lost)} "
+                f"on disk would be lost (the build saw "
+                f"{_seasons(fresh)} — a partial Statcast cache)")
+        if len(merged) < len(existing):
+            raise RuntimeError(
+                f"refusing to write {path.name}: {len(existing):,} rows on "
+                f"disk -> {len(merged):,} after merge")
+
+    atomic_write_parquet(merged, path)
+    if verbose:
+        print(f"[save] {len(merged):,} starts -> {path.name}  "
+              f"seasons={_seasons(merged)}")
+    return merged
+
+
 def build(verbose: bool = True) -> pd.DataFrame:
     pa = build_pa_table(verbose=verbose)
     pa = add_outs_on_play(pa)
@@ -386,9 +476,7 @@ def build(verbose: bool = True) -> pd.DataFrame:
 def load_outs_starts(force: bool = False, verbose: bool = False) -> pd.DataFrame:
     if OUT_PATH.exists() and not force:
         return pd.read_parquet(OUT_PATH)
-    df = build(verbose=verbose)
-    atomic_write_parquet(df, OUT_PATH)
-    return df
+    return save_outs_starts(build(verbose=verbose), verbose=verbose)
 
 
 def main() -> int:
@@ -398,8 +486,7 @@ def main() -> int:
     if OUT_PATH.exists() and not a.force:
         print(f"{OUT_PATH} exists; use --force to rebuild")
         return 0
-    df = build(verbose=True)
-    atomic_write_parquet(df, OUT_PATH)
+    df = save_outs_starts(build(verbose=True), verbose=True)
     print(f"wrote {OUT_PATH}  rows={len(df):,}")
     return 0
 

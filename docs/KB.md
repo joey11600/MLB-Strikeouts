@@ -1174,3 +1174,18 @@ reach the dashboard but not git.
     probability outputs away from the endpoints, and treat any model
     that reaches them as reporting a defect rather than a conviction
     (A-043).
+33. **A table rebuilt from a narrower cache must be MERGED, not
+    written.** `data/outs_starts.parquet` is derived from the Statcast
+    cache, and the worker and CI carry the current season only (~88 MB,
+    A-014). So `build()` there returns 2026 alone — correct for what it
+    can see — and writing it over the cached table deleted 2024+2025 for
+    17 days. Nothing errored: the board rendered, the model priced,
+    grades landed, 22 watchdog checks stayed green, and the only symptom
+    was that every career-depth feature silently shortened
+    (`career_left_censored` 0.000 on every row) while the weekly
+    scorecard slid from z=+0.65 to +5.06 with no model change (A-055).
+    A rebuild that succeeds can still be a deletion. Union on the
+    artifact's own key, refuse the write when coverage would shrink, and
+    give the artifact a check that asserts its own depth — a derived
+    file cannot be reconstructed from a cache that no longer holds what
+    built it.

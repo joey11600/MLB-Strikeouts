@@ -245,10 +245,15 @@ def test_refresh_runs_when_dataset_is_stale(tmp_path, monkeypatch):
     from datetime import timedelta
     stale = (OP.datetime.now(OP.ET) - timedelta(days=5)).date()
     parquet = tmp_path / "starts.parquet"
-    pd.DataFrame({"game_date": [pd.Timestamp(stale)]}).to_parquet(parquet)
+    # Carries the merge key: the refresh writes through save_outs_starts
+    # now, and a table without (game_pk, pitcher) cannot be unioned —
+    # it can only be replaced, which is A-055.
+    cached = pd.DataFrame({"game_date": [pd.Timestamp(stale)],
+                           "game_pk": [1], "pitcher": [100]})
+    cached.to_parquet(parquet)
     monkeypatch.setattr(BOD, "OUT_PATH", parquet)
 
-    built = pd.DataFrame({"game_date": [pd.Timestamp(stale)]})
+    built = cached.copy()
     calls = []
     monkeypatch.setattr(BOD, "build", lambda **k: (calls.append(1), built)[1])
     monkeypatch.setattr(BOD, "atomic_write_parquet", lambda df, p: None)
