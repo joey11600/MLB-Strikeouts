@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-13T07:00:20.783820+00:00",
+ "generated_at": "2026-09-13T07:01:45.786476+00:00",
  "market": "OUTS",
  "diagnostic_only": true,
  "latest_date": "2026-09-12",
@@ -6822,44 +6822,44 @@
  "paper_tracks": {
   "policies": {
    "gates": {
-    "bets": 28,
-    "wins": 13,
-    "losses": 15,
+    "bets": 31,
+    "wins": 15,
+    "losses": 16,
     "pushes": 0,
     "voids": 0,
-    "staked": 56.0,
-    "pl": -7.17,
-    "dates": 14
+    "staked": 62.0,
+    "pl": -6.57,
+    "dates": 15
    },
    "gates_role": {
-    "bets": 8,
-    "wins": 2,
-    "losses": 6,
+    "bets": 10,
+    "wins": 3,
+    "losses": 7,
     "pushes": 0,
     "voids": 0,
-    "staked": 16.0,
-    "pl": -8.99,
-    "dates": 4
+    "staked": 20.0,
+    "pl": -9.76,
+    "dates": 5
    },
    "gold_capped": {
-    "bets": 104,
-    "wins": 57,
-    "losses": 47,
+    "bets": 109,
+    "wins": 61,
+    "losses": 48,
     "pushes": 0,
     "voids": 0,
-    "staked": 159.5,
-    "pl": -0.73,
-    "dates": 19
+    "staked": 169.5,
+    "pl": 3.3,
+    "dates": 20
    },
    "gold_uncapped": {
-    "bets": 164,
-    "wins": 80,
-    "losses": 83,
+    "bets": 179,
+    "wins": 88,
+    "losses": 90,
     "pushes": 0,
     "voids": 1,
-    "staked": 982.59,
-    "pl": -129.87,
-    "dates": 19
+    "staked": 1075.3,
+    "pl": -118.89,
+    "dates": 20
    }
   },
   "since": "2026-08-24",
